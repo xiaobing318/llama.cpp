@@ -1,43 +1,50 @@
-# llama.cpp/examples/main
+# llama.cpp/examples/main（这是llama.cpp中的一个例子）
 
 This example program allows you to use various LLaMA language models easily and efficiently. It is specifically designed to work with the [llama.cpp](https://github.com/ggerganov/llama.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with LLaMA models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
 
-## Table of Contents
+ - 这个例子程序允许你轻松的、有效的使用多种不同的llama语言模型。
+ - llama这个项目提供了一个纯C/C++实现，有着4-bit量化的可选支持，对于更快、更低的内存继续推理，这个项目被优化正对桌面端CPUs。
+ - 这个程序可以通过使用llama models被用于执行多种不同的推理任务，包含基于用户提供的提示词的生成式文本、反向提示词的对话式交互等场景应用。
 
-1. [Quick Start](#quick-start)
-2. [Common Options](#common-options)
-3. [Input Prompts](#input-prompts)
-4. [Interaction](#interaction)
-5. [Context Management](#context-management)
-6. [Generation Flags](#generation-flags)
-7. [Performance Tuning and Memory Options](#performance-tuning-and-memory-options)
-8. [Additional Options](#additional-options)
+## Table of Contents（内容目录）
 
-## Quick Start
+1. [Quick Start：快速开始](#quick-start)
+2. [Common Options：常用选项](#common-options)
+3. [Input Prompts：输入提示词](#input-prompts)
+4. [Interaction：交互性](#interaction)
+5. [Context Management：上下文管理](#context-management)
+6. [Generation Flags：生成标签](#generation-flags)
+7. [Performance Tuning and Memory Options：性能微调和内存选项](#performance-tuning-and-memory-options)
+8. [Additional Options：额外的选项](#additional-options)
 
-To get started right away, run the following command, making sure to use the correct path for the model you have:
+## Quick Start（快速开始）
 
-First, we will need to download a model. In these examples, we will use the Gemma model from the ggml-org repo on Hugging Face.
+To get started right away, run the following command, making sure to use the correct path for the model you have（为了直接快速的开始，运行下列命令，对于你拥有的模型确保使用对其正确的文件路径）:
+
+First, we will need to download a model. In these examples, we will use the Gemma model from the ggml-org repo on Hugging Face.（首先，我们我需要下载一个model。在这些例子中，我们将会使用gemma模型，这个gemma模型来自hugging face上ggml-org仓库中的一个模型）
 [https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true)
 
-Once downloaded, place your model in the models folder in llama.cpp.
+Once downloaded, place your model in the models folder in llama.cpp.（一旦下载完成之后，将下载后的模型放在llama.cpp项目中的model文件夹中）
 
-### Unix-based systems (Linux, macOS, etc.):
+### Unix-based systems (Linux, macOS, etc.)（基于unix的系统，例如linux,macos,等等）:
 
-##### Input prompt (One-and-done)
+##### Input prompt (One-and-done)（输入提示词：只输入一次即完成）
 
 ```bash
+# 使用llama-cli程序，参数-m指定具体模型的位置，参数--prompt指定输入的提示词
 ./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf --prompt "Once upon a time"
 ```
-##### Conversation mode (Allow for continuous interaction with the model)
+##### Conversation mode (Allow for continuous interaction with the model)（对话模式：允许和model进行连续的交互）
 
 ```bash
+# 使用llama-cli程序，参数-m指定具体模型的位置，参数--cnv指定对话模式， 参数--chat-template指定对话的模板
 ./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf -cnv --chat-template gemma
 ```
 
-##### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it):
+##### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it)（从一个初始的提示符开始，系统或程序会持续不断地生成文本）:
 ```bash
-./llama-cli -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
+# 使用llama-cli程序，参数-m指定具体模型的位置，剩余的两个参数还需要理解
+./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 ```
 
 ### Windows:
@@ -58,49 +65,59 @@ Once downloaded, place your model in the models folder in llama.cpp.
 llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 ```
 
-## Common Options
+## Common Options（常用的选项）
 
-In this section, we cover the most commonly used options for running the `llama-cli` program with the LLaMA models:
+In this section, we cover the most commonly used options for running the `llama-cli` program with the LLaMA models（在这部分，针对运行llama-cli程序，我们将会涵盖最为常用的选项）:
 
--   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/gemma-1.1-7b-it.Q4_K_M.gguf`; inferred from `--model-url` if set).
--   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g [https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true)).
--   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
--   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
--   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
--   `-mli, --multiline-input`: Allows you to write or paste multiple lines without ending each in '\'
--   `-t N, --threads N`: Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has.
--   -   `-ngl N, --n-gpu-layers N`: When compiled with GPU support, this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
+-   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file （指定llama模型的路径）(e.g., `models/gemma-1.1-7b-it.Q4_K_M.gguf`; inferred from `--model-url` if set).
+-   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file （指定一个remote http url下载model文件）(e.g [https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true)).
+-   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.（以交互式的方式运行程序）
+-   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.（当生成文本的时候设置输出tokens的数量。通过调整这个值可以影响生成文本的长短。）
+-   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.（设置提示词的上下文大小。默认的是512个token，但是llama模型是以2048的上下文构建的，这2048的上下文将会对更长的输入和推理提供更好的结果。）
+-   `-mli, --multiline-input`: Allows you to write or paste multiple lines without ending each in '\'（这个参数允许你不需要要\即可输入或者拷贝多行输入文本）
+-   `-t N, --threads N`: Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has.（在运行的时候通过设置这个值来指定需要使用多少的threads。对于最优的性能，建议设置成物理CPU cores的数量）
+-   -   `-ngl N, --n-gpu-layers N`: When compiled with GPU support, this option allows offloading some layers to the GPU for computation. Generally results in increased performance.（当使用GPU支持编译的时候，这个选项将会允许把一部分负载迁移到GPU上进行计算。通常情况下将会增加性能）
 
-## Input Prompts
+## Input Prompts（输入提示词）
 
-The `llama-cli` program provides several ways to interact with the LLaMA models using input prompts:
+The `llama-cli` program provides several ways to interact with the LLaMA models using input prompts（这个llama-cli程序提供了使用提示词同llama models进行交互的方式）:
 
--   `--prompt PROMPT`: Provide a prompt directly as a command-line option.
--   `--file FNAME`: Provide a file containing a prompt or multiple prompts.
--   `--interactive-first`: Run the program in interactive mode and wait for input right away. (More on this below.)
+-   `--prompt PROMPT`: Provide a prompt directly as a command-line option.（直接提供一个提示词作为命令行选项）
+-   `--file FNAME`: Provide a file containing a prompt or multiple prompts.（提供一个包含一个提示词或者多个提示词的文件）
+-   `--interactive-first`: Run the program in interactive mode and wait for input right away. (More on this below.)（以交互模式和等待输入提示词的方式运行程序）
 
-## Interaction
+## Interaction（交互）
 
-The `llama-cli` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.
+The `llama-cli` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.（llama-cli程序提供了一种同llama模型无缝交互的方式，这种方式允许用户以一种实时对话的方式进行交互，或者提供了对于特定任务的指令。这个交互模式可以通过使用--interactive和--interactive-first的参数被激活。）
 
-In interactive mode, users can participate in text generation by injecting their input during the process. Users can press `Ctrl+C` at any time to interject and type their input, followed by pressing `Return` to submit it to the LLaMA model. To submit additional lines without finalizing input, users can end the current line with a backslash (`\`) and continue typing.
+In interactive mode, users can participate in text generation by injecting their input during the process. Users can press `Ctrl+C` at any time to interject and type their input, followed by pressing `Return` to submit it to the LLaMA model. To submit additional lines without finalizing input, users can end the current line with a backslash (`\`) and continue typing.（在交互模式下，用户可以在生成的过程中通过注入他们的输入来参与其中。用户可以在任何使用按下Ctrl_C中断生成过程并且输入他们的提示词，输入提示词之后可以通过按下Return来向llama models提交他们的提示词。在没有完成输入想要提交额外的输入，用户可以在输入行末尾添加\来延续输入。）
 
-### Interaction Options
+### Interaction Options（交互选项）
 
--   `-i, --interactive`: Run the program in interactive mode, allowing users to engage in real-time conversations or provide specific instructions to the model.
+-   `-i, --interactive`: Run the program in interactive mode, allowing users to engage in real-time conversations or provide specific instructions to the model.（以交互模式运行程序，这种模式允许用户以实时的方式同模型进行交互或者给模型提供特定的指令）
 -   `--interactive-first`: Run the program in interactive mode and immediately wait for user input before starting the text generation.
 -   `-cnv,  --conversation`:  Run the program in conversation mode (does not print special tokens and suffix/prefix, use default chat template) (default: false)
--   `--color`: Enable colorized output to differentiate visually distinguishing between prompts, user input, and generated text.
+-   `--color`: Enable colorized output to differentiate visually distinguishing between prompts, user input, and generated text.（启动彩色的输出为了能够从视觉上区分提示词、用户输入和生成的文本）
 
-By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the LLaMA models, tailoring the text generation process to your specific needs.
+By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the LLaMA models, tailoring the text generation process to your specific needs.（通过理解和使用这些交互选项，你可以创建一个同模型交互的、动态的体验，对于你特定的需要可以个性化文本的生成过程。）
 
 ### Reverse Prompts
+
+**反向提示**是一种在文本生成过程中，当遇到特定的文本字符串时暂停生成，并切换到交互模式的功能。这种机制特别适用于创建聊天式的交互体验。
 
 Reverse prompts are a powerful way to create a chat-like experience with a LLaMA model by pausing the text generation when specific text strings are encountered:
 
 -   `-r PROMPT, --reverse-prompt PROMPT`: Specify one or multiple reverse prompts to pause text generation and switch to interactive mode. For example, `-r "User:"` can be used to jump back into the conversation whenever it's the user's turn to speak. This helps create a more interactive and conversational experience. However, the reverse prompt doesn't work when it ends with a space.
 
+- **`-r PROMPT, --reverse-prompt PROMPT`**：这是命令行参数，用于指定一个或多个反向提示。当文本生成过程中遇到这些指定的字符串时，生成会暂停，并根据需要切换到交互模式。
+
+  - **示例**：使用 `-r "User:"` 表示当生成的文本中出现“User:”时，模型会自动暂停输出，等待用户输入，从而实现交互。这有助于在模拟对话中创造一种流畅的交替说话体验。
+
+- **空格问题**：如果反向提示字符串的末尾有空格，这种提示机制将不会工作。这可能是因为文本处理过程中空格被忽略或者不被识别为有效的暂停点。
+
 To overcome this limitation, you can use the `--in-prefix` flag to add a space or any other characters after the reverse prompt.
+
+- **`--in-prefix` 标志**：为了克服上述空格的限制，可以使用 `--in-prefix` 参数。这个标志允许在反向提示后添加空格或其他字符。这样做可以确保即使原本的反向提示以空格结束，也能正常触发暂停和交互切换。
 
 ### In-Prefix
 
@@ -110,58 +127,60 @@ The `--in-prefix` flag is used to add a prefix to your input, primarily, this is
 ./llama-cli -r "User:" --in-prefix " "
 ```
 
+这种技术在实现基于命令行的交互式聊天机器人或其他需要细致控制文本输出时刻的应用中非常有用。通过合理设置反向提示，开发者可以精确地控制何时暂停文本生成，以及如何根据用户的输入动态地继续对话，从而提高用户交互的自然性和流畅性。
+
 ### In-Suffix
 
-The `--in-suffix` flag is used to add a suffix after your input. This is useful for adding an "Assistant:" prompt after the user's input. It's added after the new-line character (`\n`) that's automatically added to the end of the user's input. Here's an example of how to use the `--in-suffix` flag in conjunction with the `--reverse-prompt` flag:
+The `--in-suffix` flag is used to add a suffix after your input. This is useful for adding an "Assistant:" prompt after the user's input. It's added after the new-line character (`\n`) that's automatically added to the end of the user's input. Here's an example of how to use the `--in-suffix` flag in conjunction with the `--reverse-prompt` flag（这个--in-suffix标志被用于在你的输入后面添加一个后缀。对于添加一个assistant是非常有用的。在用户输入完成后自动添加到输入后面。这是一个例子展示如何添加一个--in-suffix标签。）:
 
 ```sh
 ./llama-cli -r "User:" --in-prefix " " --in-suffix "Assistant:"
 ```
 When --in-prefix or --in-suffix options are enabled the chat template ( --chat-template ) is disabled
 
-### Chat templates
+### Chat templates（聊天模板）
 
- `--chat-template JINJA_TEMPLATE`: This option sets a custom jinja chat template. It accepts a string, not a file name.  Default: template taken from model's metadata. Llama.cpp only supports [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template). These include llama2, llama3, gemma, monarch, chatml, orion, vicuna, vicuna-orca, deepseek, command-r, zephyr. When --in-prefix or --in-suffix options are enabled the chat template ( --chat-template ) is disabled.
+ `--chat-template JINJA_TEMPLATE`: This option sets a custom jinja chat template（这个选项设置了一个自定义的聊天模板）. It accepts a string, not a file name（这个选项接收的是一个字符串而不是一个文件的名字。）.  Default: template taken from model's metadata（默认情况：模板信息将会从model的元数据中获得）. Llama.cpp only supports [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)（llama.cpp项目仅支持约定好的模板）. These include llama2, llama3, gemma, monarch, chatml, orion, vicuna, vicuna-orca, deepseek, command-r, zephyr. When --in-prefix or --in-suffix options are enabled the chat template ( --chat-template ) is disabled（这些模板包括llama2\llama3\gemma\monarch\charml\orion\vicuna等等）.
 
  Example usage: `--chat-template gemma`
 
-## Context Management
+## Context Management（上下文管理）
 
-During text generation, LLaMA models have a limited context size, which means they can only consider a certain number of tokens from the input and generated text. When the context fills up, the model resets internally, potentially losing some information from the beginning of the conversation or instructions. Context management options help maintain continuity and coherence in these situations.
+During text generation, LLaMA models have a limited context size, which means they can only consider a certain number of tokens from the input and generated text（在文本生成的过程中，llama模型有一个限制上下文大小，这个上下文大小意味着这些模型从输入个生成的文本中考虑的token大小。）. When the context fills up, the model resets internally, potentially losing some information from the beginning of the conversation or instructions（当上下文最大之后，这个模型内部将会自动重置，潜在的从对话或者指令中丢失一些信息。）. Context management options help maintain continuity and coherence in these situations（上下文管理选项将会在这些场景中维持连续性和连贯性。）.
 
-### Context Size
+### Context Size（上下文大小）
 
-- `-c N, --ctx-size N`: Set the size of the prompt context (default: 0, 0 = loaded from model). The LLaMA models were built with a context of 2048-8192, which will yield the best results on longer input/inference.
+- `-c N, --ctx-size N`: Set the size of the prompt context (default: 0, 0 = loaded from model). The LLaMA models were built with a context of 2048-8192, which will yield the best results on longer input/inference（参数：-c N或者--ctx-size N：这是设置提示词上下文大小的参数。llama模型的上下文大小是2024-8192，在这个范围中，模型将会产生最好的结果。）.
 
-### Extended Context Size
+### Extended Context Size（扩展上下文大小）
 
-Some fine-tuned models have extended the context length by scaling RoPE. For example, if the original pre-trained model has a context length (max sequence length) of 4096 (4k) and the fine-tuned model has 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.
+Some fine-tuned models have extended the context length by scaling RoPE. For example, if the original pre-trained model has a context length (max sequence length) of 4096 (4k) and the fine-tuned model has 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.（一些微调的模型已经扩展了上下文的大小。举例来说，如果原始的预处理模型有一个4K的上下文大小，微调的模型将会有32K的上下文大小，这里的伸缩因子是8的倍数，将上下文大小设置为32K也是可以运行的）
 
--   `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.
+-   `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.（这里的N是被微调模型使用的线性因子。）
 
-### Keep Prompt
+### Keep Prompt（持续提示词）
 
-The `--keep` option allows users to retain the original prompt when the model runs out of context, ensuring a connection to the initial instruction or conversation topic is maintained.
+The `--keep` option allows users to retain the original prompt when the model runs out of context, ensuring a connection to the initial instruction or conversation topic is maintained.（当模型用完上下文大小的时候，这个--keep选项允许用户保持原始的提示词，从而确保了与原始指令或者对话主题之间的连接性。）
 
--   `--keep N`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
+-   `--keep N`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.（当模型重置模型内部的上下文大小的时候，--keep N参数指定从原始提示词中获得多少的token，。默认情况下，这个值会被设置为0，这意味着没有tokens将会被选取。如果设置为-1那么意味着将会从原始的提示词中获取全部的tokens.）
 
-By utilizing context management options like `--ctx-size` and `--keep`, you can maintain a more coherent and consistent interaction with the LLaMA models, ensuring that the generated text remains relevant to the original prompt or conversation.
+By utilizing context management options like `--ctx-size` and `--keep`, you can maintain a more coherent and consistent interaction with the LLaMA models, ensuring that the generated text remains relevant to the original prompt or conversation.(通过使用上下文管理选项，例如--ctx-size和--keep，你可以同模型之间保持一个更加连贯和更加一致的交互，从而确保生成的文本和原始的提示词保持相关性。)
 
-## Generation Flags
+## Generation Flags（生成标签）
 
-The following options allow you to control the text generation process and fine-tune the diversity, creativity, and quality of the generated text according to your needs. By adjusting these options and experimenting with different combinations of values, you can find the best settings for your specific use case.
+The following options allow you to control the text generation process and fine-tune the diversity, creativity, and quality of the generated text according to your needs. By adjusting these options and experimenting with different combinations of values, you can find the best settings for your specific use case.（下列的选项允许你控制文本生成过程和多样性的、创造性的、高质量的微调。通过调整这些选项和进行不同值得组合你可以发现你需要得最好得设置。）
 
-### Number of Tokens to Predict
+### Number of Tokens to Predict（预测token的数量）
 
--   `-n N, --predict N`: Set the number of tokens to predict when generating text (default: -1, -1 = infinity, -2 = until context filled)
+-   `-n N, --predict N`: Set the number of tokens to predict when generating text (default: -1, -1 = infinity, -2 = until context filled)（设置模型预测的tokens数量）
 
-The `--predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text.
+The `--predict` option controls the number of tokens the model generates in response to the input prompt. By adjusting this value, you can influence the length of the generated text. A higher value will result in longer text, while a lower value will produce shorter text.（--predict选项控制模型对输入提示词能够预测的token数量。通过调整这个值，你可以影响生成文本的长度。有个更高的值将会产生更长的文本，而一个更低的值将会生成一个更短的生成文本。）
 
-A value of -1 will enable infinite text generation, even though we have a finite context window. When the context window is full, some of the earlier tokens (half of the tokens after `--keep`) will be discarded. The context must then be re-evaluated before generation can resume. On large models and/or large context windows, this will result in a significant pause in output.
+A value of -1 will enable infinite text generation, even though we have a finite context window. When the context window is full, some of the earlier tokens (half of the tokens after `--keep`) will be discarded. The context must then be re-evaluated before generation can resume. On large models and/or large context windows, this will result in a significant pause in output.（-1将会无限的生成文本，即使我们有一个有限的上下文窗口。当上下文窗口满了，一个更早的tokens将会被丢弃。在生成的结果被使用的时候，上下文必须被重新评估。在一个更大的模型和更大的上下文窗口中，这个将会导致输出被有效的暂停。）
 
 If the pause is undesirable, a value of -2 will stop generation immediately when the context is filled.
 
-It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode, text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `--predict` value. If you want the model to keep going without ever producing End-of-Sequence on its own, you can use the `--ignore-eos` parameter.
+It is important to note that the generated text may be shorter than the specified number of tokens if an End-of-Sequence (EOS) token or a reverse prompt is encountered. In interactive mode, text generation will pause and control will be returned to the user. In non-interactive mode, the program will end. In both cases, the text generation may stop before reaching the specified `--predict` value. If you want the model to keep going without ever producing End-of-Sequence on its own, you can use the `--ignore-eos` parameter.（重要的是要注意，如果遇到序列结束（EOS）标记或反向提示，生成的文本可能会比指定的令牌数更短。在交互模式中，文本生成将暂停并将控制权返回给用户。在非交互模式中，程序将结束。在这两种情况下，文本生成可能在达到指定的 `--predict` 值之前停止。如果您希望模型继续运行而不自动产生序列结束标记，您可以使用 `--ignore-eos` 参数。）
 
 ### Temperature
 
