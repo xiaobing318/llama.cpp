@@ -1,3 +1,5 @@
+# 这个 `pyproject.toml` 文件是配置 Python 项目的一种现代化、标准化的方法，尤其是与 Poetry 这类依赖管理和包装工具一起使用时。
+# 它不仅可以管理依赖，还可以处理包的构建和发布，使得项目维护更为简便。（2024-08-25-杨小兵：这个文件是用来配置python项目的。）
 [tool.poetry]
 name = "llama-cpp-scripts"
 version = "0.0.0"
