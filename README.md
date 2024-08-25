@@ -279,6 +279,8 @@ Typically finetunes of the base models below are supported as well.（通常情�
 - [x] [Open Elm models](https://huggingface.co/collections/apple/openelm-instruct-models-6619ad295d7ae9f868b759ca)
 - [x] [ChatGLM3-6b](https://huggingface.co/THUDM/chatglm3-6b) + [ChatGLM4-9b](https://huggingface.co/THUDM/glm-4-9b)
 - [x] [SmolLM](https://huggingface.co/collections/HuggingFaceTB/smollm-6695016cad7167254ce15966)
+- [x] [EXAONE-3.0-7.8B-Instruct](https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct)
+- [x] [FalconMamba Models](https://huggingface.co/collections/tiiuae/falconmamba-7b-66b9a580324dd1598b0f6d4a)
 
 (instructions for supporting more models: [HOWTO-add-model.md](./docs/development/HOWTO-add-model.md))
 
@@ -361,6 +363,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 
 - [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
 - [crashr/gppm](https://github.com/crashr/gppm) – launch llama.cpp instances utilizing NVIDIA Tesla P40 or P100 GPUs with reduced idle power consumption
+- [gpustack/gguf-parser](https://github.com/gpustack/gguf-parser-go/tree/main/cmd/gguf-parser) - review/check the GGUF file and estimate the memory usage
 
 上述内容介绍了两个与 `llama.cpp` 项目相关的工具集，这些工具各自针对特定功能进行了优化和支持，以提升 `llama.cpp` 的实用性和效率。以下是对这两个工具的详细解释：
 
@@ -378,6 +381,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 **Infrastructure（基础设施）:**
 
 - [Paddler](https://github.com/distantmagic/paddler) - Stateful load balancer custom-tailored for llama.cpp
+- [GPUStack](https://github.com/gpustack/gpustack) - Manage GPU clusters for running LLMs
 
 **Games（游戏）:**
 - [Lucy's Labyrinth](https://github.com/MorganRO8/Lucys_Labyrinth) - A simple maze game where agents controlled by an AI model will try to trick you.（一个简单的迷宫游戏，在这个游戏中被AI模型控制的智能体尝试欺骗你）
@@ -747,6 +751,7 @@ Please refer to [Build llama.cpp locally](./docs/build.md)
 | [CUDA](./docs/build.md#cuda) | Nvidia GPU |
 | [hipBLAS](./docs/build.md#hipblas) | AMD GPU |
 | [Vulkan](./docs/build.md#vulkan) | GPU |
+| [CANN](./docs/build.md#cann) | Ascend NPU |
 
 
 
