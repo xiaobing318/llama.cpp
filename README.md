@@ -1,6 +1,6 @@
 # llama.cpp
 
- - 这个项目的名字是llama.cpp，从这个项目的名称中也是可以看出来这个项目使用纯C/C++来构建LLM（inference and train）
+ - 这个项目的名字是llama.cpp，从这个项目的名称中可以看出来这个项目使用纯C/C++来构建LLM（inference and train）
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
