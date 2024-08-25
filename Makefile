@@ -1,3 +1,4 @@
+# 2024-08-25-杨小兵：这个Makefile文件是为了在linux类似的操作系统上build整个项目
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	libllava.a \
