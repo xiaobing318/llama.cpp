@@ -1,6 +1,7 @@
 # llama.cpp
 
  - 这个项目的名字是llama.cpp，从这个项目的名称中可以看出来llama.cpp这个项目使用纯C/C++来构建LLM（inference and train）
+ - 这里的问题就是llama.cpp项目只是用来进行infernece的？还是说也是可以进行train的？
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
@@ -126,6 +127,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 1. **`convert.py` 已被弃用**：
    - 原有的 `convert.py` 工具已经不推荐使用，并已移至 `examples/convert_legacy_llama.py`。现在建议使用新的 `convert_hf_to_gguf.py` 脚本进行模型转换。这通常表示项目在模型转换工具上进行了重大更新或优化。（[PR #7430](https://github.com/ggerganov/llama.cpp/pull/7430)）
+   - 如果需要进行模型文件格式的转化，那么这部分内容需要详细了解和理解
 
 2. **Flash-Attention 支持**：
    - 项目初次引入了对 Flash-Attention 的支持，这是一种高效的注意力机制实现，可以提高模型的性能和缩放性。（[PR #5021](https://github.com/ggerganov/llama.cpp/pull/5021)）
@@ -191,7 +193,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide
 variety of hardware - locally and in the cloud.
 
-`llama.cpp`这个项目的主要目标就是能够使LLM以最小的配置、高水平的性能、适配诸多硬件、本地或者云端的方式进行inference
+`llama.cpp`这个项目的主要目标就是能够使LLM以最小的配置、高水平的性能、适配诸多硬件、本地或者云端的方式进行inference运行
 
 - Plain C/C++ implementation without any dependencies
 - Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
@@ -425,7 +427,8 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 <details>
 <summary>Typical run using LLaMA v2 13B on M2 Ultra（在 M2 Ultra 上使用 LLaMA v2 13B 的典型运行）</summary>
 
-```
+```bash
+# 使用make进行编译、编译成功之后使用./llama-cli运行模型
 $ make -j && ./llama-cli -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
 I llama.cpp build info:
 I UNAME_S:  Darwin
@@ -554,13 +557,17 @@ Here are the end-to-end binary build and model conversion steps for most support
 
 Firstly, you need to get the binary. There are different methods that you can follow（首先，你需要得到二进制文件，下列是一些你可以采用的方法）:
 - Method 1: Clone this repository and build locally, see [how to build](./docs/build.md)（方法1:clone这个repo和在本地构建，查看相关内容进行build）
-- Method 2: If you are using MacOS or Linux, you can install llama.cpp via [brew, flox or nix](./docs/install.md)（方法2：如果你使用的是MacOS或者Linux，你可以通过指出的内容下载llama.cpp）
+- Method 2: If you are using MacOS or Linux, you can install llama.cpp via [brew, flox or nix](./docs/install.md)（方法2：如果你使用的是MacOS或者Linux，你可以通过指出的内容下载安装llama.cpp）
 - Method 3: Use a Docker image, see [documentation for Docker](./docs/docker.md)（方法3：使用一个docker镜像）
 - Method 4: Download pre-built binary from [releases](https://github.com/ggerganov/llama.cpp/releases)（从releases中下载一个已经构建好的二进制文件）
 
 You can run a basic completion using this command（您可以使用此命令运行基本补全）:
 
 ```bash
+# llama-cli是程序名称
+# -m your_model.gguf是GGUF格式的模型文件
+# -p "I believe the meaning of life is"是模型提示词
+# -n 128是控制生成token的数量，当生成文本的时候通过这个参数来控制模型预测生成token的数量
 llama-cli -m your_model.gguf -p "I believe the meaning of life is" -n 128
 
 # Output:
@@ -569,11 +576,15 @@ llama-cli -m your_model.gguf -p "I believe the meaning of life is" -n 128
 
 See [this page](./examples/main/README.md) for a full list of parameters.（可以查看./examples/main/README.md获取完整的参数列表）
 
-### Conversation mode（转化模式）
+### Conversation mode（对话模式）
 
 If you want a more ChatGPT-like experience, you can run in conversation mode by passing `-cnv` as a parameter（如果你想要一个更像是ChatGPT类似的体验，你可以传入-cnv这个参数从而获得对话模式）:
 
 ```bash
+# llama-cli是程序名称
+# -m your_model.gguf是GGUF格式的模型文件
+# -p "You are a helpful assistant"是模型提示词
+# -cnv是控制是否进行对话模型的一个参数
 llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
 
 # Output:
@@ -589,12 +600,23 @@ By default, the chat template will be taken from the input model. If you want to
 默认情况下，这个聊天模板将从输入模型中获得，如果你想要使用另外一个聊天模板，那么传入`--chat-template NAME`参数就可以了。查看下列支持的模板。
 
 ```bash
+# llama-cli是程序名称
+# -m your_model.gguf是GGUF格式的模型文件
+# -p "You are a helpful assistant"是模型提示词
+# -cnv是控制是否进行对话模型的一个参数
+# --chat-template chatml是自定义的聊天模板
 ./llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --chat-template chatml
 ```
 
 You can also use your own template via in-prefix, in-suffix and reverse-prompt parameters（您还可以通过前缀、后缀和反向提示参数使用自己的模板）:
 
 ```bash
+# llama-cli是程序名称
+# -m your_model.gguf是GGUF格式的模型文件
+# -p "You are a helpful assistant"是模型提示词
+# -cnv是控制是否进行对话模型的一个参数
+# --in-prefix 'User: '是使用自己的模板的一个例子
+# --reverse-prompt 'User:'是使用自己的模板的一个例子
 ./llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User: ' --reverse-prompt 'User:'
 ```
 
@@ -604,10 +626,31 @@ You can also use your own template via in-prefix, in-suffix and reverse-prompt p
 
 [llama.cpp Web 服务器](./examples/server/README.md) 是一个轻量级的与 [OpenAI API](https://github.com/openai/openai-openapi) 兼容的 HTTP 服务器，可用于为本地模型提供服务并轻松将其连接到现有客户端。
 
+```
+### 1. 总结上述内容想要表达的观点
+上述内容描述了 `llama.cpp web server`，这是一个轻量级的 HTTP 服务器，兼容 [OpenAI API](https://github.com/openai/openai-openapi)。它的主要功能是提供本地模型服务，并能够轻松地将这些模型连接到现有的客户端。该服务器旨在简化本地模型的部署和集成，使用户能够在不依赖云服务的情况下，通过符合 OpenAI API 标准的方式，直接在本地环境中使用和交互这些模型。
+
+### 2. 具体的例子解释
+假设你有一个机器学习模型，如一个基于 GPT 的文本生成模型，这个模型已经在你的本地计算机上训练完毕。通常，如果你想将这个模型提供给其他应用或服务使用，你需要有一个服务器来处理请求和发送响应。
+
+这里的 `llama.cpp web server` 就是这样一个服务器，它不仅轻量级，而且符合 OpenAI API 的标准。这意味着它可以理解和响应遵循 OpenAI API 规格的 HTTP 请求。因此，任何已经设计好用于与 OpenAI API 互动的客户端软件或服务，都可以不需任何修改，直接与你的本地服务器交互，就如同它们在与 OpenAI 的云服务交互一样。
+
+**具体例子**：
+- 假设你开发了一个应用程序，该应用程序需要生成描述性文本。通常，你可能会通过网络请求 OpenAI 的 API 来获得这些生成的文本。
+- 使用 `llama.cpp web server`，你可以将你自己的 GPT 模型部署在本地服务器上。然后，你的应用程序可以像通常请求 OpenAI 云服务一样，向你的本地服务器发送请求。
+- 你的服务器接收这些请求，利用本地的 GPT 模型生成文本，并将文本结果返回给请求的客户端。
+- 这样，你就能在完全不依赖外部云服务的情况下，提供相同的功能，同时也可能减少延迟和成本。
+
+通过这种方式，`llama.cpp web server` 为开发者提供了一个便捷的工具，使他们能够更自由、灵活地部署和使用自己的机器学习模型。
+```
+
 
 Example usage（使用示例）:
 
 ```bash
+# ./llama-server是程序名称
+# -m your_model.gguf是模型文件
+# --port 8080是服务器端口号
 ./llama-server -m your_model.gguf --port 8080
 
 # Basic web UI can be accessed via browser: http://localhost:8080
@@ -624,13 +667,22 @@ In this mode, you can always interrupt generation by pressing Ctrl+C and enterin
 Here is an example of a few-shot interaction, invoked with the command（以下是使用命令调用的几次交互的示例）
 
 ```bash
-# default arguments using a 7B model
+# default arguments using a 7B model（默认的参数使用7B模型）
+# 运行chat.sh
 ./examples/chat.sh
 
-# advanced chat with a 13B model
+# advanced chat with a 13B model（使用13B模型进行高级对话）
 ./examples/chat-13B.sh
 
-# custom arguments using a 13B model
+# custom arguments using a 13B model（使用13B模型自定义参数）
+# ./llama-cli程序名称
+# -m ./models/13B/ggml-model-q4_0.gguf模型
+# -n 256控制模型生成token的数量
+# --repeat_penalty 1.0控制模型在输出token重复的情况下处罚程度
+# --color控制输出使用彩色来进行区分
+# -i参数现在不知道有什么作用
+# -r "User:"应该是指定用户角色
+# -f prompts/chat-with-bob.txt指定输入模型的提示词
 ./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
@@ -664,6 +716,11 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
 `llama.cpp` supports grammars to constrain model output. For example, you can force the model to output JSON only（`llama.cpp`支持通过语法来限制模型的输出。例如，你可以强制模型只输出JSON）:
 
 ```bash
+# ./llama-cli程序名称
+# -m ./models/13B/ggml-model-q4_0.gguf模型位置
+# -n 256控制模型输出token的数量
+# --grammar-file grammars/json.gbnf指定语法文件
+# -p 'Request: schedule a call at 8pm; Command:'输出模型提示词
 ./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
 ```
 
@@ -753,8 +810,56 @@ Please refer to [Build llama.cpp locally](./docs/build.md)
 | [Vulkan](./docs/build.md#vulkan) | GPU |
 | [CANN](./docs/build.md#cann) | Ascend NPU |
 
+## 杨小兵-解释
 
+上述内容是一个表格，列出了不同的计算后端及它们支持的目标设备。这些后端主要用于提供不同硬件设备上的计算资源，以执行各种数据处理和计算密集型任务。这里的每个后端都针对特定类型的硬件进行了优化，以便最大化性能。以下是对各个后端及其目标设备的详细解释：
 
+### 1. Metal
+- **后端**: Metal
+- **目标设备**: Apple Silicon
+- **说明**: Metal 是 Apple 开发的一个低层次的、面向对象的框架，用于在 Apple 设备（如带有 Apple Silicon 芯片的设备）上直接控制 GPU 的图形和计算操作。
+
+### 2. BLAS
+- **后端**: BLAS (Basic Linear Algebra Subprograms)
+- **目标设备**: All (所有设备)
+- **说明**: BLAS 提供一系列低级程序，用于进行向量和矩阵运算，广泛用于各种计算软件中，支持几乎所有类型的硬件。
+
+### 3. BLIS
+- **后端**: BLIS
+- **目标设备**: All (所有设备)
+- **说明**: BLIS 是一个为多种类型的硬件提供高性能矩阵运算的软件框架。
+
+### 4. SYCL
+- **后端**: SYCL
+- **目标设备**: Intel and Nvidia GPU
+- **说明**: SYCL 是一个基于 C++ 的高级编程模型，用于开发异构计算应用程序，支持 Intel 和 Nvidia 的 GPU。
+
+### 5. MUSA
+- **后端**: MUSA
+- **目标设备**: Moore Threads GPU
+- **说明**: MUSA 是专门为 Moore Threads GPU 设计的计算后端，用于优化这种新型 GPU 的计算性能。
+
+### 6. CUDA
+- **后端**: CUDA
+- **目标设备**: Nvidia GPU
+- **说明**: CUDA 是 Nvidia 提供的一个并行计算平台和编程模型，能够增强 Nvidia GPU 的计算性能。
+
+### 7. hipBLAS
+- **后端**: hipBLAS
+- **目标设备**: AMD GPU
+- **说明**: hipBLAS 是 AMD GPU 上的一个数学库，提供 BLAS 类型的函数，用于高性能科学计算。
+
+### 8. Vulkan
+- **后端**: Vulkan
+- **目标设备**: GPU
+- **说明**: Vulkan 是一个跨平台的图形和计算 API，提供高效的、跨硬件的接口，支持多种 GPU。
+
+### 9. CANN
+- **后端**: CANN (Compute Architecture for Neural Networks)
+- **目标设备**: Ascend NPU
+- **说明**: CANN 是华为为 Ascend NPU 设计的软件架构，专门用于优化和执行神经网络相关的计算任务。
+
+每种后端都是为了特定的计算需求和硬件优化设计的，使用时可以根据具体的硬件设备和计算任务选择合适的后端。这样可以确保应用程序在不同的硬件平台上都能达到最佳的性能。
 
 
 
@@ -842,7 +947,7 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 
 ## Contributing（贡献）
 
-- Contributors can open PRs（共享这可以打开PRs）
+- Contributors can open PRs（贡献者可以打开PRs）
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch（贡献者可以在`llama.cpp`仓库中push分支并且将PRs合并到master分支中）
 - Collaborators will be invited based on contributions（贡献者将会基于贡献会被邀请）
 - Any help with managing issues and PRs is very appreciated!（有着任何管理和PRs将会是非常好的，非常感激）
