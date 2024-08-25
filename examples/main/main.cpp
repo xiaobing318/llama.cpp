@@ -40,6 +40,67 @@ static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
 static bool need_insert_eot = false;
 
+/*
+* 杨小兵-2024-08-11
+一、解释
+  这个名为`moduleExeBaseName`的函数，其目的是获取当前执行模块（通常是可执行文件）的完整路径，并从中提取基本名称（即文件名，不包括路径）。
+它专为Windows平台编写，使用了Windows API函数`GetModuleFileName`。
+  `GetModuleFileName`是Windows API的一部分，用于获取一个模块（可执行文件或DLL动态链接库）的完整路径名。这个函数能够返回包含驱动器号、目录、
+文件名和扩展名的字符串，对于调试、日志记录、或是需要基于当前执行模块路径构造其他文件路径时非常有用。
+
+二、`GetModuleFileName`函数的参数解释
+- **hModule**: 这是一个`HMODULE`类型的句柄，指向想要获取全路径的模块。如果这个参数是`NULL`或`nullptr`，函数将返回当前进程的可执行文件的路径。
+对于动态链接库（DLL）模块，可以通过`LoadLibrary`函数获取其句柄，并传递给`GetModuleFileName`。
+
+- **lpFilename**: 指向一个缓冲区的指针，用于接收模块的完整路径字符串。这个缓冲区应该足够大，能够容纳`MAX_PATH`字符，以确保有足够的空间存放路径名。
+`MAX_PATH`通常定义为260个字符，但在某些情况下路径可能会超过这个长度。
+
+- **nSize**: 这个参数指定了`lpFilename`缓冲区的大小（以字符为单位）。这个大小包括了字符串的终止null字符。如果路径长度超过了这个值，函数调用将不会成功，
+需要一个更大的缓冲区来存放完整路径。
+  函数的返回值是复制到`lpFilename`缓冲区的字符串长度（不包括终止null字符）。如果函数成功，返回值是写入缓冲区的字符串长度；如果函数失败，返回值是0。
+调用`GetLastError`函数可以获取更多错误信息
+
+二、总结
+1、moduleExeBaseName这个函数的作用就是获取当前可执行文件的完整路径，从中获取到文件名
+2、GetModuleFileName是一个函数
+3、GetModuleFileName属于windows.h中的内容
+4、filepath.get()`返回的C风格字符串
+5、如果GetModuleFileName函数成功，返回值是写入缓冲区的字符串长度；如果GetModuleFileName函数失败，返回值是0
+*/
+static std::string moduleExeBaseName(void)
+{
+    DWORD l = MAX_PATH;
+    //  通过分配一个char类型的智能指针filepath来保存文件（可执行文件）的路径信息
+    std::unique_ptr<char> filepath;
+    for (;; )
+    {
+        //  通过`filepath.reset(new char[l])`分配足够长的字符数组来尝试存放模块文件名
+        filepath.reset(new char[l]);
+        //  如果`GetModuleFileName`返回的长度小于`l`，说明文件名已成功获取，不需要再次循环；否则，增加`l`的值（`l += MAX_PATH;`）以提供更大的缓冲区并再次尝试
+        if (GetModuleFileName(nullptr, filepath.get(), l) < l)
+            break;
+        l += MAX_PATH;
+    }
+
+    std::string basename(filepath.get());
+    return basename;
+}
+
+/*
+* 杨小兵-2024-08-11
+  替换一个字符串中出现的多个特定子字符串
+*/
+static void replaceAll(std::string& source, const std::string& from, const std::string& to)
+{
+    size_t startPos = 0;
+    while ((startPos = source.find(from, startPos)) != std::string::npos)
+    {
+        source.replace(startPos, from.length(), to);
+        // 由于替换的新字符串可能会影响后续位置，更新 startPos 以防止替换相同位置
+        startPos += to.length();
+    }
+}
+
 static bool file_exists(const std::string & path) {
     std::ifstream f(path.c_str());
     return f.good();
@@ -128,22 +189,26 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     return formatted;
 }
 
-int main(int argc, char ** argv) {
+int _main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
     if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+        //gpt_params_print_usage(argc, argv, params);
+        printf("usage:StarEarthGPT.exe -t N");
         return 1;
     }
 
     llama_sampling_params & sparams = params.sparams;
 
 #ifndef LOG_DISABLE_LOGS
+/*
+* 暂时关闭记录日志
     log_set_target(log_filename_generator("main", "log"));
     LOG_TEE("Log start\n");
     log_dump_cmdline(argc, argv);
     llama_log_set(llama_log_callback_logTee, nullptr);
+*/
 #endif // LOG_DISABLE_LOGS
 
     // TODO: Dump params ?
@@ -481,24 +546,47 @@ int main(int argc, char ** argv) {
     }
     LOG_TEE("\n\n");
 
+//    if (params.interactive) {
+//        const char * control_message;
+//        if (params.multiline_input) {
+//            control_message = " - To return control to the AI, end your input with '\\'.\n"
+//                              " - To return control without starting a new line, end your input with '/'.\n";
+//        } else {
+//            control_message = " - Press Return to return control to the AI.\n"
+//                              " - To return control without starting a new line, end your input with '/'.\n"
+//                              " - If you want to submit another line, end your input with '\\'.\n";
+//        }
+//        LOG_TEE("== Running in interactive mode. ==\n");
+//#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
+//        LOG_TEE(       " - Press Ctrl+C to interject at any time.\n");
+//#endif
+//        LOG_TEE(       "%s\n", control_message);
+//
+//        is_interacting = params.interactive_first;
+//    }
+
     if (params.interactive) {
-        const char * control_message;
+        const char* control_message;
         if (params.multiline_input) {
-            control_message = " - To return control to the AI, end your input with '\\'.\n"
-                              " - To return control without starting a new line, end your input with '/'.\n";
-        } else {
-            control_message = " - Press Return to return control to the AI.\n"
-                              " - To return control without starting a new line, end your input with '/'.\n"
-                              " - If you want to submit another line, end your input with '\\'.\n";
+            control_message = " - 要将控制权交还给 AI，请以 '\\' 结束输入。\n"
+                " - 要返回控制权而不开始新行，请以 '/' 结束输入。\n";
         }
-        LOG_TEE("== Running in interactive mode. ==\n");
+        else {
+            control_message = " - 按“Return”键将控制权交还给 AI。\n"
+                " - 要返回控制而不开始新行，请以“/”结束输入。\n"
+                " - 如果您想提交另一行，请以“\\”结束您的输入。\n";
+        }
+        LOG_TEE("== 运行在交互模式中 ==\n");
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-        LOG_TEE(       " - Press Ctrl+C to interject at any time.\n");
+        LOG_TEE(" - 可随时按 Ctrl+C 插入。\n");
 #endif
-        LOG_TEE(       "%s\n", control_message);
+        LOG_TEE("%s\n", control_message);
 
         is_interacting = params.interactive_first;
     }
+
+
+
 
     bool is_antiprompt        = false;
     bool input_echo           = true;
@@ -994,4 +1082,54 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     return 0;
+}
+
+int main(int argc, char** argv)
+{
+    if (argc != 3)
+    {
+        printf("usage: StarEarthGPT.exe -t N\n");
+        return 1;
+    }
+    else
+    {
+        std::string exename(moduleExeBaseName());
+        std::string basename(exename.substr(0, exename.size() - 16));
+        replaceAll(basename, "\\", "/");
+        std::string model_path = basename + "llama3-8b-chinese-chat.gguf";
+
+        // 创建新的参数数组
+        std::vector<char*> new_argv;
+        for (int i = 0; i < argc; ++i) {
+            new_argv.push_back(argv[i]); // 原始参数
+        }
+
+        // 添加-m 和 model_path 参数
+        char model_flag[] = "-m";
+        new_argv.push_back(model_flag); // 添加 "-m"
+
+        // 注意：这里需要确保model_path字符串在传递给_main之前保持有效
+        char* model_path_arg = new char[model_path.length() + 1];
+        std::copy(model_path.begin(), model_path.end(), model_path_arg);
+        model_path_arg[model_path.length()] = '\0';
+        new_argv.push_back(model_path_arg); // 添加 model_path
+
+        // 添加-p 参数
+        char prompt_flag[] = "-p";
+        new_argv.push_back(prompt_flag); // 添加 "-p"
+        char prompt_arg[] = "你是一个非常有帮助的助手";
+        new_argv.push_back(prompt_arg); // 添加 prompt_arg
+
+        // 添加-cnv 参数
+        char cnv_flag[] = "-cnv";
+        new_argv.push_back(cnv_flag); // 添加 "-cnv"
+
+        // 调用 _main 函数
+        _main(new_argv.size(), new_argv.data());
+
+        // 清理动态分配的内存
+        delete[] model_path_arg;
+
+        return 0;
+    }
 }
