@@ -1,4 +1,5 @@
 {
+  //  2024-08-25-杨小兵：这个文件的作用就是为配置Pyright工具（对python静态类型进行检查）
   "extraPaths": ["gguf-py"],
   "pythonVersion": "3.9",
   "pythonPlatform": "All",
