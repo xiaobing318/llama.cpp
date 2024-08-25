@@ -1,3 +1,4 @@
+# 2024-08-25-杨小兵：这个`flake.nix` 文件定义了一个 Nix Flakes 配置，用于构建和管理 Facebook 的 LLaMA 模型的 C/C++ 版本。
 # The flake interface to llama.cpp's Nix expressions. The flake is used as a
 # more discoverable entry-point, as well as a way to pin the dependencies and
 # expose default outputs, including the outputs built by the CI.
