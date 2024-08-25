@@ -1,14 +1,27 @@
 #[[
 1. `cmake_minimum_required(VERSION 3.14)`
    - 这一行指定了当前CMake项目所需的最低CMake版本。在这个例子中，它要求至少使用CMake版本3.14。这是因为一些特定的功能或者选项可能在旧版本的CMake中
-   不可用。在这里提到的3.14版本支持`add_link_options`和隐式目标目录等功能。
+   不可用（CMake版本至少为3.14才能提供当前项目所需要的特定功能）。在这里提到的3.14版本支持`add_link_options`和隐式目标目录等功能。
 
 2. `project("llama.cpp" C CXX)`
    - 这行命令定义了项目的名称以及项目支持的编程语言。项目名称被设置为"llama.cpp"，同时指定了这个项目使用C和C++语言。`C`代表C语言，`CXX`代表C++语言。
    项目名称通常用于生成相关文档、导出目标等多种用途。
 
 3. `include(CheckIncludeFileCXX)`
-   - `include()`命令用于载入并运行CMake代码。这里，它包含了`CheckIncludeFileCXX`模块，该模块提供了检查C++头文件是否存在的功能。这对于确认编译环境是否具备某些功能或者库的支持非常有用。
+   - `include()`命令用于载入并运行CMake代码。这里，它包含了`CheckIncludeFileCXX`模块，该模块提供了检查C++头文件是否存在的功能。这对于确认编译环境
+是否具备某些功能或者库的支持非常有用。
+
+4. "for add_link_options and implicit target directories."内容解释
+   在CMake中，`cmake_minimum_required(VERSION 3.14)`这行代码不仅指定了项目需要的最低CMake版本，而且它还确保了使用该版本所支持的所有功能。其中提到
+的“# for add_link_options and implicit target directories”是注释，用来解释为什么需要至少3.14版本的CMake。
+
+   1. **add_link_options**: 这是一个在CMake 3.13版本中引入的命令，它允许开发者在全局范围内为链接器添加选项。这意味着，通过这个命令，你可以为项目中的
+   所有目标设置链接选项，而不需要对每一个目标分别设置。这大大简化了链接选项的管理，尤其是在大型项目中。
+
+   2. **隐式目标目录**：从CMake 3.14开始，增加了更智能的目标二进制文件目录的处理。在这之前，你可能需要显式地设置每个目标的存放目录。从3.14版本开始，
+   CMake能更智能地推断这些目录，使得目录结构的管理更为方便和直观。
+
+通过要求至少使用CMake 3.14，这个CMake脚本确保了所有这些较新和改进的功能都可用，从而使构建过程更加高效和易于管理。
 ]]
 cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
@@ -45,8 +58,8 @@ include(CheckIncludeFileCXX)
 
 ### 是否为 CMake 内置变量
 
-    上述提到的变量都是 CMake 的内置变量，它们是 CMake 配置过程中可以使用来控制特定行为的预定义变量。这些变量允许用户定制 CMake 的行为，比如调整
-    警告输出或控制特定文件的生成，以适应不同的开发需求和环境。
+   上述提到的变量都是 CMake 的内置变量，它们是 CMake 配置过程中可以使用来控制特定行为的预定义变量。这些变量允许用户定制 CMake 的行为，比如调整
+警告输出或控制特定文件的生成，以适应不同的开发需求和环境。
 ]]
 #set(CMAKE_WARN_DEPRECATED YES)
 set(CMAKE_WARN_UNUSED_CLI YES)
