@@ -23,7 +23,7 @@
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`（清除所有尾随空格，使用 4 个空格缩进，括号放在同一行）
 - Naming usually optimizes for common prefix (see https://github.com/ggerganov/ggml/pull/302#discussion_r1243240963)（命名通常针对通用前缀进行优化）
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices（张量按行主序存储数据。我们将维度 0 称为列，维度 1 称为行，维度 2 称为矩阵）
-- Matrix multiplication is unconventional（矩阵乘法是不常规的）: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
+- Matrix multiplication is unconventional（矩阵乘法是不常规的：和通常的理解是不同的，不过现在还可以不进行深入理解）: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
 
 ![matmul](media/matmul.png)
 
