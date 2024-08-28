@@ -9,7 +9,7 @@ git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 ```
 
-In order to build llama.cpp you have four different options.（为了build llama.cpp项目，你有四种不同的选择）
+In order to build llama.cpp you have four different options.（为了build llama.cpp项目，你有四种不同的选择，但是这里没有找到四种方式，只有三种方式）
 
 - Using `make`（1、使用make构建llama.cpp项目）:
   - On Linux or MacOS:
