@@ -758,7 +758,6 @@ string ::= "\"" char* "\"" space
 
 </details>
 
-
 `llama.cpp`支持将JSON Schema的一个子集转换为GBNF语法。这种转换功能允许用户将结构化的JSON Schema定义直接转换成形式语法，这对于确保特定类型的JSON数据符合预期格式非常有用。以下详细解释这种转换功能及其应用方式：
 
 ### 在`llama-server`中使用
