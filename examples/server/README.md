@@ -1,23 +1,30 @@
-# LLaMA.cpp HTTP Server
+# LLaMA.cpp HTTP Server（LLaMA.cpp项目中的HTTP Server）
 
 Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
 
+ - 基于[httplib]、[nlohmann::json](https://github.com/nlohmann/json)、(https://github.com/yhirose/cpp-httplib)、**llama.cpp**快速的、轻量级的、纯C/C++的HTTP server
+
 Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 
+ - 一组 LLM REST API 和一个用于与 llama.cpp 交互的简单 Web 前端。
+
 **Features:**
- * LLM inference of F16 and quantized models on GPU and CPU
- * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes
- * Parallel decoding with multi-user support
+ * LLM inference of F16 and quantized models on GPU and CPU（GPU 和 CPU 上 F16 和量化模型的 LLM 推理）
+ * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes（[OpenAI API](https://github.com/openai/openai-openapi) 兼容聊天完成和嵌入路线）
+ * Parallel decoding with multi-user support（支持多用户并行解码）
  * Continuous batching
  * Multimodal (wip)
- * Monitoring endpoints
- * Schema-constrained JSON response format
+ * Monitoring endpoints（监控端点）
+ * Schema-constrained JSON response format（受架构约束的 JSON 响应格式）
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
 
-## Usage
+ - 该项目正在积极开发中，我们正在[寻求反馈和贡献者]（https://github.com/ggerganov/llama.cpp/issues/4216）。
+
+## Usage（使用：）
 
 ```
+# 下列内容是如何通过参数控制.llama-server的使用
 usage: ./llama-server [options]
 
 general:
@@ -247,7 +254,8 @@ logging:
          --log-append             Don't truncate the old log file.
 ```
 
-Available environment variables (if specified, these variables will override parameters specified in arguments):
+
+Available environment variables (if specified, these variables will override parameters specified in arguments)可用的一些环境变量，如果这些环境变量被指定，那么这些环境变量将会覆盖通过参数设置的变量值:
 
 - `LLAMA_CACHE` (cache directory, used by `--hf-repo`)
 - `HF_TOKEN` (Hugging Face access token, used when accessing a gated model with `--hf-repo`)
@@ -267,28 +275,32 @@ Available environment variables (if specified, these variables will override par
 - `LLAMA_ARG_FLASH_ATTN`
 - `LLAMA_ARG_DEFRAG_THOLD`
 
-## Build
+## Build（构建server）
 
-`llama-server` is built alongside everything else from the root of the project
+`llama-server` is built alongside everything else from the root of the project（`llama-server`与项目根目录中的其他所有内容一起构建）
 
 - Using `make`:
 
   ```bash
+  # 使用make程序对llama-server目录进行build
   make llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
+  # 使用cmake对llama-server目录进行build
+  # 参数1：cmake指定程序的名称；参数2：-B build指定cmake在build目录中进行构建，如果没有build目录则创建build
   cmake -B build
+  # 参数1：cmake指定程序的名称；参数2：--build build指定构建build目录中的内容；参数3：--config Release指定构建版本类型；4、-t llama-server-->在 CMake 命令行中使用的 `-t llama-server` 参数指定了构建的目标。`-t` 或 `--target` 参数后面跟随的是目标名称，在这个例子中是 `llama-server`。这意味着 CMake 将仅构建指定的目标，而不是默认的全部目标。
   cmake --build build --config Release -t llama-server
   ```
 
   Binary is at `./build/bin/llama-server`
 
-## Build with SSL
+## Build with SSL（将SSL包含进来进行build）
 
-`llama-server` can also be built with SSL support using OpenSSL 3
+`llama-server` can also be built with SSL support using OpenSSL 3（`llama-server` 也可以使用 OpenSSL 3 构建 SSL 支持）
 
 - Using `make`:
 
@@ -306,46 +318,62 @@ Available environment variables (if specified, these variables will override par
   cmake --build build --config Release -t llama-server
   ```
 
-## Quick Start
+## Quick Start（快速开始）
 
 To get started right away, run the following command, making sure to use the correct path for the model you have:
+
+ - 要立即开始，请运行以下命令，确保使用您拥有的模型的正确路径：
 
 ### Unix-based systems (Linux, macOS, etc.)
 
 ```bash
+# 参数1：./llama-server指定程序
+# 参数2：-m models/7B/ggml-model.gguf指定程序使用的模型文件
+# 参数3：-c 2024指定提示词上下文的大小
 ./llama-server -m models/7B/ggml-model.gguf -c 2048
 ```
 
 ### Windows
 
 ```powershell
+# 参数1：llama-server.exe指定程序
+# 参数2：-m models\7B\ggml-model.gguf指定模型文件
+# 参数3：-c 2048指定提示词上下文token的大小
 llama-server.exe -m models\7B\ggml-model.gguf -c 2048
 ```
 
-The above command will start a server that by default listens on `127.0.0.1:8080`.
-You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
+The above command will start a server that by default listens on `127.0.0.1:8080`.（上述命令将启动一个默认监听“127.0.0.1:8080”的服务器。）
+You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.（您可以使用 Postman 或带有 axios 库的 NodeJS 来使用端点。您可以通过相同的 URL 访问 Web 前端。）
 
 ### Docker
 
 ```bash
+# 参数1：docker run是Docker的一个命令，用于创建并启动一个新的容器实例
+# 参数2：这个参数用于端口映射。格式为 `-p <主机端口>:<容器端口>`。这里，Docker 将容器内的 8080 端口映射到宿主机的 8080 端口上，这样可以通过宿主机的 8080 端口访问容器中运行的应用
+# 参数3：-v /path/to/models-->这是一个卷映射的参数。格式为 `-v <宿主机目录>:<容器内目录>`。它将宿主机上的 `/path/to/models` 目录挂载到容器内的 `/models` 目录。这样，容器内的应用可以直接访问宿主机目录中的文件，这在需要持久化数据或共享数据时非常有用。
 docker run -p 8080:8080 -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:server -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080
 
 # or, with CUDA:
 docker run -p 8080:8080 -v /path/to/models:/models --gpus all ghcr.io/ggerganov/llama.cpp:server-cuda -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080 --n-gpu-layers 99
 ```
 
-## Testing with CURL
+## Testing with CURL（使用CURL进行测试）
 
 Using [curl](https://curl.se/). On Windows, `curl.exe` should be available in the base OS.
 
 ```sh
+# 参数1：curl指定程序
+# 参数2：--request POST指定数据请求的方式
+# 参数3：--url http://localhost:8080/completion指定需要访问的页面
+# 参数4：--header "Content-Type: application/json"指定数据头的类型
+# 参数5：--data '{"prompt": "Building a website can be done in 10 simple steps:","n_predict": 128}'指定需要请求的内容
 curl --request POST \
     --url http://localhost:8080/completion \
     --header "Content-Type: application/json" \
     --data '{"prompt": "Building a website can be done in 10 simple steps:","n_predict": 128}'
 ```
 
-## Advanced testing
+## Advanced testing（高级测试）
 
 We implemented a [server test framework](./tests/README.md) using human-readable scenario.
 
