@@ -6,7 +6,7 @@ Adding a model requires few steps（添加一个model需要几个步骤）:
 2. Define the model architecture in `llama.cpp`（在llama.cpp项目中定义模型架构）
 3. Build the GGML graph implementation（构建GGMLgraph implementation）
 
-After following these steps, you can open PR.(完成了上述这些步骤，你可以进行PR)
+After following these steps, you can open PR.(完成了上述这些步骤，你可以进行PR，最为重要的也就是上述三个步骤，现在的一个思路可以是仿照已经实现的model architecture来添加新的new model architecture)
 
 Also, it is important to check that the examples and main ggml backends (CUDA, METAL, CPU) are working with the new architecture, especially（另外，检查示例和主要 ggml 后端（CUDA、METAL、CPU）是否与新架构兼容也很重要，尤其是）:
 - [main](/examples/main/)
