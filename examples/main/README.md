@@ -1,9 +1,8 @@
 # llama.cpp/examples/main（这是llama.cpp中的一个例子）
 
 This example program allows you to use various LLaMA language models easily and efficiently. It is specifically designed to work with the [llama.cpp](https://github.com/ggerganov/llama.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with LLaMA models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
-
  - 这个例子程序允许你轻松的、有效的使用多种不同的llama语言模型。
- - llama这个项目提供了一个纯C/C++实现，有着4-bit量化的可选支持，对于更快、更低的内存继续推理，这个项目被优化正对桌面端CPUs。
+ - 它专为与 [llama.cpp](https://github.com/ggerganov/llama.cpp) 项目配合使用而设计，该项目提供纯 C/C++ 实现，并具有可选的 4 位量化支持，可实现更快、更低内存的推理，并且针对台式机 CPU 进行了优化。
  - 这个程序可以通过使用llama models被用于执行多种不同的推理任务，包含基于用户提供的提示词的生成式文本、反向提示词的对话式交互等场景应用。
 
 ## Table of Contents（内容目录）
@@ -32,18 +31,31 @@ Once downloaded, place your model in the models folder in llama.cpp.（一旦下
 
 ```bash
 # 使用llama-cli程序，参数-m指定具体模型的位置，参数--prompt指定输入的提示词
+# 参数1：./llama-cli是程序名称
+# 参数2：-m models/gemma-1.1-7b-it.Q4_K_M.gguf是指定的模型文件
+# 参数3：--prompt "Once upon a time"是提示词
 ./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf --prompt "Once upon a time"
 ```
 ##### Conversation mode (Allow for continuous interaction with the model)（对话模式：允许和model进行连续的交互）
 
 ```bash
 # 使用llama-cli程序，参数-m指定具体模型的位置，参数--cnv指定对话模式， 参数--chat-template指定对话的模板
+# 参数1：./llama-cli是程序名称
+# 参数2：-m models/gemma-1.1-7b-it.Q4_K_M.gguf是指定的模型文件
+# 参数3：-cnv是开启conversation mode的开关
+# 参数4：--chat-template gemma这个参数不能知道具体是怎么使用的
 ./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf -cnv --chat-template gemma
 ```
 
 ##### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it)（从一个初始的提示符开始，系统或程序会持续不断地生成文本）:
 ```bash
 # 使用llama-cli程序，参数-m指定具体模型的位置，剩余的两个参数还需要理解
+# 参数1：./llama-cli是程序名称
+# 参数2：-m models/gemma-1.1-7b-it.Q4_K_M.gguf是指定的模型文件
+# 参数3：--ignore-eos是开启conversation mode的开关
+# 参数4：--chat-template gemma指定同模型对话的方式
+# 参数5：--ignore-eos指定-->忽略流结束标记并继续生成
+# 参数6：-n -1指定预测的tokens数量，其中-1为无限的选项
 ./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 ```
 
@@ -51,17 +63,28 @@ Once downloaded, place your model in the models folder in llama.cpp.（一旦下
 
 ##### Input prompt (One-and-done)
 ```powershell
+# 参数1：./llama-cli.exe程序路径
+# 参数2：-m models\gemma-1.1-7b-it.Q4_K_M.gguf用来指定模型文件的位置
+# 参数3：--prompt "Once upon a time"用来指定模型输入的提示词
 ./llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf --prompt "Once upon a time"
 ```
 ##### Conversation mode (Allow for continuous interaction with the model)
 
 ```powershell
+# 参数1：./llama-cli.exe程序路径
+# 参数2：-m models\gemma-1.1-7b-it.Q4_K_M.gguf用来指定模型文件的位置
+# 参数3：-cnv用来开启模型的“持续对话模式”
+# 参数4：--chat-template gemma用来指定对话聊天的模板
 ./llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf -cnv --chat-template gemma
 ```
 
 #### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it):
 
 ```powershell
+# 参数1：./llama-cli.exe程序路径
+# 参数2：-m models\gemma-1.1-7b-it.Q4_K_M.gguf用来指定模型文件的位置
+# 参数3：--ignore-eos指定-->忽略流结束标记并继续生成
+# 参数4：-n -1指定预测的tokens数量，其中-1为无限的选项
 llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 ```
 
