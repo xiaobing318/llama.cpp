@@ -4,6 +4,7 @@
 notes:杨小兵-2024-12-16
 
 1、这个项目是llama.cpp项目的子项目HTTP Server
+2、这个子项目作为一个llama.cpp的前端从而使得更容易使用后端的模型
 */
 ```
 Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
@@ -14,6 +15,7 @@ notes:杨小兵-2024-12-16
 1、快速的、轻量级的、纯C/C++ HTTP server
 2、这个HTTP server依赖httplib、json、llama.cpp这三个库
 3、上述提到的httplib是我没有接触过的
+4、llama.cpp是这个HTTP server的计算后端
 */
 ```
 
@@ -22,8 +24,10 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 /*
 notes:杨小兵-2024-12-16
 
-1、一组 LLM REST API 和一个用于与 llama.cpp 交互的简单 Web 前端。
-2、这里有一组LLM REST API、web前端
+1、组成部分
+  1.1 一组 LLM REST APIs
+  1.2 一个用于与 llama.cpp 交互的简单 Web 前端
+2、对HTTP server的简单介绍
 */
 ```
 
@@ -40,14 +44,18 @@ notes:杨小兵-2024-12-16
 /*
 notes:杨小兵-2024-12-16
 
-1、将float-pointing 16和量化的LLM在GPU和CPU上进行inference
-2、[OpenAI API](https://github.com/openai/openai-openapi) 兼容聊天完成和嵌入路线
-3、Reranking endoint（这个目前不了解）
-4、支持多用户并行解码
-5、连续的batching
-6、多模态
-7、对endpoints进行监督
-8、可以使用schema来限制JSON的回复格式
+1、支持在GPU和CPU上进行大规模语言模型（LLM）的推理，使用F16（16位浮点）和量化模型。F16模型通过减少每个参数的位数来加快计算速度并降低内存占用，而量化模型则通过将模型参数压缩为更低的精度（例如INT8）来进一步提高效率
+2、提供与OpenAI API兼容的聊天补全（chat completions）和嵌入（embeddings）接口。这意味着开发者可以使用与OpenAI相同的API端点和请求格式来集成和调用该服务，简化了迁移和集成过程
+3、提供一个重新排序（reranking）的接口端点，用于对生成的结果进行二次排序，以提高结果的相关性和准确性。目前该功能仍在开发中（Work In Progress，WIP），具体实现可参考提供的GitHub拉取请求链接
+4、支持并行解码，允许多个用户同时进行推理请求。这意味着系统可以同时处理多个查询，提高响应速度和吞吐量，适用于高并发的应用场景
+5、实现持续的批处理机制，将多个推理请求合并为一个批次进行处理，以提高计算资源的利用率和推理效率。这在处理大量短请求时尤其有效，能够减少单个请求的延迟
+6、支持多模态功能，即处理和理解多种类型的数据输入，如文本、图像、音频等。目前该功能仍在开发中，未来将能够处理和生成多种形式的内容
+7、提供监控端点，用于实时跟踪和监控系统的运行状态、性能指标和资源使用情况。开发者可以通过这些端点获取系统健康状况，进行故障排查和性能优化。
+8、采用基于模式（Schema）约束的JSON响应格式，确保API返回的数据结构符合预定义的规范。这有助于提高数据的一致性和可靠性，便于客户端解析和处理。
+
+Chat Completions：聊天补全功能，指的是模型根据对话上下文生成相应的回复，用于构建对话系统或聊天机器人。
+OpenAI API：OpenAI提供的应用程序编程接口，允许开发者通过HTTP请求与其语言模型交互，执行文本生成、嵌入生成等功能。兼容性意味着该服务可以无缝替代或集成OpenAI的API。
+Embeddings：嵌入是将文本或其他数据转换为高维向量表示的技术，这些向量可以捕捉语义信息，广泛应用于搜索、推荐系统、相似性计算等领域。
 */
 ```
 
@@ -57,6 +65,7 @@ The project is under active development, and we are [looking for feedback and co
 notes:杨小兵-2024-12-16
 
 1、这个项目还处于积极开发状态，想要获取一些反馈和贡献者
+2、后面将会进行积极的开发和维护
 */
 ```
 
@@ -67,7 +76,8 @@ notes:杨小兵-2024-12-16
 /*
 notes:杨小兵-2024-12-16
 
-1、这部分注释是为了提示贡献者，下列的列表通过llama-gen-docs生成得到的
+1、贡献者需要注意：下列列表是通过llama-gen-docs生成得到的
+2、通过名为llama-gen-docs可执行文件得到的
 */
 ```
 **Common params**
@@ -239,6 +249,7 @@ Example usage of docker compose with environment variables:
 notes:杨小兵-2024-12-16
 
 1、使用环境变量的docker compose的示例
+2、可以使用local的LLM对下列这个命令进行解释分析
 */
 ```
 ```yml
@@ -266,7 +277,7 @@ services:
 notes:杨小兵-2024-12-16
 
 1、这个部分为了解释如何构建llama.cpp项目中的llama-server子项目
-2、“llama-server” 与项目根目录中的其他所有内容一起构建
+2、“llama-server” 与项目根目录中的其他所有内容一起构建（换句话说，当在项目的根目录执行构建命令时，`llama-server` 不是单独构建的，而是作为整个项目的一部分，与其他组件一起被构建和生成）
 */
 ```
 
@@ -278,6 +289,16 @@ notes:杨小兵-2024-12-16
   ```
 
   Binary is at `./build/bin/llama-server`
+```c
+/*
+notes:杨小兵-2024-12-16
+
+cmake -B build
+  在当前目录中的build目录中对项目进行构建，假设指定的build目录不存在，则cmake将会自动创建build
+cmake --build build --config Release -t llama-server
+  将上一条命令创建的build目录作为项目构建目录，这里的--config作为项目的构建类型（Release/Debug/ReleaaseWithDebuginfo/...）"-t llama-server" : 这个参数用于指定构建目标 (target)。在这个命令中, 构建目标是 "llama-server"。"llama-server" 表示我们想要构建的项目是 llama.cpp 服务器。通过指定构建目标, CMake 可以确定构建哪个项目。
+*/
+```
 
 ## 3 Build with SSL
 
@@ -286,7 +307,7 @@ notes:杨小兵-2024-12-16
 /*
 notes:杨小兵-2024-12-16
 
-1、`llama-server` 也可以使用 OpenSSL 3 构建 SSL 支持
+1、`llama-server` 也可以使用OpenSSL 3构建SSL支持
 2、在构建llama-server的时候通过构建SSL的支持
 3、下列在CAMAKE中使用宏定义来控制编译
 */
@@ -331,7 +352,8 @@ A pre-built version is available as a single HTML file under `/public` directory
 /*
 notes:杨小兵-2024-12-17
 
-1、在/public目录下有一个单HTML文件是可以使用的，这个文件是预构建好的
+1、在/public目录下有一个单HTML文件可以使用，这个文件是预构建好的
+2、这个html是非常简单的
 */
 ```
 
@@ -391,7 +413,8 @@ You can consume the endpoints with Postman or NodeJS with axios library. You can
 /*
 notes:杨小兵-2024-12-17
 
-1、这部分内容需要额外了解然后进行修改
+1、上述命令将会启动一个服务器，这个服务器默认情况下将会监听127.0.0.1:8080
+2、Postman：是一个通用 API 开发和测试工具, 具有强大的功能, 可以帮助开发者访问和使用 API 端点
 */
 ```
 
@@ -419,6 +442,7 @@ curl --request POST \
 notes:杨小兵-2024-12-17
 
 1、使用CURL来对llama-server进行测试，模仿其他用户使用llama-server的场景
+2、需要对curl可执行文件有所了解
 */
 ```
 
@@ -432,7 +456,7 @@ We implemented a [server test framework](./tests/README.md) using human-readable
 notes:杨小兵-2024-12-17
 
 1、使用人类可读的场景实现了一个服务测试框架
-2、在提交一个issue的时候请尝试使用这种格式进行复现
+2、在提交issue之前，如何通过指定的格式复现问题，帮助开发者更好地诊断和解决问题
 */
 ```
 
@@ -494,9 +518,11 @@ notes:杨小兵-2024-12-17
 /*
 notes:杨小兵-2024-12-17
 
-1、这部分内容不理解，我应该从哪里获取得到？
+1、要获取 `llama-server` 的健康状态，您需要向其健康检查（Health Check）端点发送HTTP请求，并根据响应的HTTP状态码和响应体来判断服务器的当前状态。
+2、可以通过浏览器输入地址或者通过curl工具获取服务器状态
 */
 ```
+
 ### 9.2 POST `/completion`: Given a `prompt`, it returns the predicted completion.
 ```c
 /*
@@ -884,10 +910,15 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 /*
 notes:杨小兵-2024-12-17
 
-1、在messages中给定一个ChatML格式的json描述，模型将会返回预测的内容
-2、这个功能支持同步模式和流式阅读模式,可以适应写脚本和交互式应用程序
-3、不过,我不声称它完全兼容OpenAI API规范,但我们的试验表明,它能够满足许多应用程序的需求。只有使用支持的聊天模板的模型,可以优化其最佳使用
-4、默认情况下ChatML模板将会被使用
+1、在许多对话模型（例如OpenAI的ChatGPT API、Llama、Bard等）中，输入往往以特定的格式（例如ChatML格式）组织。这种格式将多轮对话、系统提示、用户请求、开发者消息等按照统一的结构序列化为JSON，方便模型理解上下文，从而给出合理的文本续写（completion）
+2、这个功能支持同步模式和流式阅读模式,可以适应写脚本和交互式应用程序（流式输出提高了交互体验，用户能即时看到回答正在生成，而不是等待漫长的计算完成）
+  2.1 同步模式（Synchronous Mode）：客户端发送请求后，等待完整的响应返回。这适用于需要一次性获取完整回复的应用场景
+  2.2 流式模式（Streaming Mode）：响应以流的形式逐步返回，允许客户端在生成过程中实时接收和处理部分内容。这对于交互式应用或需要即时反馈的场景尤为适用。
+3、该接口接收一个以ChatML格式组织的JSON描述，具体位于`messages`字段中，并返回模型预测的完成文本（predicted completion）
+4、与OpenAI API的兼容性：尽管该接口在设计上参考了OpenAI的API规范，但并未宣称完全兼容。然而，基于实际经验，该接口已经能够满足许多应用的需求，提供足够的功能支持
+5、支持的聊天模板：只有使用了[支持的聊天模板](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)的模型才能在该接口下达到最佳性能。这意味着用户需要确保所选模型符合特定的模板要求，以充分利用接口的功能。
+6、默认模板：在未指定其他模板的情况下，接口默认使用ChatML模板。这为用户提供了一种标准化的输入格式，简化了使用流程。
+
 */
 ```
 
