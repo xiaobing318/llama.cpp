@@ -3,7 +3,7 @@
 /*
 notes:杨小兵-2024-12-16
 
-1、这个项目是llama.cpp项目的子项目HTTP Server
+1、这个项目是llama.cpp项目的子项目llama HTTP Server
 2、这个子项目作为一个llama.cpp的前端从而使得更容易使用后端的模型
 */
 ```
@@ -13,7 +13,13 @@ Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/
 notes:杨小兵-2024-12-16
 
 1、快速的、轻量级的、纯C/C++ HTTP server
+  1.1 性能高
+  1.2 轻量级
+  1.3 纯C/C++
 2、这个HTTP server依赖httplib、json、llama.cpp这三个库
+  2.1 httplib
+  2.2 json
+  2.3 llama.cpp
 3、上述提到的httplib是我没有接触过的
 4、llama.cpp是这个HTTP server的计算后端
 */
@@ -25,7 +31,7 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 notes:杨小兵-2024-12-16
 
 1、组成部分
-  1.1 一组 LLM REST APIs
+  1.1 一组 LLM REST APIs（目前使用不熟悉）
   1.2 一个用于与 llama.cpp 交互的简单 Web 前端
 2、对HTTP server的简单介绍
 */
