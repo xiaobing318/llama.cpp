@@ -1,10 +1,26 @@
-### Server benchmark tools
+### 1 Server benchmark tools
 
 Benchmark is using [k6](https://k6.io/).
+```c
+/*
+notes:杨小兵-2024-12-19
 
-##### Install k6 and sse extension
+1、对llama-server基准测试的tools
+2、benchmark使用的是k6（目前对k6不熟悉）
+*/
+```
+
+#### 1.1 Install k6 and sse extension
 
 SSE is not supported by default in k6, you have to build k6 with the [xk6-sse](https://github.com/phymbert/xk6-sse) extension.
+```c
+/*
+notes:杨小兵-2024-12-19
+
+1、k6 默认不支持 SSE，你必须使用 [xk6-sse]扩展来构建 k6。
+2、使用xk6-sse来构建k6从而获取SSE的支持
+*/
+```
 
 Example:
 ```shell
@@ -13,23 +29,47 @@ xk6 build master \
 --with github.com/phymbert/xk6-sse
 ```
 
-#### Download a dataset
+#### 1.2 Download a dataset
 
 This dataset was originally proposed in [vLLM benchmarks](https://github.com/vllm-project/vllm/blob/main/benchmarks/README.md).
+```c
+/*
+notes:杨小兵-2024-12-19
+
+1、下列命令行中的数据集最初是在[vLLM benchmarks]中被提出的
+2、这个benchmark使用到了已有的数据集
+*/
+```
 
 ```shell
 wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 ```
 
-#### Download a model
+#### 1.3 Download a model
 Example for PHI-2
+```c
+/*
+notes:杨小兵-2024-12-19
+
+1、这里下载PHI-2作为示例
+2、下载模型文件格式是GGUF
+*/
+```
 
 ```shell
 ../../../scripts/hf.sh --repo ggml-org/models --file phi-2/ggml-model-q4_0.gguf
 ```
 
-#### Start the server
+#### 1.4 Start the server
 The server must answer OAI Chat completion requests on `http://localhost:8080/v1` or according to the environment variable `SERVER_BENCH_URL`.
+```c
+/*
+notes:杨小兵-2024-12-19
+
+1、llama-server服务器必须回答`http://localhost:8080/v1`上或根据环境变量`SERVER_BENCH_URL`的OAI聊天完成请求
+2、上述这段话是被翻译过来的，理解不到位
+*/
+```
 
 Example:
 ```shell
@@ -43,8 +83,15 @@ server --host localhost --port 8080 \
   -ngl 33
 ```
 
-#### Run the benchmark
+#### 1.5 Run the benchmark
+```c
+/*
+notes:杨小兵-2024-12-19
 
+1、这部分内容介绍的内容就是运行benchmark
+2、具体的内容目前先不用关心
+*/
+```
 For 500 chat completions request with 8 concurrent users during maximum 10 minutes, run:
 ```shell
 ./k6 run script.js --duration 10m --iterations 500 --vus 8
@@ -69,7 +116,7 @@ SERVER_BENCH_N_PROMPTS=500 k6 run script.js --duration 10m --iterations 500 --vu
 
 To [debug http request](https://k6.io/docs/using-k6/http-debugging/) use `--http-debug="full"`.
 
-#### Metrics
+#### 1.6 Metrics
 
 Following metrics are available computed from the OAI chat completions response `usage`:
 - `llamacpp_tokens_second` Trend of `usage.total_tokens / request duration`
@@ -88,7 +135,7 @@ K6 metrics might be compared against [server metrics](../README.md), with:
 curl http://localhost:8080/metrics
 ```
 
-### Using the CI python script
+### 2 Using the CI python script
 The `bench.py` script does several steps:
 - start the server
 - define good variable for k6
