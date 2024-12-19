@@ -26,7 +26,9 @@ notes:杨小兵-2024-12-16
 杨小兵-2024-12-16
 
 1、通过点击图片的方式在浏览器中打开对应的网址
-2、这里涉及到两个网址：许可证、项目服务器
+2、这里涉及到两个网址：
+    2.1 许可证
+    2.2 项目服务器
 */
 ```
 
@@ -37,6 +39,10 @@ notes:杨小兵-2024-12-16
 杨小兵-2024-12-16
 
 1、通过点击文字链接的方式跳转到该项目的不同网址查看对应的内容
+    1.1 roadmap
+    1.2 project status
+    1.3 manifesto
+    1.4 ggml
 */
 ```
 
@@ -46,6 +52,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 杨小兵-2024-12-16
 
 1、只使用C/C++对Meta公司的LLaMA模型、其他公司的模型进行inference
+    1.1 meta's model
+    1.2 others model
 2、这里的亮点就是只使用C、C++来完成整个模型的推理工作而不会使用到其他的高级语言，对于不同平台的适配将会变得容易
 */
 ```
@@ -60,7 +68,9 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 1、这部分内容为了说明最近函数API的一些改变情况
 2、通过日志的方式来说明libllama接口变化情况
+    2.1 libllama api
 3、通过日志的方式来说明llama-server接口变化情况
+    3.1 llama-server rest api
 */
 ```
 
@@ -76,7 +86,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 1、这部分内容为了说明一些热点话题
 2、首先通过网址的方式来介绍GGUF-my-LoRA的话题
 3、hugging face inference endpoints使得用户可以更方便地在 Hugging Face 上部署使用 GGUF 格式的模型，无需进行格式转换或额外的配置步骤
-4、提供了对GGUF文件的编辑功能
+4、提供了工具：对GGUF文件进行编辑
 */
 ```
 ----
@@ -120,7 +130,7 @@ The `llama.cpp` project is the main playground for developing new features for t
 /*
 杨小兵-2024-12-16
 
-1、`llama.cpp` 项目是开发 [ggml](https://github.com/ggerganov/ggml) 库新功能的主要平台。
+1、llama.cpp 项目是开发 [ggml](https://github.com/ggerganov/ggml) 库新功能的主要平台。
 2、llama.cpp项目用到了ggml项目中的东西，llama项目利用ggml项目的计算能力实现对不同的LLMs推理工作
 */
 ```
@@ -319,6 +329,24 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 | [hipBLAS](docs/build.md#hipblas) | AMD GPU |
 | [Vulkan](docs/build.md#vulkan) | GPU |
 | [CANN](docs/build.md#cann) | Ascend NPU |
+```c
+/*
+杨小兵-2024-12-16
+
+1、Backend（后端）：在软件开发和计算框架中，**backend** 指的是处理底层计算任务的模块或库。它们负责执行核心计算、优化性能、管理硬件资源等。不同的 backend 通常针对不同的硬件架构或计算平台进行优化，以充分利用特定设备的计算能力和特性。
+2、Target Devices（目标设备）：指的是应用程序或计算任务所运行的具体硬件设备。这些设备可以包括各种处理器（如 CPU、GPU）、专用加速器（如 NPU）、或其他计算单元。不同的目标设备具有不同的架构和性能特点，因此选择合适的 backend 可以确保软件在这些设备上高效运行。
+3、backend and target devices
+    3.1 Metal 是 Apple 提供的底层图形和计算 API，专为 Apple 的硬件（如 M1、M2 芯片）优化，能够充分利用 Apple Silicon 的图形和计算能力。
+    3.2 BLAS 是一组用于执行基本线性代数运算的标准库，广泛应用于各种计算平台，适用于所有类型的硬件设备。
+    3.3 BLIS 是一个高性能的线性代数库，旨在提供可扩展和可定制的 BLAS 实现，适用于各种硬件平台。
+    3.4 SYCL 是一种基于 C++ 的异构计算框架，允许开发者编写跨平台代码，支持 Intel 和 Nvidia 的 GPU 设备，便于在不同硬件上进行并行计算。
+    3.5 MUSA 是针对 Moore Threads 公司生产的 MTT GPU 设备优化的计算后端，旨在充分利用其 GPU 的并行计算能力。
+    3.6 CUDA 是 Nvidia 提供的并行计算平台和编程模型，专为 Nvidia 的 GPU 设计，广泛应用于深度学习、科学计算等领域。
+    3.7 hipBLAS 是 AMD 提供的 BLAS 实现，基于 HIP（Heterogeneous-Compute Interface for Portability）框架，专为 AMD GPU 优化，支持高性能线性代数运算。
+    3.8 Vulkan 是一个跨平台的低开销图形和计算 API，支持多种 GPU 设备，提供高效的并行计算能力，适用于需要高性能图形和计算的应用。
+    3.9 CANN 是华为开发的用于神经网络计算的架构，专为 Ascend 系列的神经处理单元（NPU）设计，优化了深度学习任务的计算性能。
+*/
+```
 
 ## 5 Building the project
 
@@ -330,9 +358,11 @@ The project also includes many example programs and tools using the `llama` libr
 
 1、这部分内容讲述的是如何构建llama.cpp项目
 2、这个项目的主要产品成果就是llama库。这个项目的C风格接口可以在include/llama.h中找到
-3、这个项目同时也包含很多使用llama库的示例程序和工具
-4、这些示例程序从简单的、最小化的代码片段到复杂的子项目例如兼容OpenAI的HTTP服务器。
-5、可以通过下列内容获取这些二进制的制作方式
+3、这个项目包含了一些示例程序和工具
+    3.1 example programs用到了llama library
+    3.2 tools用到了llama library
+4、这些示例程序从简单的、最小化的代码片段到复杂的子项目例如与OpenAI兼容HTTP服务器。
+5、可以通过下列内容获取这些可执行二进制文件
 */
 ```
 
@@ -345,7 +375,7 @@ The project also includes many example programs and tools using the `llama` libr
 杨小兵-2024-12-16
 
 1、将这个仓库clone到本地并且在本地进行构建，查看docs/build.md文档获取帮助
-2、在MacOS或者Linux上可以通过brew, flox or nix来对llama.cpp项目成果进行安装
+2、在MacOS或者Linux上可以通过brew, flox or nix来对llama.cpp项目成果进行安装（不需要编译构建，只需要直接进行下载）
 3、如果想要使用Docker镜像，那么可以查看docs/docker.md获取帮助
 4、可以从https://github.com/ggerganov/llama.cpp/releases直接下载已经构建好的二进制文件
 */
@@ -384,6 +414,9 @@ The Hugging Face platform provides a variety of online tools for converting, qua
 杨小兵-2024-12-16
 
 1、Hugging Face平台提供了多种在线工具，用于使用`llama.cpp`转换，量化和托管模型
+    1.1 转化模型
+    1.2 量化模型
+    1.3 托管模型
 */
 ```
 
@@ -477,6 +510,15 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     For authoring more complex JSON grammars, check out https://grammar.intrinsiclabs.ai/
 
+    ```c
+    /*
+    杨小兵-2024-12-19
+
+    1、这一部分的内容需要进一步了解
+    2、grammer用于约束模型（如 LLaMA）生成的输出，使其符合预定义的结构和格式。这种约束确保了输出数据的一致性和可解析性，特别是在需要将自然语言转换为结构化数据（如 JSON）的场景中尤为重要。
+    3、通过 GBNF 文件，用户可以详细描述期望的输出结构，使模型生成的内容严格遵循这些规则。
+    */
+    ```
     </details>
 
 
@@ -485,7 +527,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 /*
 杨小兵-2024-12-16
 
-1、这个部分内容用来描述这个项目中的一个llama-server工具
+1、这部分用来介绍示例程序中的llama-server，这是个兼容OpenAI的HTTP server，这部分内容是比较重要的
 */
 ```
 #### A lightweight, [OpenAI API](https://github.com/openai/openai-openapi) compatible, HTTP server for serving LLMs.
@@ -494,6 +536,10 @@ To learn more about model quantization, [read this documentation](examples/quant
 杨小兵-2024-12-16
 
 1、一个轻量级的、openai api兼容的、为了运行LLMs的HTTP服务
+2、特点
+    2.1 轻量级
+    2.2 兼容OpenAI API
+    2.3 serving for LLMs
 */
 ```
 
@@ -506,7 +552,19 @@ To learn more about model quantization, [read this documentation](examples/quant
     # Basic web UI can be accessed via browser: http://localhost:8080
     # Chat completion endpoint: http://localhost:8080/v1/chat/completions
     ```
+    ```c
+    /*
+    杨小兵-2024-12-19
 
+    1、命令解释
+        1.1 llama-server    二进制程序
+        1.2 -m model.gguf   模型文件
+        1.3 --port 8080     服务器端口
+    2、效果解释
+        1.1 可以通过浏览器网址：http://localhost:8080进行访问基本页面
+        1.2 对话补全端点地址：http://localhost:8080/v1/chat/completions
+    */
+    ```
     </details>
 
 - <details>
@@ -516,7 +574,14 @@ To learn more about model quantization, [read this documentation](examples/quant
     # up to 4 concurrent requests, each with 4096 max context
     llama-server -m model.gguf -c 16384 -np 4
     ```
+    ```c
+    /*
+    杨小兵-2024-12-19
 
+    1、支持多用户、并行解码
+    2、最多支持4个并发请求，每一个用户最多4096上下文长度
+    */
+    ```
     </details>
 
 - <details>
@@ -530,9 +595,10 @@ To learn more about model quantization, [read this documentation](examples/quant
     /*
     杨小兵-2024-12-16
 
-    1、`-m model.gguf` 指定了主要使用的模型文件为 `model.gguf`
-    2、`-md draft.gguf` 指定了一个辅助模型文件 `draft.gguf`，用于推测性解码
+    1、-m model.gguf 指定了主要使用的模型文件为 `model.gguf`
+    2、-md draft.gguf 指定了一个辅助模型文件 `draft.gguf`，用于推测性解码
     3、`draft.gguf` 模型应该是目标模型 `model.gguf` 的一个小型变体。这意味着 `draft.gguf` 是一个轻量级或精简版的模型，用于辅助或优化目标模型的运行
+    4、注意：这里两个模型是必须要相同系列的
     */
     ```
     </details>
@@ -544,7 +610,19 @@ To learn more about model quantization, [read this documentation](examples/quant
     # use the /embedding endpoint
     llama-server -m model.gguf --embedding --pooling cls -ub 8192
     ```
+    ```c
+    /*
+    杨小兵-2024-12-16
 
+    1、可以作为一个embedding model
+    2、命令解释
+        2.1 llama-server    可执行文件
+        2.2 -m model.gguf   指定模型文件
+        2.3 --embedding     限制仅支持嵌入用例
+        2.4 --pooling cls   嵌入的池化类型，如果未指定则使用模型默认值
+        2.5 -ub 8192        物理最大批次大小
+    */
+    ```
     </details>
 
 - <details>
@@ -554,7 +632,16 @@ To learn more about model quantization, [read this documentation](examples/quant
     # use the /reranking endpoint
     llama-server -m model.gguf --reranking
     ```
+    ```c
+    /*
+    杨小兵-2024-12-19
 
+    1、命令解释
+        2.1 llama-server    可执行文件
+        2.2 -m model.gguf   指定模型文件
+        2.3 --reranking     在服务器上启用重新排名端点
+    */
+    ```
     </details>
 
 - <details>
@@ -567,7 +654,18 @@ To learn more about model quantization, [read this documentation](examples/quant
     # JSON
     llama-server -m model.gguf --grammar-file grammars/json.gbnf
     ```
+    ```c
+    /*
+    杨小兵-2024-12-19
 
+    1、使用grammer来限制模型的所有输出
+    2、命令解释
+        2.1 llama-server                        可执行文件
+        2.2 -m model.gguf                       指定模型文件
+        2.3 --grammar-file grammar.gbnf         自定义grammar
+        2.4 --grammar-file grammars/json.gbnf   JSON grammar
+    */
+    ```
     </details>
 
 
@@ -578,7 +676,8 @@ To learn more about model quantization, [read this documentation](examples/quant
 /*
 杨小兵-2024-12-16
 
-1、llama-perplexity是一个用来测量
+1、`llama-perplexity` 是一个用于测量模型在给定文本上的困惑度（perplexity）以及其他质量指标的工具。困惑度是一种衡量语言模型在预测文本时的不确定性的方法。具体来说，它量化了模型对给定文本的预测能力：困惑度越低，意味着模型的预测越精确。
+2、`llama-perplexity` 通过计算语言模型在处理某段文本时的困惑度，从而评估该模型在理解该文本时的效果。它是通过给定模型和文本文件，返回一组困惑度的数值，最终得出该文本的平均困惑度值。
 */
 ```
 - <details open>
@@ -612,7 +711,8 @@ To learn more about model quantization, [read this documentation](examples/quant
 /*
 杨小兵-2024-12-16
 
-1、对于不同的参数用来测量inference的性能
+1、针对多种不同参数模型推理性能的基准测试
+2、llama-bench为了测量模型的性能
 */
 ```
 
@@ -641,6 +741,8 @@ To learn more about model quantization, [read this documentation](examples/quant
 杨小兵-2024-12-16
 
 1、运行“llama.cpp”模型的综合示例，适用于推理，与 RamaLama 一起使用
+2、`llama-run` 是一个用于运行 `llama.cpp` 模型的命令行工具，通常用于模型推理（即使用已经训练好的模型来进行实际的预测或任务处理）。它提供了一个综合示例，帮助用户轻松地启动并运行基于 LLaMA 模型的推理过程。
+
 */
 ```
 - <details>
@@ -662,7 +764,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 杨小兵-2024-12-16
 
 1、使用llama.cpp项目实现应用程序的一个最小的例子
-2、这个例子对开发者很容易
+2、这个例子对开发者很有用
 */
 ```
 - <details>
@@ -697,9 +799,11 @@ To learn more about model quantization, [read this documentation](examples/quant
 4、请参阅[good first issues]以了解适合首次贡献的任务
 5、读取CONTRIBUTING.md文件内容获取更多的信息
 6、确保将[Inference at the edge]内容了解了
+    6.1 边缘inference：
 7、给那些感兴趣的人讲一些背景故事
 */
 ```
+
 ## 14 Other documentation
 
 - [main (cli)](examples/main/README.md)
@@ -709,7 +813,9 @@ To learn more about model quantization, [read this documentation](examples/quant
 /*
 杨小兵-2024-12-16
 
-1、上述三个文件就是对应程序的README.md文件
+1、程序示例：llama-cli
+2、程序示例：llama-server
+3、GBNF grammars
 */
 ```
 #### Development documentation
@@ -719,7 +825,17 @@ To learn more about model quantization, [read this documentation](examples/quant
 - [Build on Android](docs/android.md)
 - [Performance troubleshooting](docs/development/token_generation_performance_tips.md)
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
+```c
+/*
+杨小兵-2024-12-16
 
+1、在PC上构建项目相关文档
+2、在docker上部署项目相关文档
+3、在Android上构建项目相关文档
+4、项目性能故障排除相关文档
+5、GGML库使用的技巧相关文档
+*/
+```
 #### Seminal papers and background on the models
 
 If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
@@ -739,5 +855,6 @@ If your issue is with model generation quality, then please at least scan the fo
 2、如果您的问题与模型生成质量有关，请至少浏览以下链接和论文，以了解 LLaMA 模型的局限性。在选择合适的模型大小并理解 LLaMA 模型与 ChatGPT 之间的显著和细微差异时，这一点尤为重要
 */
 ```
+
 #### References
 
