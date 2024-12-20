@@ -1240,7 +1240,14 @@ bash chat.sh
 ### 10.2 OAI-like API
 
 The HTTP `llama-server` supports an OAI-like API: https://github.com/openai/openai-openapi
+```c
+/*
+notes:杨小兵-2024-12-17
 
+1、llama-server支持一个类似OAI的API
+2、这部分内容还需要理解
+*/
+```
 ### 10.3 API errors
 
 `llama-server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
