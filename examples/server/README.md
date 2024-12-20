@@ -1242,16 +1242,24 @@ bash chat.sh
 The HTTP `llama-server` supports an OAI-like API: https://github.com/openai/openai-openapi
 ```c
 /*
-notes:杨小兵-2024-12-17
+notes:杨小兵-2024-12-20
 
 1、llama-server支持一个类似OAI的API
 2、这部分内容还需要理解
 */
 ```
+
 ### 10.3 API errors
 
 `llama-server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
+```c
+/*
+notes:杨小兵-2024-12-20
 
+1、llama-server返回错误代码，这里的错误代码同OAI的格式是相同的
+2、llama-server采用同OAI相同的错误代码
+*/
+```
 Example of an error:
 
 ```json
@@ -1265,6 +1273,15 @@ Example of an error:
 ```
 
 Apart from error types supported by OAI, we also have custom types that are specific to functionalities of llama.cpp:
+```c
+/*
+notes:杨小兵-2024-12-20
+
+1、支持两种形式的error types
+  1.1 OAI支持的error types
+  1.2 针对llama.cpp功能的自定义error types
+*/
+```
 
 **When /metrics or /slots endpoint is disabled**
 
@@ -1276,6 +1293,14 @@ Apart from error types supported by OAI, we also have custom types that are spec
         "type": "not_supported_error"
     }
 }
+```
+```c
+/*
+notes:杨小兵-2024-12-20
+
+1、当endpoint:/metrics不能使用的时候，定义的error type是501
+2、当endpoint:/slots不能使用的时候，定义的error type是501
+*/
 ```
 
 **When the server receives invalid grammar via */completions endpoint**
@@ -1289,15 +1314,41 @@ Apart from error types supported by OAI, we also have custom types that are spec
     }
 }
 ```
+```c
+/*
+notes:杨小兵-2024-12-20
+
+1、当server通过/completions endpoint接收到无效的grammar的时候自定义一种error type
+*/
+```
 
 ### 10.4 Legacy completion web UI
 
 A new chat-based UI has replaced the old completion-based since [this PR](https://github.com/ggerganov/llama.cpp/pull/10175). If you want to use the old completion, start the server with `--path ./examples/server/public_legacy`
+```c
+/*
+notes:杨小兵-2024-12-20
+
+1、这部分内容介绍的是过时的对话补全网页UI
+2、自从[this PR](https://github.com/ggerganov/llama.cpp/pull/10175)这个PR提交之后，一个新的基于对话的UI已经取代了旧版的对话UI。如果想要使用旧版的对话UI，通过参数--path指定UI路径从而启动llama-server以此来使用旧版的UI
+*/
+```
 
 For example:
 
 ```sh
 ./llama-server -m my_model.gguf -c 8192 --path ./examples/server/public_legacy
+```
+```c
+/*
+notes:杨小兵-2024-12-20
+
+1、命令解释
+  1.1 ./llama-server      可执行程序
+  1.2 -m my_model.gguf    模型文件
+  1.3 -c 8192             the size of prompt context
+  1.4 --path ./examples/server/public_legacy  chat-completion UI
+*/
 ```
 
 ### 10.5 Extending or building alternative Web Front End
