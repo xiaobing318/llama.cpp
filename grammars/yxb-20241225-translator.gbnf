@@ -1,0 +1,17 @@
+<json> ::= "{" <members> "}"
+
+<members> ::= <member_original> "," <member_translation>
+
+<member_original> ::= "\"original\"" ":" <string>
+
+<member_translation> ::= "\"translation\"" ":" <string>
+
+<string> ::= "\"" <characters> "\""
+
+<characters> ::= <character> | <character> <characters>
+
+<character> ::= /* 此处定义允许的字符集，例如中文字符、英文字符、数字、标点符号等 */
+               /* 例如： */
+               /* "a" | "b" | ... | "z" | "A" | "B" | ... | "Z" */
+               /* | "0" | "1" | ... | "9" */
+               /* | " " | "，" | "。" | ...  */
