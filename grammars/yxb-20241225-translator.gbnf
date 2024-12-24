@@ -1,17 +1,40 @@
-<json> ::= "{" <members> "}"
+root   ::= object
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
-<members> ::= <member_original> "," <member_translation>
+object ::= 
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)* 
+  )? "}" ws
 
-<member_original> ::= "\"original\"" ":" <string>
+array  ::= 
+  "[" ws (
+            value
+    ("," ws value)* 
+  )? "]" ws
 
-<member_translation> ::= "\"translation\"" ":" <string>
+string ::= 
+  "\"" (
+    [^"\\\x7F\x00-\x1F] |
+    "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}) # escapes
+  )* "\"" ws
 
-<string> ::= "\"" <characters> "\""
+number ::= 
+  ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
 
-<characters> ::= <character> | <character> <characters>
+ws ::= | " " | "\n" [ \t]{0,20}
 
-<character> ::= /* 此处定义允许的字符集，例如中文字符、英文字符、数字、标点符号等 */
-               /* 例如： */
-               /* "a" | "b" | ... | "z" | "A" | "B" | ... | "Z" */
-               /* | "0" | "1" | ... | "9" */
-               /* | " " | "，" | "。" | ...  */
+# 新增的部分，处理 original 和 translation 的键值对
+members ::= <member_original> "," <member_translation>
+
+member_original ::= "\"original\"" ":" <string>
+
+member_translation ::= "\"translation\"" ":" <string>
+
+# 修改 object 规则，允许 original 和 translation 作为合法成员
+object ::= 
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+    ("," ws "\"original\"" ":" string "," ws "\"translation\"" ":" string)?
+  )? "}" ws
