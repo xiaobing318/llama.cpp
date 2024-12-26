@@ -3,9 +3,9 @@
 /*
 Note:杨小兵-2024-12-24
 
-1、GBNF代表什么意思？目前不理解
-2、这个文件讲述的是关于GBNF相关内容
-3、根据之前的经验知道GBNF的作用就是为了严格限制LLMs的输出内容，但是具体的效果还不知道是什么样子？
+1、GBNF：从该文档中后面有说明（GBNF：GGML BNF，需要注意的是GBNF是BNF的扩展）
+2、这个文件讲述的是关于GBNF相关内容（提供的能力、编写的规则等等）
+3、根据之前的经验知道GBNF的作用就是为了严格限制LLMs的输出内容，但是具体的效果还不知道是什么样子？自己提供的*.gbnf文件目前不起作用
 4、针对GBNF的作用后续还需要深入理解
 */
 ```
@@ -14,9 +14,11 @@ GBNF (GGML BNF) is a format for defining [formal grammars](https://en.wikipedia.
 /*
 Note:杨小兵-2024-12-24
 
-1、GBNF：GGML BNF（其中GGML我知道是一个库的名称，其中BNF不理解）
+1、GBNF：GGML BNF（其中GGML我知道是llama.cpp项目所依赖的ggml库的名称，其中BNF不理解）
 2、BNF：在编译器、自然语言处理、编程语言中是一个重要的概念，自己没有深入接触compiler相关内容因此接触不到
-3、GBNF是一种定义 [formal_grammar]以约束 llama.cpp 中的模型输出的格式。例如，您可以使用它来强制模型生成有效的 JSON，或者只使用表情符号说话。examples/main 和 examples/server 以各种方式支持 GBNF 语法。
+3、GBNF是一种定义 [formal_grammar]以约束 llama.cpp 中的模型输出的格式（llama.cpp项目中支持的LLMs）。例如，您可以使用它来强制模型生成有效的 JSON，或者只使用表情符号说话。examples/main 和 examples/server 以各种方式支持 GBNF 语法。
+  3.1 强制模型生成有效的JSON
+  3.2 强制模型生成emojis
 4、注意：这里的GBNF是为了llama.cpp项目服务的，可能对符合BNF格式的文件llama.cpp支持不好
 */
 ```
@@ -29,11 +31,15 @@ Note:杨小兵-2024-12-24
 Note:杨小兵-2024-12-24
 
 1、BNF(Backus-Naur Form)是一种用于描述形式语言（如编程语言、文件格式和协议）语法的符号。GBNF 是 BNF 的扩展，主要添加了一些现代正则表达式类功能。
+  1.1 formal languages的例子
+    file formats
+    programming languages
+    protocols
 2、BNF 是由 John Backus 和 Peter Naur 提出的形式化表示法，用于描述上下文无关文法（Context-Free Grammar, CFG）。它的语法结构非常简洁，主要由以下几个部分组成：
   2.1 非终结符（Nonterminal symbols）：通常是用尖括号 < > 包裹的符号，表示语法规则的左侧变量。例如，<expression> 或 <number>。
   2.2 终结符（Terminal symbols）：语法规则中的实际字符或符号，不能进一步分解。例如，数字 0-9 或字符 +、-。
   2.3 产生式规则（Production rules）：定义非终结符如何用其他符号进行替换。例如，<expression> ::= <number> "+" <number>。
-3、GBNF 对 BNF 做了扩展，引入了更加灵活的正则表达式（regex）特性，能够更精确地描述一些复杂的语言模式。下面是一些 GBNF 相比 BNF 增加的特性：
+3、GBNF 对 BNF 做了扩展，引入了更加灵活的正则表达式（regex）特性，能够更精确地描述一些复杂的语言模式。下面是一些 BNF 的一些特性：
   3.1 重复（Repetition）：使用 * 或 + 来表示重复的模式，类似于正则表达式中的量词。（* 表示零次或多次；+ 表示一次或多次）
   3.2 选择（Alternation）：使用 | 来表示多个选项，类似于正则表达式中的 |。
   3.3 分组（Grouping）：使用圆括号 () 来分组模式，允许对多个选项进行优先级控制。
@@ -195,7 +201,7 @@ Newlines are allowed between rules and between symbols or sequences nested insid
 /*
 Note:杨小兵-2024-12-25
 
-1、在GBNF中可以通过#来进行添加注释
+1、在GBNF中可以通过#来进行添加注释从而对*.gbnf中的内容进行说明解释
 2、规则之间以及括号内嵌套的符号或序列之间允许使用换行符。此外，替代标记“|”后的换行符将继续当前规则，即使在括号外也是如此。
 */
 ```
@@ -213,7 +219,7 @@ item ::= [^\n]+ "\n"
 /*
 Note:杨小兵-2024-12-25
 
-1、在完整的语法中，“根”规则始终定义语法的起点。换句话说，它指定整个输出必须匹配的内容。
+1、在完整的语法中，“root”规则始终定义语法的起点。换句话说，它指定整个输出必须匹配的内容。
 */
 ```
 
@@ -286,6 +292,7 @@ Note:杨小兵-2024-12-25
 Note:杨小兵-2024-12-25
 
 1、llama.cpp项目支持将https://json-schema.org子集转化为GBNF grammars
+  1.1 {subset of https://json-schema.org/} ----> GBNF grammars
 2、有了https://json-schema.org子集，便可以使用llama.cpp项目中的功能将子集转化为GBNF grammar
 */
 ```
@@ -371,7 +378,7 @@ You can convert any schema in command-line with:
 /*
 Note:杨小兵-2024-12-25
 
-1、可以通过命令行实现schema的转化
+1、可以通过命令行实现任意的schema转化
 */
 ```
 
