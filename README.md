@@ -11,10 +11,13 @@ notes:杨小兵-2024-12-16
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-28
 
 1、这个markdown语法为了在渲染的时候展示一张项目的logo图片
-2、其中[llama]为了给这个图片命名
+2、![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
+    2.1 !：表示这是一个图片
+    2.2 [llama]：这是替代文字（alt text），用于在图片无法显示时提供描述，同时对无障碍访问（如屏幕阅读器）也有帮助。
+    2.3 (https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)：这是图片的URL地址，指向图片的存放位置。
 3、这个logo图片是从互联网中获取得到的
 */
 ```
@@ -23,12 +26,15 @@ notes:杨小兵-2024-12-16
 [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-28
 
 1、通过点击图片的方式在浏览器中打开对应的网址
 2、这里涉及到两个网址：
     2.1 许可证
     2.2 项目服务器
+3、语法解释：[![替代文字](图片URL)](链接URL)
+    3.1 外层方括号 [ ]：定义了一个链接。
+    3.2 内层感叹号 ! 加方括号 [ ] 和圆括号 ( )：定义了一个图片。
 */
 ```
 
@@ -36,13 +42,16 @@ notes:杨小兵-2024-12-16
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-28
 
 1、通过点击文字链接的方式跳转到该项目的不同网址查看对应的内容
     1.1 roadmap
     1.2 project status
     1.3 manifesto
     1.4 ggml
+2、在文档中插入链接有两种方式
+    2.1 通过图片的方式直接点击跳转到对应的位置
+    2.2 通过文字的方式直接点击跳转到对应的位置
 */
 ```
 
@@ -81,10 +90,11 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 - Hugging Face GGUF editor: [discussion](https://github.com/ggerganov/llama.cpp/discussions/9268) | [tool](https://huggingface.co/spaces/CISCai/gguf-editor)
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-28
 
 1、这部分内容为了说明一些热点话题
 2、首先通过网址的方式来介绍GGUF-my-LoRA的话题
+    2.1 这部分内容挺有意思的，从上述对应的网址中知道了讨论区
 3、hugging face inference endpoints使得用户可以更方便地在 Hugging Face 上部署使用 GGUF 格式的模型，无需进行格式转换或额外的配置步骤
 4、提供了工具：对GGUF文件进行编辑
 */
@@ -113,10 +123,13 @@ range of hardware - locally and in the cloud.
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-28
 
 1、没有任何依赖的纯C/C++实现
 2、苹果的芯片是被优先考虑的，通过 ARM NEON、Accelerate 和 Metal 框架进行了优化
+    2.1 ARM NEON：一种用于加速多媒体和信号处理任务的 SIMD（单指令多数据）指令集。
+    2.2 Accelerate 框架：Apple 提供的高性能计算框架，利用底层硬件加速数学运算和信号处理。
+    2.3 Accelerate 框架：Apple 提供的高性能计算框架，利用底层硬件加速数学运算和信号处理。
 3、对于x86架构，AVX, AVX2, AVX512 and AMX指令集是被支持的
 4、为了更快的推理任务、更好的内存需求1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit整数量化是被支持的
 5、为了在NVIDIA GPUS上运行LLMs，自定义了一些CUDA内核（通过HIP支持AMD GPUs、通过MUSA支持Moore Threads MTT GPUs）
@@ -128,9 +141,9 @@ range of hardware - locally and in the cloud.
 The `llama.cpp` project is the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-29
 
-1、llama.cpp 项目是开发 [ggml](https://github.com/ggerganov/ggml) 库新功能的主要平台。
+1、llama.cpp 项目是开发 [ggml](https://github.com/ggerganov/ggml) 库新功能的主要平台.llama.cpp是ggml库的一个应用实现项目，利用ggml来做出一些好玩的东西。
 2、llama.cpp项目用到了ggml项目中的东西，llama项目利用ggml项目的计算能力实现对不同的LLMs推理工作
 */
 ```
@@ -143,13 +156,21 @@ Typically finetunes of the base models below are supported as well.
 Instructions for adding support for new models: [HOWTO-add-model.md](docs/development/HOWTO-add-model.md)
 ```c
 /*
-杨小兵-2024-12-16
+杨小兵-2024-12-29
 
 1、这里提到的模型也包含一些基础模型的微调版本，这些微调版本的模型也是被llama.cpp项目支持的
-2、如果想要在llama.cpp项目中添加对新模型的支持，这里的HOWTO-add-model.md文件提供了参考
+2、如果想要在llama.cpp项目中添加对新模型的支持，这里的HOWTO-add-model.md文件提供了参考，new feature adding。
 */
 ```
-#### Text-only
+
+#### 3.1 Text-only
+```c
+/*
+杨小兵-2024-12-29
+
+1、下列列出来的这些模型则是目前llama.cpp项目支持的，这些模型的一个共性就是：输入输出全都是文本并不包含图片、语音等等。
+*/
+```
 
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
@@ -205,8 +226,14 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [RWKV-6](https://github.com/BlinkDL/RWKV-LM)
 - [x] [GigaChat-20B-A3B](https://huggingface.co/ai-sage/GigaChat-20B-A3B-instruct)
 
-#### Multimodal
+#### 3.2 Multimodal
+```c
+/*
+杨小兵-2024-12-29
 
+1、下列列出来的这些模型则是目前llama.cpp项目支持的，这些模型的一个共性就是：输入输出包含文本、图片。
+*/
+```
 - [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e), [LLaVA 1.6 models](https://huggingface.co/collections/liuhaotian/llava-16-65b9e40155f60fd046a5ccf2)
 - [x] [BakLLaVA](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
 - [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
@@ -357,7 +384,7 @@ The project also includes many example programs and tools using the `llama` libr
 杨小兵-2024-12-16
 
 1、这部分内容讲述的是如何构建llama.cpp项目
-2、这个项目的主要产品成果就是llama库。这个项目的C风格接口可以在include/llama.h中找到
+2、这个项目的主要产品成果就是llama库。这个llama库的C风格接口可以在include/llama.h中找到
 3、这个项目包含了一些示例程序和工具
     3.1 example programs用到了llama library
     3.2 tools用到了llama library
@@ -445,8 +472,21 @@ To learn more about model quantization, [read this documentation](examples/quant
 ```
 
 ## 7 [`llama-cli`](examples/main)
+```c
+/*
+杨小兵-2024-12-29
 
-#### A CLI tool for accessing and experimenting with most of `llama.cpp`'s functionality.
+1、从第七部分开始介绍了一些实例程序或者llama.cpp项目的子项目
+2、总结
+    2.1 llama-cli
+    2.2 llama-server
+    2.3 llama-perplexity
+    2.4 llama-bench
+    2.5 llama-run
+    2.6 llama-simple
+*/
+```
+#### 7.1 A CLI tool for accessing and experimenting with most of `llama.cpp`'s functionality.
 ```c
 /*
 杨小兵-2024-12-16
@@ -492,9 +532,29 @@ To learn more about model quantization, [read this documentation](examples/quant
     # use a custom template
     llama-cli -m model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User: ' --reverse-prompt 'User:'
     ```
+    ```c
+    /*
+    杨小兵-2024-12-29
 
+    1、上述提到的chat template
+        1.1 chatml template
+        1.2 custom template
+    2、使用chatml template的时候使用的是--chat-template参数，使用custom template的适合用使用另外一种参数方式，目前对这部分内容不理解
+    3、custom template参数理解
+        3.1 --in-prefix 'User: '
+            设置用户输入的前缀为“User: ”，即每次用户输入前都会自动添加“User: ”
+        3.2 --reverse-prompt 'User:'
+            --reverse-prompt 是一个指示模型何时停止生成回复的参数。它通常用于定义一个“停止信号”，当模型在生成文本时遇到这个信号，就会停止继续生成。这对于控制对话的结构和长度非常有用，确保模型只生成一个合理长度的回复，而不会无限制地继续下去。总的来说就是确保模型可以在什么时候停止生成。
+    */
+    ```
     [Supported templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
+    ```c
+    /*
+    杨小兵-2024-12-29
 
+    1、这里提到有关templates理解的还不是特别的清楚需要很多其他的前置知识。
+    */
+    ```
     </details>
 
 - <details>
@@ -512,11 +572,12 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     ```c
     /*
-    杨小兵-2024-12-19
+    杨小兵-2024-12-29
 
-    1、这一部分的内容需要进一步了解
-    2、grammer用于约束模型（如 LLaMA）生成的输出，使其符合预定义的结构和格式。这种约束确保了输出数据的一致性和可解析性，特别是在需要将自然语言转换为结构化数据（如 JSON）的场景中尤为重要。
+    1、grammar用于约束模型（如 LLaMA）生成的输出，使其符合预定义的结构和格式。这种约束确保了输出数据的一致性和可解析性，特别是在需要将自然语言转换为结构化数据（如 JSON）的场景中尤为重要。
+    2、可以通过--grammar-file参数来传入GBNF文件从而来限制模型的输出。
     3、通过 GBNF 文件，用户可以详细描述期望的输出结构，使模型生成的内容严格遵循这些规则。
+    4、如果想要编写更复杂的JSON grammars可以参考https://grammar.intrinsiclabs.ai/中的内容。（这部分内容理解不够深入，还需要其他的知识沉淀）
     */
     ```
     </details>
@@ -530,7 +591,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 1、这部分用来介绍示例程序中的llama-server，这是个兼容OpenAI的HTTP server，这部分内容是比较重要的
 */
 ```
-#### A lightweight, [OpenAI API](https://github.com/openai/openai-openapi) compatible, HTTP server for serving LLMs.
+#### 8.1 A lightweight, [OpenAI API](https://github.com/openai/openai-openapi) compatible, HTTP server for serving LLMs.
 ```c
 /*
 杨小兵-2024-12-16
@@ -554,7 +615,7 @@ To learn more about model quantization, [read this documentation](examples/quant
     ```
     ```c
     /*
-    杨小兵-2024-12-19
+    杨小兵-2024-12-30
 
     1、命令解释
         1.1 llama-server    二进制程序
@@ -563,6 +624,7 @@ To learn more about model quantization, [read this documentation](examples/quant
     2、效果解释
         1.1 可以通过浏览器网址：http://localhost:8080进行访问基本页面
         1.2 对话补全端点地址：http://localhost:8080/v1/chat/completions
+    3、QA:目前不知道如何部署到公开网络中使得别人可以进行访问。
     */
     ```
     </details>
@@ -671,7 +733,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## 9 [`llama-perplexity`](examples/perplexity)
 
-#### A tool for measuring the perplexity [^1][^2] (and other quality metrics) of a model over a given text.
+#### 9.1 A tool for measuring the perplexity [^1][^2] (and other quality metrics) of a model over a given text.
 ```c
 /*
 杨小兵-2024-12-16
@@ -706,7 +768,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## 10 [`llama-bench`](example/bench)
 
-#### Benchmark the performance of the inference for various parameters.
+#### 10.1 Benchmark the performance of the inference for various parameters.
 ```c
 /*
 杨小兵-2024-12-16
@@ -735,7 +797,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## 11 [`llama-run`](examples/run)
 
-#### A comprehensive example for running `llama.cpp` models. Useful for inferencing. Used with RamaLama [^3].
+#### 11.1 A comprehensive example for running `llama.cpp` models. Useful for inferencing. Used with RamaLama [^3].
 ```c
 /*
 杨小兵-2024-12-16
@@ -758,7 +820,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## 12 [`llama-simple`](examples/simple)
 
-#### A minimal example for implementing apps with `llama.cpp`. Useful for developers.
+#### 12.1 A minimal example for implementing apps with `llama.cpp`. Useful for developers.
 ```c
 /*
 杨小兵-2024-12-16
@@ -818,7 +880,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 3、GBNF grammars
 */
 ```
-#### Development documentation
+#### 14.1 Development documentation
 
 - [How to build](docs/build.md)
 - [Running on Docker](docs/docker.md)
@@ -836,7 +898,8 @@ To learn more about model quantization, [read this documentation](examples/quant
 5、GGML库使用的技巧相关文档
 */
 ```
-#### Seminal papers and background on the models
+
+#### 14.2 Seminal papers and background on the models
 
 If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
 - LLaMA:
@@ -856,5 +919,5 @@ If your issue is with model generation quality, then please at least scan the fo
 */
 ```
 
-#### References
+#### 14.3 References
 
