@@ -1,14 +1,56 @@
 #ifndef LLAMA_H
 #define LLAMA_H
+/*
+Note:杨小兵-2025-01-01
+
+1、这里出现的预处理器指令为了保证该头文件不会被一个编译单元包含多次从而造成重定义的错误
+    1.1 ifndef、#define、#endif三者都是预处理器命令
+    1.2 三者结合从而保证头文件在编译单元的单次包含，等价的写法是#pragma once，这个预处理器指令在各个编译器中也是被广泛兼容的
+*/
 
 #include "ggml.h"
 #include "ggml-cpu.h"
 #include "ggml-backend.h"
+/*
+Note:杨小兵-2025-01-01
+
+1、头文件（这三个头文件都是GGML相关的库）
+    1.1 ggml.h
+    1.2 ggml-cpu.h
+    1.3 ggml-backend.h
+*/
 
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
+/*
+Note:杨小兵-2025-01-01
+
+1、<stddef.h> 是一个标准C头文件，主要提供以下内容：
+    1.1 类型定义：
+        1.1.1 size_t：无符号整数类型，通常用于表示对象的大小或数组的索引。
+        1.1.2 ptrdiff_t：有符号整数类型，用于表示两个指针之间的差值。
+    1.2 宏定义：
+        1.2.1 NULL：空指针常量。
+2、<stdint.h> 是一个标准C头文件，提供固定宽度的整数类型，确保跨平台的一致性。主要包括：
+    2.1 有符号整数类型：
+        2.1.1 int8_t, int16_t, int32_t, int64_t
+    2.2 无符号整数类型：
+        2.2.1 uint8_t, uint16_t, uint32_t, uint64_t
+    2.3 其他类型：
+        2.3.1 intptr_t, uintptr_t, 等。
+3、<stdio.h> 是一个标准C头文件，提供输入和输出功能，包括文件操作。主要内容包括：
+    3.1 类型定义：
+        3.1.1 FILE：文件类型，用于文件操作。
+    3.2 函数原型：
+        3.2.1 printf, fprintf, fopen, fclose, 等。
+4、<stdbool.h> 是一个标准C头文件，用于在C中引入布尔类型。主要内容包括：
+    4.1 类型定义：
+        4.1.1 bool：布尔类型。
+    4.2 宏定义：
+        4.2.1 true 和 false：布尔常量。
+*/
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
@@ -23,6 +65,26 @@
 #else
 #    define LLAMA_API
 #endif
+/*
+Note:杨小兵-2025-01-01
+
+1、上述这些内容都是C/C++预处理器指令。在C和C++中，预处理器指令以 # 开头，用于指示编译器在编译实际代码之前对源代码进行某些处理。这些指令在编译阶段的预处理阶段被处理，不会被编译器视为实际的代码。
+2、C/C++标准允许在预处理器指令的 # 后面有零个或多个空格。因此，以下两种写法都是合法且等效的。例如#   include <iostream>是合法的。
+3、定义 LLAMA_API 宏，用于控制符号的导出和导入。这使得在不同的构建环境（Windows vs. 非Windows）和不同的构建阶段（构建库 vs. 使用库）下，符号的可见性得以正确管理。
+4、工作原理：
+    4.1 构建共享库时：
+        4.1.1 在MSVC环境下，使用 __declspec(dllexport) 导出符号。
+        4.1.2 在GCC/Clang环境下，使用 __attribute__((visibility("default"))) 导出符号。
+    4.2 使用共享库时：
+        4.2.1 在MSVC环境下，使用 __declspec(dllimport) 导入符号。
+        4.2.2 在GCC/Clang环境下，符号的导入无需特别声明，因为 visibility("default") 已经使其可见。
+    4.3 静态链接或非共享库构建时： LLAMA_API 宏为空，不做任何特殊处理。
+5、在Windows平台上，当您构建一个动态链接库（DLL）时，通常会生成两个文件：
+    5.1 *.dll：这是动态链接库的实际文件，包含了库中实现的函数、类和其他资源。
+    5.2 *.lib：这是所谓的“导入库”（Import Library），包含了与DLL中导出符号相关的信息，供链接器在编译客户端应用程序时使用。
+*/
+
+
 
 #ifdef __GNUC__
 #    define DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
