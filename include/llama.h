@@ -84,8 +84,6 @@ Note:杨小兵-2025-01-01
     5.2 *.lib：这是所谓的“导入库”（Import Library），包含了与DLL中导出符号相关的信息，供链接器在编译客户端应用程序时使用。
 */
 
-
-
 #ifdef __GNUC__
 #    define DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
 #elif defined(_MSC_VER)
@@ -93,8 +91,30 @@ Note:杨小兵-2025-01-01
 #else
 #    define DEPRECATED(func, hint) func
 #endif
+/*
+Note:杨小兵-2025-01-02
+
+1、__GNUC__ 是由编译器预定义的宏，而不是用户自定义的。
+2、__GNUC__ 是由 GNU 编译器集合（GCC）自动定义的预定义宏。它用于指示当前使用的编译器是 GCC，且通常包含编译器的版本信息。
+    2.1 例如，GCC 版本 9.3 会定义 __GNUC__ 为 9，并且还可能定义 __GNUC_MINOR__ 为 3。
+    2.2 开发者可以使用这些预定义宏来编写与特定编译器相关的代码。例如，针对 GCC 的特性或优化，可以使用 #ifdef __GNUC__ 来包含或排除特定代码。
+    2.3 确保代码在不同编译器之间具有良好的兼容性，通过检测编译器类型来应用不同的实现方式。
+3、其他相关宏：
+    3.1 __clang__： 当使用 Clang 编译器时定义。
+    3.2 _MSC_VER： 当使用 Microsoft Visual C++（MSVC）编译器时定义。
+    3.3 __MINGW32__ 和 __MINGW64__： 当使用 MinGW 编译器时定义。
+4、预处理器命令定义了一个带有参数的宏（宏函数），用于标记函数为弃用，并提供弃用提示信息。
+    4.1 使用这个宏，可以在函数声明或定义时标记该函数为弃用（deprecated），并提供相应的提示信息。
+    4.2 hint 参数允许开发者提供弃用原因或替代方案，帮助其他开发者理解为何该函数被弃用以及应该使用什么替代函数。
+5、通过使用 DEPRECATED 宏，您可以轻松地在代码中标记不推荐使用的函数，并为其他开发者提供明确的替代建议，同时确保在不同编译器环境下的兼容性和一致性。
+*/
 
 #define LLAMA_DEFAULT_SEED 0xFFFFFFFF
+/*
+Note:杨小兵-2025-01-02
+
+1、这是一个C/C++预处理器指令，定义一个宏变量用来设置llama default seed
+*/
 
 // TODO: use everywhere in the implementation
 #define LLAMA_TOKEN_NULL -1
@@ -108,10 +128,30 @@ Note:杨小兵-2025-01-01
 
 #define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
 #define LLAMA_STATE_SEQ_VERSION 2
+/*
+Note:杨小兵-2025-01-02
+
+1、上述指令是C/C++预处理器指令，创建一些宏变量将会在其他地方用到
+*/
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+/*
+Note:杨小兵-2025-01-02
+
+1、用于在C++代码中声明C接口，以确保C++编译器对这些接口使用C语言的链接规范（C linkage）。这对于实现跨语言兼容性（如C和C++混合编程）至关重要。
+2、extern "C" { 和 }
+    2.1 作用： 告诉C++编译器使用C语言的链接规范（C linkage）来编译括号内的代码。这意味着函数名不会经过C++的名称修饰（name mangling），从而确保这些函数可以被C代码或其他遵循C链接规范的代码正确调用。
+    2.2 用途： 通常用于在C++库中提供C接口，或在C++代码中调用C库函数。
+    2.3 解释：extern "C" 的主要作用是告诉C++编译器使用C语言的链接规范来编译指定的代码块。这确保了C++函数可以被C代码调用，或者C++代码可以调用C函数，而不会因名称修饰导致链接错误。
+3、extern 的基本含义
+    3.1 声明外部变量或函数： extern 用于声明在其他文件中定义的变量或函数，告诉编译器这些符号在其他地方定义，以避免重复定义错误。
+4、C++中的扩展用法
+    4.1 extern "C"： 用于指示编译器使用C语言的链接规范来编译指定的代码块，确保C++函数可以被C代码调用，或者C++代码可以调用C函数。
+*/
+
+
 
     //
     // C interface
