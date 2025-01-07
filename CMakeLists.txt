@@ -5,11 +5,17 @@ include(CheckIncludeFileCXX)
 Note:杨小兵-2025-01-04
 
 1、指令1
-    1.1 指定 CMake 的最低版本要求为 3.14，这是为了确保支持 `add_link_options` 和隐式目标目录等功能。
-    1.2 在当前项目的构建过程中使用到了cmake高版本中的功能，但是在cmake低版本中没有对应的功能，因此需要指定cmake的版本
+    1.1 作用：指定 CMake 的最低版本要求为 3.14，对于CMake版本大于等于3.14的都是符合要求的
+    1.2 注释解释：支持两个features
+        1.2.1 `add_link_options`
+        1.2.2 隐式目标目录
+    1.2 原因：在当前项目的构建过程中使用到了cmake高版本中的功能，但是在cmake低版本中没有对应的功能，因此需要指定cmake的版本
 2、指令2
-    2.1 定义项目名称为 "llama.cpp"，并指定支持的编程语言为 C 和 C++。
-    2.2 llama.cpp是项目的名称，C、CXX则是指定该项目中使用的programming languages为C、C++
+    2.1 定义项目信息：project 命令为整个 CMake 配置过程设定了基础信息，如项目名称、版本和支持的编程语言。
+    2.2 启用语言支持：指定的编程语言（如 C、C++）将启用对应的编译器和语言特性。CMake 会自动设置编译器、编译选项等相关配置。
+    2.3 配置生成器：许多 CMake 功能和模块依赖于 project 命令中定义的信息。例如，测试框架、安装规则等都可能依赖项目名称和语言。
+    2.4 全局变量设置：project 命令会设置一些全局变量，如 PROJECT_NAME, PROJECT_VERSION, CMAKE_C_COMPILER, CMAKE_CXX_COMPILER 等，这些变量在后续的配置和构建过程中可供使用。
+    2.5 依赖管理：在多项目构建（例如使用 add_subdirectory）中，project 命令有助于管理不同子项目的独立性和依赖关系。
 3、指令3
     3.1 在 CMake 中，include 命令用于包含和执行另一个 CMake 脚本或模块。通过 include，您可以引入外部定义的函数、宏、变量和其他设置，从而在当前的 CMakeLists.txt 文件中复用这些内容
         3.1.1 引入模块和功能：CMake 提供了许多内置模块，包含常见的功能检查、编译选项设置等。通过 include，您可以使用这些模块提供的功能。
@@ -27,7 +33,7 @@ Note:杨小兵-2025-01-04
 
 1、指令1
     1.1 这行cmake命令被注释掉了，说明已经被弃用了
-    1.2 创建一个新的cmake变量将其设置为CMAKE_WARN_DEPRECATED
+    1.2 CMAKE作为前缀的变量是cmake内置的变量，这里将变量的值设置为YES（是一个boolean类型的变量）
 2、指令2
     2.1 在 CMake 中，set 命令用于定义或修改变量的值。这些变量可以在整个 CMake 配置过程中被引用，以控制构建过程的各种方面。
 ]]
@@ -38,7 +44,7 @@ Note:杨小兵-2025-01-04
 
 1、指令1
     1.1 在 CMake 中，set 命令用于定义或修改变量的值。这些变量可以在整个 CMake 配置过程中被引用，以控制构建过程的各种方面。
-    1.2 在在 CMake 中，CMAKE_EXPORT_COMPILE_COMMANDS 是一个用于控制是否生成 compile_commands.json 文件的变量。通过设置 CMAKE_EXPORT_COMPILE_COMMANDS 为 ON，CMake 会在构建目录中生成一个 compile_commands.json 文件。这个文件详细记录了项目中每个源文件的编译命令和编译选项。
+    1.2 在 CMake 中，CMAKE_EXPORT_COMPILE_COMMANDS 是一个用于控制是否生成 compile_commands.json 文件的变量。通过设置 CMAKE_EXPORT_COMPILE_COMMANDS 为 ON，CMake 会在构建目录中生成一个 compile_commands.json 文件。这个文件详细记录了项目中每个源文件的编译命令和编译选项。
     1.3 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 的主要作用是让 CMake 生成一个包含所有源文件编译命令的 compile_commands.json 文件。这对于静态分析工具、代码编辑器的智能功能以及其他依赖编译信息的工具非常有用。通过启用这一选项，可以显著提升开发过程中的代码质量检查和开发效率。
     1.4 Visual Studio 生成器不支持 compile_commands.json：CMake 的 CMAKE_EXPORT_COMPILE_COMMANDS 选项在大多数 Unix-like 生成器（如 Ninja 和 Unix Makefiles）中是支持的，但对于 Visual Studio 生成器，它并不生成 compile_commands.json 文件。
 ]]
@@ -69,18 +75,34 @@ Note:杨小兵-2025-01-04
 # Add path to modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 #[[
-Note:杨小兵-2025-01-04
+Note:杨小兵-2025-01-07
 
 1、指令1
     1.1 上述cmake指令的作用是将 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ 路径添加到 CMake 的模块搜索路径中，以便在配置和生成过程中，CMake 能够在这个路径下找到自定义的模块文件（通常是 .cmake 文件）。
+    1.2 list 命令是 CMake 中用于操作列表（List）变量的内置命令。CMake 的列表实际上是由分号（;）分隔的字符串，list 命令提供了一系列子命令，用于对这些列表进行添加、删除、修改、查询等操作。通过 list 命令，开发者可以方便地管理和操作多个值的集合，例如源文件列表、包含目录列表、库路径列表等。
+    1.3 主要功能包括：
+        1.3.1 添加元素：向列表中追加或插入新的元素。
+        1.3.2 删除元素：从列表中移除指定的元素。
+        1.3.3 修改元素：替换列表中的某个元素。
+        1.3.4 查询列表：检查列表中是否包含某个元素，获取列表的长度等。
+        1.3.5 排序和去重：对列表进行排序或移除重复元素。
+    1.4 常用子命令示例：
+        1.4.1 APPEND：向列表末尾添加一个或多个元素。
+        1.4.2 INSERT：在指定位置插入一个或多个元素。
+        1.4.3 REMOVE_ITEM：从列表中删除指定的元素。
+        1.4.4 FIND：查找某个元素在列表中的位置。
+        1.4.5 LENGTH：获取列表的长度。
+        1.4.6 SORT：对列表进行排序。
+        1.4.7 REMOVE_DUPLICATES：移除列表中的重复元素。
 ]]
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #[[
-Note:杨小兵-2025-01-04
+Note:杨小兵-2025-01-07
 
 1、指令1
-    将项目构建的结果设置成对应目录下的bin文件夹中
+    1.1 指定所有可执行文件（runtime targets）的输出目录。即，生成的可执行文件（如 .exe 文件）将被放置在此目录下。
+    1.2 runtime 在 CMake 中主要指的是 可执行文件（executables）。
 ]]
 
 
@@ -126,7 +148,7 @@ Note:杨小兵-2025-01-04
     2.2 非 EMSCRIPTEN 环境：
         2.2.1 如果当前环境是 MinGW（Windows 的 GCC 工具链）：
             2.2.1.1 禁用共享库的默认构建（BUILD_SHARED_LIBS_DEFAULT OFF）。
-        2.2.2 否则（其他环境，例如 Linux 或 macOS）：
+        2.2.2 否则（其他环境，例如 Linux、visual studio、macOS）：
             2.2.2.1 启用共享库的默认构建（BUILD_SHARED_LIBS_DEFAULT ON）。
 3、EMSCRIPTEN 是什么？
 EMSCRIPTEN 是一个开源工具链，主要用于将 C/C++ 代码编译为 WebAssembly（WASM）或 asm.js，从而使这些代码能够在 Web 浏览器中运行。其特点包括：
@@ -150,10 +172,10 @@ option 是 CMake 提供的一个命令，用于定义布尔类型（ON/OFF）的
 
 option(BUILD_SHARED_LIBS "build shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
 #[[
-Note:杨小兵-2025-01-04
+Note:杨小兵-2025-01-07
 
 1、指令1
-    1.1 总体作用提供一个Boolean类型的选项从而用户可以进行选择，相当于提供了一个开关
+    1.1 设置一个boolean类型的选项从而用户可以进行选择，相当于提供了一个开关
     1.2 第一个参数是变量的名称；第二个参数是对变量的说明；第三个参数是变量的值
 ]]
 
@@ -178,11 +200,20 @@ if (MSVC)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
 endif()
 #[[
-Note:杨小兵-2025-01-04
+Note:杨小兵-2025-01-07
 
 1、指令1
     1.1 `MSVC` 是 CMake 的内置布尔变量，当 CMake 配置项目时，如果目标生成器是 Microsoft 的 Visual C++ 编译器（MSVC），CMake 会自动定义 `MSVC` 为 `TRUE`
     1.2 条件判断
+    1.3 WIN32 和 MSVC 的区别
+        1.3.1 概念层面：
+            1.3.1.1 WIN32 是一个 平台检测 变量，指示目标平台是否为 Windows 系统。
+            1.3.1.2 MSVC 是一个 编译器检测 变量，指示当前使用的编译器是否为 MSVC。
+        1.3.2 互斥关系：
+            1.3.2.1 虽然在 Windows 平台上常常使用 MSVC 编译器，但 WIN32 和 MSVC 并不是互斥的。即一个项目可以在 Windows 平台上使用不同的编译器（如 MinGW、Clang），因此在 Windows 上 WIN32 为真，而 MSVC 可能为真或假，具体取决于所使用的编译器。
+        1.3.3 使用场景：
+            1.3.3.1 WIN32：当您需要针对 Windows 平台进行特定配置时使用。
+            1.3.3.2 MSVC：当您需要针对 MSVC 编译器进行特定配置时使用。
 2、指令2
     2.1 该命令是cmake中的一个内置命令
     2.2 该命令的作用是向全局的编译器命令行添加指定的选项，适用于当前项目中所有目标的编译。相当于为整个项目的所有源文件添加编译器选项。
@@ -191,6 +222,16 @@ Note:杨小兵-2025-01-04
     2.5 `$<$<COMPILE_LANGUAGE:C>:/utf-8>` 是一个 CMake 生成器表达式，表示仅当当前编译的文件是 C 文件时，才为其添加 `/utf-8` 编译选项。这种机制使得 CMake 配置更加灵活，能够根据条件动态调整编译器选项。
 3、指令3
     3.1 条件判断的结束标识
+4、注意
+    4.1 add_compile_definitions 和 add_compile_options 命令主要用于向编译器传递定义和选项，因此它们的操作对象可以视为编译器及其编译过程。
+    4.2 add_compile_definitions（添加预处理器宏定义）
+        4.2.1 主要用于添加预处理器宏定义（如 -D 选项）。
+        4.2.2 适用于需要在代码中进行条件编译或启用特定功能的场景。
+        4.2.3 当需要为代码添加预处理器宏定义时使用。例如，定义调试模式、平台特定宏等。
+    4.3 add_compile_options（添加编译器选项）
+        4.3.1 主要用于添加编译器选项（如优化级别、警告控制、语言标准等）。
+        4.3.2 适用于需要调整编译器行为或配置特定编译选项的场景。
+        4.3.3 当需要调整编译器的行为或配置特定编译器选项时使用。例如，设置优化级别、警告级别、语言标准等。
 ]]
 
 
@@ -256,6 +297,8 @@ Note:杨小兵-2025-01-05
     2.1 创建一个boolean类型的变量从而给用户提供选择，相当于提供了一个开关
 3、指令3
     3.1 创建一个boolean类型的变量从而给用户提供选择，相当于提供了一个开关
+4、名词解释
+    4.1 extra artifacts:额外的构建产物
 ]]
 
 # 3rd party libs
@@ -402,10 +445,11 @@ if (NOT TARGET ggml)
 endif()
 add_subdirectory(src)
 #[[
-Note:杨小兵-2025-01-05
+Note:杨小兵-2025-01-07
 
 1、指令1
     1.1 条件判断：检查是否已经存在名为 ggml 的目标（target）。TARGET 是 CMake 中用于引用已经定义的目标（如库或可执行文件）。NOT TARGET ggml 表示如果当前项目中还没有定义 ggml 这个目标，则执行接下来的代码块。
+    1.2 CMake 提供了一个条件表达式 TARGET <name>，用于检查是否已经定义了名为 <name> 的目标。结合逻辑操作符 NOT，NOT TARGET <name> 的含义就是“如果没有定义名为 <name> 的目标”。
 2、指令2
     2.1 添加子目录：将 ggml 目录添加到当前的 CMake 构建过程中。add_subdirectory 命令会进入指定的子目录，并处理其中的 CMakeLists.txt 文件，从而包含该子项目的构建配置。这通常用于包含和编译第三方库或模块。
 3、指令3
