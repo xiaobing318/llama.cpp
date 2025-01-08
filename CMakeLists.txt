@@ -602,7 +602,7 @@ Note:杨小兵-2025-01-05
         1.3.2 在此例中：lib/pkgconfig 表示 llama.pc 文件将被安装到安装目录下的 lib/pkgconfig 目录中。
     1.4 在这段 CMake 脚本中，install 命令的作用是将生成的 llama.pc 文件从当前的二进制构建目录复制到最终安装目录的 lib/pkgconfig 子目录中。这样，安装完成后，llama.pc 文件将位于 <安装前缀>/lib/pkgconfig/ 目录下，供其他工具（如 pkg-config）使用。
 ]]
-    
+
 
 
 #
