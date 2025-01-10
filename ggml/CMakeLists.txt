@@ -505,6 +505,7 @@ Note:杨小兵-2025-01-10
 1、指令1
     1.1 添加子目录：将 src 目录添加到当前的 CMake 构建过程中。add_subdirectory 命令会进入指定的子目录，并处理其中的 CMakeLists.txt 文件，从而包含该子项目的构建配置。这通常用于包含和编译第三方库或模块。
 ]]
+
 #
 # tests and examples
 #
@@ -513,10 +514,33 @@ if (GGML_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif ()
+#[[
+Note:杨小兵-2025-01-10
+
+1、指令1
+    1.1 如果启用了 GGML_BUILD_TESTS 选项，则执行后续测试相关命令。
+2、指令2
+    2.1 启用 CMake 自带的测试功能。
+    2.2 当前命令是cmake中自带的一个命令
+3、指令3
+    3.1 在llama.cpp项目中的ggml项目没有tests这个子文件夹，如果是在ggml项目中则是存在的，这是因为在llama.cpp中ggml只是一个依赖项。
+4、指令4
+    4.1 结束 if (GGML_BUILD_TESTS) 判断语句的范围。
+]]
 
 if (GGML_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif ()
+#[[
+Note:杨小兵-2025-01-10
+
+1、指令1
+    1.1 如果启用了 GGML_BUILD_EXAMPLES 选项，则执行后续测试相关命令。
+2、指令2
+    2.1 在llama.cpp项目中的ggml项目没有examples这个子文件夹，如果是在ggml项目中则是存在的，这是因为在llama.cpp中ggml只是一个依赖项。
+3、指令3
+    3.1 结束 if (GGML_BUILD_EXAMPLES) 判断语句的范围。
+]]
 
 #
 # install
@@ -560,6 +584,14 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #endif()
 install(TARGETS ggml LIBRARY PUBLIC_HEADER)
 install(TARGETS ggml-base LIBRARY)
+#[[
+Note:杨小兵-2025-01-10
+
+1、指令1
+    1.1 将名为 ggml 的目标库以及对应的公共头文件安装到指定安装位置。
+2、指令2
+    2.1 将名为 ggml-base 的目标库安装到指定安装位置。
+]]
 
 # FIXME: this should be done in the backend cmake files
 if (GGML_METAL)
@@ -589,3 +621,15 @@ if (GGML_STANDALONE)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ggml.pc
         DESTINATION share/pkgconfig)
 endif()
+#[[
+Note:杨小兵-2025-01-10
+
+1、指令1
+    1.1 如果启用了 GGML_STANDALONE 选项，则执行其内部的命令。
+2、指令2
+    2.1 根据模板文件 ggml.pc.in 生成实际的 ggml.pc 文件，并只替换其中的 CMake 变量。
+3、指令3
+    3.1 将生成的 ggml.pc 文件安装到 share/pkgconfig 目录下。
+4、指令4
+    4.1 结束 if (GGML_STANDALONE) 判断语句的范围。
+]]
