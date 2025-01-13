@@ -373,13 +373,23 @@ Note:杨小兵-2025-01-12
     1.2 Tailwind CSS：Tailwind CSS 是一个功能类优先的 CSS 框架，提供了大量可组合的实用工具类以快速构建定制化设计。
     1.3 DaisyUI：DaisyUI 是基于 Tailwind CSS 的组件库，提供预设的可定制组件以加速前端开发。
     1.4 Vite：Vite 是一个快速的前端构建工具，利用原生 ES 模块实现极速的开发启动和热更新。
-2、前端开发用到了vue框架
-3、风格化的东西使用到了`tailwindcss` and `daisyui`
-4、构建tooling使用到了vite
+2、工具的作用
+    2.1 作为前端开发框架，Vue 提供了响应式的数据绑定和组件化的开发模式，简化了复杂用户界面的构建和维护。
+    2.2 Tailwind CSS 通过预定义的实用工具类，使开发者能够快速构建高度定制化且一致的用户界面，而无需编写大量自定义 CSS。
+    2.3 DaisyUI 在 Tailwind CSS 的基础上提供了一系列预制的、可定制的 UI 组件，帮助开发者加快界面设计和实现的速度。
+    2.4 Vite 提供了快速的开发服务器和高效的构建流程，利用现代浏览器特性和优化策略，显著提升前端开发和构建的效率与体验。
 */
 ```
 
 A pre-built version is available as a single HTML file under `/public` directory.
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、在当前文件所在目录中的/public中有一个单HTML文件可以使用，这个文件是预构建好的版本。
+2、这个HTML是比较简单的，但是我对HTML是不理解的。
+*/
+```
 
 To build or to run the dev server (with hot reload):
 
@@ -394,24 +404,62 @@ npm run dev
 # to build the public/index.html
 npm run build
 ```
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、npm（Node Package Manager）是 Node.js 的包管理工具，用于管理 JavaScript 代码包（称为“包”或“模块”）。它允许开发者轻松地安装、更新、共享和管理项目所需的各种依赖库和工具。npm 提供了一个庞大的在线存储库（npm Registry），开发者可以从中获取各种开源包来加速开发过程。
+2、在运行上述命令之前，确保你的系统中已经安装了 Node.js。Node.js 是一个基于 Chrome V8 引擎的 JavaScript 运行时，允许你在服务器端运行 JavaScript 代码。你可以通过访问 Node.js 官方网站 下载并安装适合你操作系统的版本。安装 Node.js 时，npm 会自动安装在你的系统中。
+3、启用热重载（Hot Reload）：当你修改代码时，开发服务器会自动重新编译并刷新浏览器，使你能够实时看到更改效果，而无需手动刷新页面。
+*/
+```
 
 NOTE: if you are using the vite dev server, you can change the API base URL to llama.cpp. To do that, run this code snippet in browser's console:
 
 ```js
 localStorage.setItem('base', 'http://localhost:8080')
 ```
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、注意：如果您使用的是 vite dev 服务器，则可以将 API 基本 URL 更改为 llama.cpp。为此，请在浏览器的控制台中运行上述提到的代码。
+2、上述这部分内容还是不熟悉，需要学习了解。
+*/
+```
 
 ## 5 Quick Start
 
 To get started right away, run the following command, making sure to use the correct path for the model you have:
+```c
+/*
+Note:杨小兵-2025-01-12
 
-### Unix-based systems (Linux, macOS, etc.)
+1、运行下列的command可以立即启动llama-server，这里的前提就是确保模型的路径是正确的。
+*/
+```
+
+### 5.1 Unix-based systems (Linux, macOS, etc.)
 
 ```bash
 ./llama-server -m models/7B/ggml-model.gguf -c 2048
 ```
+```c
+/*
+Note:杨小兵-2025-01-12
 
-### Windows
+1、基于Unix的systems
+    1.1 Linux
+    1.2 macOS
+    1.3 etc
+2、上述给出的命令则是在Unix-based systems中能够运行的。
+3、命令行参数解释
+    3.1 -m 用来指定模型文件所在的路径
+    3.2 -c prompt context的大小（在需要多轮对话的时候需要合适的设置这个参数，另外这个参数将会影响到KV cache大小从而影响到整体的性能。）
+*/
+```
+
+### 5.2 Windows
 
 ```powershell
 llama-server.exe -m models\7B\ggml-model.gguf -c 2048
@@ -419,14 +467,37 @@ llama-server.exe -m models\7B\ggml-model.gguf -c 2048
 
 The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
+```c
+/*
+Note:杨小兵-2025-01-12
 
-### Docker
+1、Windows system
+2、上述给出的命令则是在windows system中能够运行的。
+3、命令行参数解释
+    3.1 -m 用来指定模型文件所在的路径
+    3.2 -c prompt context的大小（在需要多轮对话的时候需要合适的设置这个参数，另外这个参数将会影响到KV cache大小从而影响到整体的性能。）
+4、在powershell中运行的命令将会启动一个server，这个server默认监听127.0.0.1:8080。
+    4.1 如果设备跟server在同一个 Wi-Fi/有线网络下（在同一个网段），只要满足上述防火墙设置（可能需要进行设置），就可以直接通过 http://192.168.1.6:8080 访问服务。
+    4.2 问题：同一个网段是什么意思？
+    4.2 想要弄清楚这部分内容需要对computer network有着更多的了解，目前对这些知识内容了解的比较少。
+5、可以使用 Postman 或带有 axios 库的 NodeJS 来使用端点。您可以通过相同的 URL 访问 Web 前端。
+*/
+```
+
+### 5.3 Docker
 
 ```bash
 docker run -p 8080:8080 -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:server -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080
 
 # or, with CUDA:
 docker run -p 8080:8080 -v /path/to/models:/models --gpus all ghcr.io/ggerganov/llama.cpp:server-cuda -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080 --n-gpu-layers 99
+```
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、上述这些内容是关于Docker的，目前用不到，因此这部分内容不需要进行深入的了解。
+*/
 ```
 
 ## 6 Testing with CURL
@@ -439,12 +510,29 @@ curl --request POST \
     --header "Content-Type: application/json" \
     --data '{"prompt": "Building a website can be done in 10 simple steps:","n_predict": 128}'
 ```
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、使用CURL来对llama-server进行测试，模仿其他用户使用llama-server的场景
+2、在windows上，curl.exe程序在基本的操作系统上应该都是可用的。
+3、需要对curl可执行文件有所了解，重点是如何使用curl可执行文件，目前还用不到先不需要深入了解。
+*/
+```
 
 ## 7 Advanced testing
 
 We implemented a [server test framework](./tests/README.md) using human-readable scenario.
 
 *Before submitting an issue, please try to reproduce it with this format.*
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、使用人类可读的场景实现了一个服务测试框架。
+2、在提交issue之前，如何通过指定的格式复现问题，帮助开发者更好地诊断和解决问题。
+*/
+```
 
 ## 8 Node JS Test
 
@@ -479,10 +567,17 @@ And run it:
 ```bash
 node index.js
 ```
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、整体上为了测试Node JS，目前是不需要深入理解。
+*/
+```
 
 ## 9 API Endpoints
 
-### GET `/health`: Returns heath check result
+### 9.01 GET `/health`: Returns heath check result
 
 **Response format**
 
@@ -493,12 +588,31 @@ node index.js
   - Body: `{"status": "ok" }`
   - Explanation: the model is successfully loaded and the server is ready.
 
-### POST `/completion`: Given a `prompt`, it returns the predicted completion.
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、可以通过健康检查（Health Check）端点向llama-server发送HTTP GET请求，并根据响应的HTTP状态码和响应体来判断服务器的当前状态。
+2、可以通过浏览器输入地址或者通过curl工具获取服务器状态。
+3、目前存在两种status code
+    3.1 503 表示模型正在加载中
+    3.2 200 表示模型已经被成功加载并且server已经准备好了
+*/
+```
+
+### 9.02 POST `/completion`: Given a `prompt`, it returns the predicted completion.
 
 > [!IMPORTANT]
 >
 > This endpoint is **not** OAI-compatible. For OAI-compatible client, use `/v1/completions` instead.
 
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、/completion endpoint不是OAI-compatible的。如果想要OAI-compatible的客户端，使用/v1/completions endpoint。
+*/
+```
 *Options:*
 
 `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
@@ -605,6 +719,13 @@ These words will not be included in the completion, so make sure to add them to 
 `response_fields`: A list of response fields, for example: `"response_fields": ["content", "generation_settings/n_predict"]`. If the specified field is missing, it will simply be omitted from the response without triggering an error. Note that fields with a slash will be unnested; for example, `generation_settings/n_predict` will move the field `n_predict` from the `generation_settings` object to the root of the response and give it a new name.
 
 `lora`: A list of LoRA adapters to be applied to this specific request. Each object in the list must contain `id` and `scale` fields. For example: `[{"id": 0, "scale": 0.5}, {"id": 1, "scale": 1.1}]`. If a LoRA adapter is not specified in the list, its scale will default to `0.0`. Please note that requests with different LoRA configurations will not be batched together, which may result in performance degradation.
+```c
+/*
+Note:杨小兵-2025-01-12
+
+1、/completion endpoint相关的参数目前没有深入了解，在后续如果涉及到这部分内容可以深入了解。
+*/
+```
 
 **Response format**
 
@@ -678,7 +799,14 @@ These words will not be included in the completion, so make sure to add them to 
 - `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
 
 
-### POST `/tokenize`: Tokenize a given text
+### 9.03 POST `/tokenize`: Tokenize a given text
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、这是llama-server的/tokenize endpoint，可以对给定的text进行tokenize，然后给出tokenize之后的内容。
+*/
+```
 
 *Options:*
 
@@ -687,11 +815,39 @@ These words will not be included in the completion, so make sure to add them to 
 `add_special`: (Optional) Boolean indicating if special tokens, i.e. `BOS`, should be inserted.  Default: `false`
 
 `with_pieces`: (Optional) Boolean indicating whether to return token pieces along with IDs.  Default: `false`
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、字段：content
+    1.1 作用：用来tokenize的text
+    1.2 是否必须：必须
+2、字段：add_special
+    2.1 作用：表示是否应插入特殊标记，即“BOS”。默认值：false
+    2.2 是否必须：可选
+3、字段：with_pieces
+    3.1 作用：表示是否同ID一起返回token pieces。默认值：false
+    3.2 是否必须：可选
+4、示例
+{
+  "content": "Hello world!",
+  "add_special": false,
+  "with_pieces": true
+}
+*/
+```
 
 **Response:**
 
 Returns a JSON object with a `tokens` field containing the tokenization result. The `tokens` array contains either just token IDs or objects with `id` and `piece` fields, depending on the `with_pieces` parameter. The piece field is a string if the piece is valid unicode or a list of bytes otherwise.
+```c
+/*
+Note:杨小兵-2025-01-13
 
+1、返回一个JSON object，这个JSON object包含一个tokens字段，这个字段包含tokenization之后的结果。
+2、tokens数组包含要么仅仅是token IDs或者同时有id和piece字段的对象。如果pieces是有效的 Unicode，则pieces字段为字符串，否则为字节列表。
+*/
+```
 
 If `with_pieces` is `false`:
 ```json
@@ -721,30 +877,125 @@ With input 'á' (utf8 hex: C3 A1) on tinyllama/stories260k
 }
 ```
 
-### POST `/detokenize`: Convert tokens to text
+### 9.04 POST `/detokenize`: Convert tokens to text
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、这是llama-server的/detokenize endpoint，可以对给定的tokens进行detokenize，然后给出detokenize之后的字符串。
+2、示例
+{
+    "tokens": [
+        2354,
+        1946,
+        364,
+        1953,
+        6,
+        320,
+        4762,
+        23,
+        12371,
+        25,
+        356,
+        18,
+        362,
+        16,
+        8,
+        389,
+        13673,
+        654,
+        3029,
+        14272,
+        2433,
+        17,
+        21,
+        15,
+        74
+    ]
+}
+
+*/
+```
 
 *Options:*
 
 `tokens`: Set the tokens to detokenize.
 
-### POST `/embedding`: Generate embedding of a given text
+### 9.05 POST `/embedding`: Generate embedding of a given text
 
 > [!IMPORTANT]
 >
 > This endpoint is **not** OAI-compatible. For OAI-compatible client, use `/v1/embeddings` instead.
 
 The same as [the embedding example](../embedding) does.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/embedding endpoint的作用就是给定text将会生成这个text的embedding
+2、/embedding endpoint不是OAI-compatible。如果想要使用OAI-compatible client，使用/v1/embeddings endpoint
+3、同[the embedding example](../embedding)中的例子是相同的
+*/
+```
+
 
 *Options:*
 
 `content`: Set the text to process.
 
 `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `content`. You can determine the place of the image in the content as in the following: `Image: [img-21].\nCaption: This is a picture of a house`. In this case, `[img-21]` will be replaced by the embeddings of the image with id `21` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 21}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### POST `/reranking`: Rerank documents according to a given query
+1、content
+    1.1 定义：content 用于设置需要处理的文本内容。
+    1.2 用途：这是用户提供的主要文本数据，模型将基于此文本进行理解、分析或生成相关内容。
+2、image_data
+    2.1 定义：image_data 是一个对象数组，每个对象包含以下两个属性：
+        2.1.1 data：以 Base64 编码的图像数据。
+        2.1.2 id：图像的唯一标识符，用于在 content 中引用该图像。
+    2.2 用途：
+        2.2.1 存储图像：将图像以 Base64 编码的形式存储在数组中，便于在不同平台或传输过程中使用。
+        2.2.2 引用图像：在 content 中通过特定格式 [img-<id>] 引用图像，使文本和图像能够关联起来。
+3、使用场景
+    3.1 多模态模型：image_data 选项主要用于支持多模态（即同时处理文本和图像）的模型，例如 LLaVA。这类模型能够理解和生成结合了文本和图像的信息。
+    3.2 纯文本模型：如果使用的模型仅支持文本处理，则无需使用 image_data 选项，因为模型无法处理图像数据。
+4、示例
+{
+  "content": "这是一个美丽的房子。图片展示如下：Image: [img-1].\n说明：这是一栋位于乡村的房子。",
+  "image_data": [
+    {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAUA...", // 这里使用的是Base64编码的图片数据
+      "id": 1
+    }
+  ]
+}
+*/
+```
+
+### 9.06 POST `/reranking`: Rerank documents according to a given query
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/reranking endpoint的作用就是根据给定的查询对文档进行重新排序。
+*/
+```
 
 Similar to https://jina.ai/reranker/ but might change in the future.
 Requires a reranker model (such as [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)) and the `--embedding --pooling rank` options.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、类似于https://jina.ai/reranker/但是在未来可能会发生变化。
+2、使用这个endpoint需要一个reranker model（例如[bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)）并且需要--embedding --pooling rank参数选项。
+3、解释
+    3.1 /reranking 是一个用于重新排序文档的 API 端点。它接收一个查询（query）和一组文档（documents），并根据查询的相关性对这些文档进行排序。重新排序的目的是将最相关的文档排在前面，以便用户能够更快地找到他们需要的信息。
+    3.2 在信息检索（如搜索引擎）中，当用户输入一个查询时，系统会返回一组相关的文档。这些文档最初是基于某种相关性评分（如 TF-IDF、BM25 等）进行排序的。然而，这些初步排序可能并不总是最符合用户需求的。重新排序（Reranking） 是在初步排序的基础上，使用更复杂的模型（如深度学习模型）对文档进行再次排序，以提高排序的准确性和相关性。例如，使用预训练的语言模型来理解查询和文档的深层含义，从而更准确地评估其相关性。
+*/
+```
 
 *Options:*
 
@@ -756,6 +1007,22 @@ Requires a reranker model (such as [bge-reranker-v2-m3](https://huggingface.co/B
   - `/rerank`
   - `/v1/rerank`
   - `/v1/reranking`
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、字段：query
+    1.1 作用：对文档进行排名所依据的查询。
+    1.2 是否必须：必须
+2、字段：documents
+    2.1 作用：一个字符串数组用来表示被排序的文档
+    2.2 是否必须：可选
+3、别名
+    3.1 /rerank endpoint
+    3.2 /v1/rerank endpoint
+    3.3 /v1/rerankings endpoint
+*/
+```
 
 *Examples:*
 
@@ -774,9 +1041,28 @@ curl http://127.0.0.1:8012/v1/rerank \
     }' | jq
 ```
 
-### POST `/infill`: For code infilling.
+### 9.07 POST `/infill`: For code infilling.
 
 Takes a prefix and a suffix and returns the predicted completion as stream.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/infill endpoint用来进行code infilling的。
+2、Code Infilling（代码填充）是一种代码生成技术，旨在在现有代码的中间部分插入缺失的代码片段。这与传统的代码自动补全不同，后者通常是在代码的末尾或特定位置进行补全。Code infilling 允许开发者在代码的任意位置插入或修复代码，增强了代码编辑和修复的灵活性。
+3、为什么需要 Code Infilling？
+    3.1 代码修复：当代码中存在缺失或错误时，code infilling 可以帮助自动生成正确的代码片段，减少手动修复的工作量。
+    3.2 代码补全：在编写复杂的函数或逻辑时，可以在中间插入代码，提高编写效率。
+    3.3 协助重构：在重构代码时，可能需要在现有代码中插入新的逻辑或修改现有逻辑，code infilling 能提供帮助。
+4、/infill Endpoint 的作用
+    4.1 /infill 是一个用于 代码填充 的 API 端点。它接收代码的前缀（prefix）和后缀（suffix），并根据上下文预测并生成中间缺失的代码片段。生成的代码通过流（stream）的形式返回，允许实时查看生成过程。
+5、如何使用 /infill Endpoint？
+    5.1 prefix：代码片段的前部分，即缺失部分之前的代码。
+    5.2 suffix：代码片段的后部分，即缺失部分之后的代码。
+    5.3 completion：预测并生成的中间代码片段，以流的形式返回。
+6、Code infilling 是一种强大的代码生成技术，能够在现有代码的中间部分自动生成缺失的代码片段。通过使用 /infill endpoint，开发者可以提高编码效率，减少错误，并加快开发进程。具体的使用方法包括准备前缀和后缀，发送 POST 请求，并将生成的中间代码整合到原始代码中。虽然这种技术具有诸多优势，但在实际应用中，开发者仍需注意代码的安全性和准确性，确保生成的代码符合预期需求。
+*/
+```
 
 *Options:*
 
@@ -807,10 +1093,32 @@ If the tokens are missing, then the extra context is simply prefixed at the star
 ```txt
 [input_extra]<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
 ```
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### **GET** `/props`: Get server global properties.
+1、基本选项
+    1.1 input_prefix：需要填充代码的前部分，即缺失部分之前的代码。
+    1.2 input_suffix：需要填充代码的后部分，即缺失部分之后的代码。
+    1.3 input_extra：附加的上下文信息，通常用于提供额外的文件内容或项目背景。这是一个数组，每个元素是一个包含 filename（文件名）和 text（文件内容）的对象。
+    1.4 prompt：在填充代码时添加的提示信息，用于引导生成的代码片段。
+    1.5 此外，/infill 端点还接受所有 /completion 端点的选项，如 model、temperature、max_tokens 等。
+2、特殊标记和模式
+    2.1 FIM_REPO 和 FIM_FILE_SEP 是特定的标记，用于定义项目级别的代码填充模式。如果模型支持这些标记，将按照 repo-level pattern 进行处理；否则，附加上下文会被简单地放置在前缀之前。
+*/
+```
+
+### 9.08 **GET** `/props`: Get server global properties.
 
 This endpoint is public (no API key check). By default, it is read-only. To make POST request to change global properties, you need to start server with `--props`
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/props endpoint是为了获取llama-server的全局属性。
+2、这个endpoint是公开的（不需要API key的检查）。默认情况下，这个endpoint的数据是read-only。为了使用POST request来改变全局属性，在启动llama-server的时候需要使用--props参数。
+*/
+```
 
 **Response format**
 
@@ -895,19 +1203,56 @@ This endpoint is public (no API key check). By default, it is read-only. To make
 - `model_path` - the path to model file (same with `-m` argument)
 - `chat_template` - the model's original Jinja2 prompt template
 
-### POST `/props`: Change server global properties.
+### 9.09 POST `/props`: Change server global properties.
 
 To use this endpoint with POST method, you need to start server with `--props`
 
 *Options:*
 
 - None yet
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### POST `/embeddings`: non-OpenAI-compatible embeddings API
+1、/props endpoint用来改变全局属性的。
+2、为了以POST的方式使用这个endpoint，需要在启动llama-server的适合使用--props参数。
+*/
+```
+
+### 9.10 POST `/embeddings`: non-OpenAI-compatible embeddings API
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、什么是 Pooling（池化）？
+    1.1 Pooling（池化） 是一种在深度学习和自然语言处理（NLP）中常用的操作，用于将一组向量（如词嵌入或特征图）转换为一个单一的向量。池化的主要目的是降维和提取关键信息，从而简化数据并减少计算复杂度。
+    1.2 在嵌入（Embeddings）的上下文中，Pooling 通常指的是将词级别的嵌入向量（即每个词的向量表示）聚合成一个句子级别或文档级别的嵌入向量。这对于许多下游任务（如分类、相似性计算等）非常有用，因为这些任务通常需要固定长度的向量表示。
+2、常见的 Pooling 方法
+    2.1 Mean Pooling（平均池化）：对所有词嵌入向量进行逐维度的平均
+    2.2 Max Pooling（最大池化）：对所有词嵌入向量进行逐维度的最大值提取。
+    2.3 CLS Token（分类标记池化）：使用特殊的分类标记（如BERT中的[CLS]标记）的嵌入向量作为整个句子的表示。
+    2.4 None（无池化）：不进行任何池化，直接返回所有词的嵌入向量。
+3、为什么在 LLM 中需要 Pooling？
+    3.1 固定长度的向量表示：许多下游任务（如文本分类、情感分析、相似性计算等）需要固定长度的向量作为输入。由于自然语言的长度不固定，直接使用词级别的嵌入向量会导致输入维度不一致。通过 Pooling，可以将可变长度的词嵌入转换为固定长度的句子或文档嵌入。
+    3.2 信息整合：Pooling 有助于整合句子或文档中所有词的信息，生成一个综合的向量表示。例如，平均池化可以捕捉整体的语义信息，而最大池化可以提取最显著的特征。
+    3.3 计算效率：将多个词嵌入聚合为一个向量，可以显著减少后续计算的复杂度，提升模型的计算效率，尤其是在处理长文本时。
+    3.4 噪音抑制：通过 Pooling，可以平滑掉单个词可能带来的噪音，增强整体的语义表示。例如，平均池化能够减少极端值的影响，提升表示的稳定性。
+    3.5 适应不同任务需求：不同的任务可能需要不同的 Pooling 方法。例如，分类任务可能更适合使用 CLS Token，而相似性计算可能更适合使用 Mean Pooling。
+*/
+```
 
 This endpoint supports all poolings, including `--pooling none`. When the pooling is `none`, the responses will contain the *unnormalized* embeddings for *all* input tokens. For all other pooling types, only the pooled embeddings are returned, normalized using Euclidian norm.
 
 Note that the response format of this endpoint is different from `/v1/embeddings`.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/embeddings endpoint is non-OpenAI-compatible embeddings API
+2、这个endpoint支持所有的poolings，包括--pooling none。当pooling是none的时候，对所有的input tokens而言，llama-server响应将会包含‘unnormalized’ embeddings。对于所有其他池化类型，仅返回池化嵌入，并使用欧几里得范数进行归一化。
+3、注意：该endpoint的响应格式和/v1/embeddings是不同的。
+*/
+```
 
 *Options:*
 
@@ -943,7 +1288,7 @@ Same as the `/v1/embeddings` endpoint.
 ]
 ```
 
-### GET `/slots`: Returns the current slots processing state
+### 9.11 GET `/slots`: Returns the current slots processing state
 
 > [!WARNING]
 > This endpoint is intended for debugging and may be modified in future versions. For security reasons, we strongly advise against enabling it in production environments.
@@ -951,6 +1296,16 @@ Same as the `/v1/embeddings` endpoint.
 This endpoint is disabled by default and can be enabled with `--slots`
 
 If query param `?fail_on_no_slot=1` is set, this endpoint will respond with status code 503 if there is no available slots.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/slots endpoint用来返回当前slots处理状态
+2、此端点用于调试，未来版本可能会有所修改。出于安全原因，我们强烈建议不要在生产环境中启用它。
+3、/slots endpoint默认情况下是被禁止的，在启动llama-server的时候使用--slots参数来使其变得可用。
+3、如果设置了查询参数“？fail_on_no_slot=1”，则如果没有可用插槽，该/slots endpoint将以状态代码 503 进行响应。
+*/
+```
 
 **Response format**
 
@@ -1028,9 +1383,26 @@ Example:
 ]
 ```
 
-### GET `/metrics`: Prometheus compatible metrics exporter
+### 9.12 GET `/metrics`: Prometheus compatible metrics exporter
 
 This endpoint is only accessible if `--metrics` is set.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、什么是 Prometheus？
+    1.1 Prometheus 是一个开源的监控系统，专门用于收集、存储和查询时间序列数据。
+    1.2 时间序列数据库：以时间为关键维度存储度量指标（metrics）
+    1.3 Pull 模型：Prometheus 定期从目标应用的 /metrics 端点拉取数据
+    1.4 多维数据模型：支持使用标签（labels）对数据进行细粒度区分和查询
+    1.5 灵活查询语言（PromQL）：用于聚合、过滤和分析数据
+    1.6 报警功能：支持基于监控指标定义复杂的报警规则
+    1.7 生态系统：Prometheus 自带一套丰富的工具链，可以与 Grafana 等工具结合使用
+    1.8 应用场景： Prometheus 常用于监控系统性能指标，例如 CPU 使用率、内存占用、网络流量等，以及应用的业务指标，例如请求数、延迟等
+
+/metrics endpoint只有当启动llama-server添加--metrics参数的时候才是可用的。
+*/
+```
 
 Available metrics:
 - `llamacpp:prompt_tokens_total`: Number of prompt tokens processed.
@@ -1041,8 +1413,41 @@ Available metrics:
 - `llamacpp:kv_cache_tokens`: KV-cache tokens.
 - `llamacpp:requests_processing`: Number of requests processing.
 - `llamacpp:requests_deferred`: Number of requests deferred.
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### POST `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
+1、上述是一些可用的指标
+    1.1 已处理的prompt tokens的数量。
+    1.2 已处理的generation tokens的数量。
+    1.3 平均prompt吞吐量（以tokens/s为单位）。
+    1.4 平均generation吞吐量（以tokens/s为单位）。
+    1.5 KV-cache 使用情况。“1”表示 100% 使用率。
+    1.6 KV-cache tokens。
+    1.7 处理的请求数。
+    1.8 推迟的请求数。
+*/
+```
+
+### 9.13 POST `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、将指定 slot 的 prompt cache（提示缓存）保存到一个文件中，便于后续读取或管理。
+2、该接口可以完成的事情
+    2.1 指定 slot ID（id_slot）
+    2.2 指定保存的文件名（通过 filename 参数）
+    2.3 将保存的文件存储在服务器预定义的路径（由 --slot-save-path 决定）
+3、为什么需要该接口？
+    3.1 缓存持久化：在长时间运行的系统中，slot 的 prompt cache 可能需要频繁修改和更新。通过保存功能，可以在需要时将缓存持久化到文件，避免数据丢失。
+    3.2 跨会话数据共享：保存的缓存文件可以在不同会话间共享或传递，支持分布式系统或多用户环境下的灵活操作。
+    3.3 调试和恢复：如果某个 slot 的缓存内容异常，保存后可供调试分析。系统重启后，通过加载文件可以恢复保存的缓存，减少重新生成缓存的时间。
+    3.4 提高性能：对于复杂的缓存生成逻辑，直接从保存的文件中读取比重新计算更高效。
+4、示例
+    4.1 场景描述： 一个聊天机器人系统维护多个用户对话的状态，每个用户的对话状态被存储在一个 slot 中（通过 id_slot 区分）。开发者希望在一天结束时将所有用户对话状态保存到文件，以便备份和后续分析。
+*/
+```
 
 *Options:*
 
@@ -1062,7 +1467,25 @@ Available metrics:
 }
 ```
 
-### POST `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
+### 9.14 POST `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、将指定 slot 的 prompt cache（提示缓存）从一个文件中恢复，便于后续使用。
+2、该接口可以完成的事情
+    2.1 指定 slot ID（id_slot）
+    2.2 指定恢复文件名（通过 filename 参数）
+    2.3 将指定恢复文件存储在服务器预定义的路径（由 --slot-save-path 决定）
+3、为什么需要该接口？
+    3.1 缓存持久化：在长时间运行的系统中，slot 的 prompt cache 可能需要频繁修改和更新。通过保存功能，可以在需要时将缓存持久化到文件，避免数据丢失。
+    3.2 跨会话数据共享：保存的缓存文件可以在不同会话间共享或传递，支持分布式系统或多用户环境下的灵活操作。
+    3.3 调试和恢复：如果某个 slot 的缓存内容异常，保存后可供调试分析。系统重启后，通过加载文件可以恢复保存的缓存，减少重新生成缓存的时间。
+    3.4 提高性能：对于复杂的缓存生成逻辑，直接从保存的文件中读取比重新计算更高效。
+4、示例
+    4.1 场景描述： 一个聊天机器人系统维护多个用户对话的状态，每个用户的对话状态被存储在一个 slot 中（通过 id_slot 区分）。开发者希望在一天结束时将所有用户对话状态保存到文件，以便备份和后续分析。
+*/
+```
 
 *Options:*
 
@@ -1082,7 +1505,7 @@ Available metrics:
 }
 ```
 
-### POST `/slots/{id_slot}?action=erase`: Erase the prompt cache of the specified slot.
+### 9.15 POST `/slots/{id_slot}?action=erase`: Erase the prompt cache of the specified slot.
 
 **Response format**
 
@@ -1093,7 +1516,7 @@ Available metrics:
 }
 ```
 
-### GET `/lora-adapters`: Get list of all LoRA adapters
+### 9.16 GET `/lora-adapters`: Get list of all LoRA adapters
 
 This endpoint returns the loaded LoRA adapters. You can add adapters using `--lora` when starting the server, for example: `--lora my_adapter_1.gguf --lora my_adapter_2.gguf ...`
 
@@ -1119,8 +1542,26 @@ If an adapter is disabled, the scale will be set to 0.
     }
 ]
 ```
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### POST `/lora-adapters`: Set list of LoRA adapters
+1、/lora-adapters endpoint 用于获取所有加载的 LoRA（Low-Rank Adaptation）适配器的列表及其配置信息，如路径和缩放比例（scale）
+2、Scale 的含义
+    2.1 scale 是一个参数，用来控制 LoRA 适配器的作用强度，取值范围通常在 0 到 1 之间
+        2.1.1 1 表示完全应用适配器的调整（全量作用）。
+        2.1.2 0 表示禁用适配器的影响（无作用）。
+3、默认情况下，所有加载的 LoRA 适配器的 scale 会被设置为 1，即它们的调整将立即生效。
+4、特殊选项 --lora-init-without-apply
+    4.1 如果启动服务器时添加了该选项，所有 LoRA 适配器的 scale 将初始化为 0，即适配器加载但不生效。这为开发者提供了更灵活的控制，可以根据实际需求动态调整适配器的 scale 值，而不是在加载时直接生效。
+5、Please note that this value will be overwritten by the lora field for each request.
+    5.1 每个请求中可以包含一个名为 lora 的字段，用于指定 LoRA 适配器的配置。在这种情况下，该字段的值会覆盖当前的 scale 配置。
+    5.2 即使在服务器启动时通过参数（如 --lora-init-without-apply 或其他）设置了默认的 scale 值，但每次请求可以通过 lora 字段临时调整适配器的行为，使请求级别的配置优先。
+    5.3 提供更细粒度的控制：每个请求可以动态调整哪些适配器生效，以及它们的影响程度。
+*/
+```
+
+### 9.17 POST `/lora-adapters`: Set list of LoRA adapters
 
 This sets the global scale for LoRA adapters. Please note that this value will be overwritten by the `lora` field for each request.
 
@@ -1136,16 +1577,42 @@ To know the `id` of the adapter, use GET `/lora-adapters`
   {"id": 1, "scale": 0.8}
 ]
 ```
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/lora-adapters endpoint 用于设置加载的 LoRA（Low-Rank Adaptation）适配器
+2、针对LoRA adapters，/lora-adapters endpoint将会设置全局的scale，请注意这个值将会在每次请求附带的lora参数所修改。
+3、为了禁用一个adapter,要么从list中移除，要么将其scale设置成0
+*/
+```
 
 ## 10 OpenAI-compatible API Endpoints
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### GET `/v1/models`: OpenAI-compatible Model Info API
+1、这部分内容将会解释一些OpenAI-compatible API endpoints
+2、这部分内容将会介绍一些endpoints，这些endpoints是OpenAI-comatible的
+*/
+```
+
+### 10.1 GET `/v1/models`: OpenAI-compatible Model Info API
 
 Returns information about the loaded model. See [OpenAI Models API documentation](https://platform.openai.com/docs/api-reference/models).
 
 The returned list always has one single element.
 
 By default, model `id` field is the path to model file, specified via `-m`. You can set a custom value for model `id` field via `--alias` argument. For example, `--alias gpt-4o-mini`.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/v1/models endpoint为了获取已经被加载model的信息。如果想要了解更多的信息查看[OpenAI Models API documentation](https://platform.openai.com/docs/api-reference/models)中的描述信息。
+2、返回的列表始终只有一个元素。
+3、默认情况下，模型id字段是模型文件的路径，模型文件路径是在启动llama-server通过-m参数设置的。你可以为model id field设置一个自定义的值，这通过--alias参数来设置。例如：--alias gpt-4o-mini
+*/
+```
 
 Example:
 
@@ -1171,7 +1638,7 @@ Example:
 }
 ```
 
-### POST `/v1/completions`: OpenAI-compatible Completions API
+### 10.2 POST `/v1/completions`: OpenAI-compatible Completions API
 
 Given an input `prompt`, it returns the predicted completion. Streaming mode is also supported. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps.
 
@@ -1180,6 +1647,21 @@ Given an input `prompt`, it returns the predicted completion. Streaming mode is 
 See [OpenAI Completions API documentation](https://platform.openai.com/docs/api-reference/completions).
 
 llama.cpp `/completion`-specific features such as `mirostat` are supported.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、给定一个输入“提示”，它会返回预测的补全2。还支持流式传输模式。虽然没有明确声称与 OpenAI API 规范兼容，但根据我们的经验，它足以支持许多应用程序。
+2、llama.cpp 支持“/completion”特定的功能，例如“mirostat”。
+    2.1 在 llama.cpp 的 /completion API 中可以使用一些特定的高级功能，比如 mirostat。这些功能通常用于生成文本时对模型行为进行更细粒度的控制，优化生成结果的质量、稳定性或多样性。
+3、/completion
+    3.1 是 llama.cpp 中的一个主要端点，用于生成文本
+    3.2 用户通过该端点发送请求，指定输入文本（prompt）和其他参数，模型会返回相应的补全内容。
+4、特定功能支持
+    4.1 除了标准的生成参数（如温度 temperature、Top-K、Top-P 等），/completion 提供了一些高级功能，如 mirostat。
+    4.2 Mirostat 的核心功能：控制生成文本的熵（信息量）以达到目标值，防止文本生成过程中过于无序（随机性太高）或过于确定（随机性太低）
+*/
+```
 
 *Examples:*
 
@@ -1202,7 +1684,7 @@ completion = client.completions.create(
 print(completion.choices[0].text)
 ```
 
-### POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
+### 10.3 POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
 
 Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only models with a [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, the ChatML template will be used.
 
@@ -1211,6 +1693,32 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
 
 The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/v1/chat/completions 的作用
+    1.1 提供一个与 OpenAI Chat Completions API 兼容的接口，用于处理对话生成请求。
+    1.2 接受 ChatML 格式的 messages 描述，返回预测的对话补全结果。
+    1.3 支持两种模式
+        1.3.1 同步模式：请求完成后直接返回结果
+        1.3.2 流式模式（streaming mode）：允许逐步返回生成内容，适合交互式应用
+2、功能特点
+    2.1 兼容性：虽然未严格声明完全兼容 OpenAI API，但实际测试表明其功能足以支持大部分应用。
+    2.2 支持模型限制
+        2.2.1 仅支持具有 chat 模板 的模型
+        2.2.2 默认使用 ChatML 模板，用于优化生成效果
+        2.2.3 模板列表可参考 Supported Chat Templates
+3、参数选项与功能扩展
+    3.1 一些 OpenAI 专属功能（如函数调用）暂未支持
+    3.2 额外支持 llama.cpp 的 /completion 特性，例如Mirostat：一种动态熵调节功能，优化生成质量。
+4、response_format 参数
+    4.1 普通 JSON 输出
+    4.2 符合 JSON Schema 的输出
+        4.2.1 可以通过 schema 定义返回 JSON 的结构或约束条件
+5、/v1/chat/completions 提供了一个功能强大且兼容 OpenAI API 的接口，用于对话生成。虽然部分 OpenAI 专属功能尚未支持，但通过 ChatML、Mirostat 和自定义 JSON 返回功能，接口在灵活性和可控性方面具备显著优势，适合多种生成和交互场景。
+*/
+```
 
 *Examples:*
 
@@ -1256,13 +1764,20 @@ curl http://localhost:8080/v1/chat/completions \
 }'
 ```
 
-### POST `/v1/embeddings`: OpenAI-compatible embeddings API
+### 10.4 POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
 This endpoint requires that the model uses a pooling different than type `none`. The embeddings are normalized using the Eucledian norm.
 
 *Options:*
 
 See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、/v1/embeddings endpoint 此端点要求模型使用不同于“none”类型的池化。嵌入使用欧几里得范数进行归一化。
+*/
+```
 
 *Examples:*
 
@@ -1294,7 +1809,7 @@ See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-r
 
 ## 11 More examples
 
-### Interactive mode
+### 11.1 Interactive mode
 
 Check the sample in [chat.mjs](chat.mjs).
 Run with NodeJS version 16 or later:
@@ -1310,12 +1825,19 @@ Run with bash:
 ```sh
 bash chat.sh
 ```
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### OAI-like API
+1、提供了两种交互模式的示例脚本（chat.mjs 和 chat.sh），用于通过不同方式与系统交互。其中，chat.mjs 需要 NodeJS（版本 16 或更高）运行，而 chat.sh 需要 bash、curl 和 jq 环境支持。这些示例旨在帮助用户快速体验和实现交互功能。
+*/
+```
+
+### 11.2 OAI-like API
 
 The HTTP `llama-server` supports an OAI-like API: https://github.com/openai/openai-openapi
 
-### API errors
+### 11.3 API errors
 
 `llama-server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
 
@@ -1357,7 +1879,7 @@ Apart from error types supported by OAI, we also have custom types that are spec
 }
 ```
 
-### Legacy completion web UI
+### 11.4 Legacy completion web UI
 
 A new chat-based UI has replaced the old completion-based since [this PR](https://github.com/ggerganov/llama.cpp/pull/10175). If you want to use the old completion, start the server with `--path ./examples/server/public_legacy`
 
@@ -1366,8 +1888,15 @@ For example:
 ```sh
 ./llama-server -m my_model.gguf -c 8192 --path ./examples/server/public_legacy
 ```
+```c
+/*
+Note:杨小兵-2025-01-13
 
-### Extending or building alternative Web Front End
+1、新版本已用基于对话的界面取代了旧的补全界面，但用户仍可以通过指定启动参数 --path ./examples/server/public_legacy 启动旧版补全界面，例如运行命令 ./llama-server 时添加该参数。此选项为需要旧版功能的用户提供了兼容支持。
+*/
+```
+
+### 11.5 Extending or building alternative Web Front End
 
 You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
 
@@ -1395,4 +1924,20 @@ You can use html formatting if needed.
     </pre>
   </body>
 </html>
+```
+```c
+/*
+Note:杨小兵-2025-01-13
+
+1、该部分提供了扩展或构建自定义 Web 前端的方法，允许开发者通过自定义目录和接口轻松实现特定需求的前端界面。
+2、扩展前端的方式
+    2.1 指定自定义路径： 通过运行服务器二进制文件，并使用 --path 参数指定自定义的 Web 前端文件目录。
+    2.2 访问 llamaComplete() 方法： 自定义前端需要通过 /completion.js 文件获取 llamaComplete() 方法，该方法用于调用模型进行文本生成。
+3、/completion.js 的作用
+    3.1 /completion.js 是一个 JavaScript 文件，封装了与 llama.cpp 的交互逻辑。
+    3.2 提供了便捷的方法（如 llamaComplete()）与模型进行通信，发送提示（prompt）并接收生成的文本结果。
+    3.3 具体方法的使用细节可以查看 /completion.js 文件中的文档。
+4、上述内容提供了一个简单 HTML 示例，展示了如何通过 llamaComplete() 实现与 llama.cpp 的交互。
+5、这部分内容目前因为对前端不熟悉，因此多数东西现在看不明白。
+*/
 ```
