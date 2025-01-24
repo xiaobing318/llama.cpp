@@ -6,14 +6,48 @@
     https://opensource.org/licenses/MIT.
 */
 // SPDX-License-Identifier: MIT
+
+/*
+Note:杨小兵-2025-01-23
+
+1、2024：这是版权声明的年份，表明该代码在2024年由版权所有者发布或更新。
+2、Google LLC：这是版权所有者的名称，指明该代码由Google有限责任公司拥有。
+3、解释：
+    3.1 使用权声明：指出使用此源代码需要遵循特定的许可证条款。
+    3.2 MIT-style license：指该代码采用的是MIT许可证或类似于MIT许可证的条款。
+    3.3 LICENSE文件：指向项目根目录中的一个文件，通常包含详细的许可证文本。
+    3.4 URL链接：提供了一个指向MIT许可证官方文本的URL，便于用户查阅。
+4、作用：
+    4.1 明确许可条款：告知使用者可以在什么条件下使用、修改和分发该代码。
+    4.2 开放源代码：MIT许可证是一种宽松的开源许可证，允许用户自由使用、复制、修改、合并、发布、分发、再许可和/或销售软件的副本，只需保留原始版权声明和许可证声明。
+5、SPDX标识符的使用进一步标准化了许可证声明，便于自动化工具识别和处理。这些声明在开源项目中尤为重要，既保护了版权所有者的权益，又促进了社区的开放协作。
+*/
+
 #pragma once
+/*
+Note:杨小兵-2025-01-23
+
+1、上述命令是一个预处理器指令，用于确保头文件只被包含一次，避免重复定义。
+*/
 
 #include "minja.hpp"
 #include <json.hpp>
 #include <string>
 #include <vector>
+/*
+Note:杨小兵-2025-01-23
+
+1、包含头文件，这样是为了减少重复
+2、其中json.hpp、minja.hpp是一个只有头文件的第三方库
+*/
 
 using json = nlohmann::ordered_json;
+/*
+Note:杨小兵-2025-01-23
+
+1、using命令同typedef在数据类型重命名的角度来理解是相同的作用。
+2、其中ordered_json是nlohmann/json中的一个数据类型。
+*/
 
 namespace minja {
 
