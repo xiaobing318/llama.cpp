@@ -412,7 +412,22 @@ static void add_rpc_devices(std::string servers) {
 
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
     auto ctx_arg = common_params_parser_init(params, ex, print_usage);
+    /*
+    Note:杨小兵-2025-01-25
+
+    1、从该函数可以知道当前函数的作用就是用来对通用参数解析器进行初始化。
+    2、需要这个步骤的作用就是为了在自定义结构体ctx_arg中添加预定义命令行参数，例如--help等等
+    3、函数的作用
+        3.1 根据指定的示例类型，初始化并配置程序的命令行参数选项。它通过定义一系列的选项、描述和相应的处理逻辑，过滤和添加适用于当前示例或通用示例的参数到上下文中。
+        3.2 这包括设置各种配置项如线程数、模型路径、采样参数、GPU设置、日志选项等，确保程序根据用户输入的命令行参数正确配置运行环境和行为。
+        3.3 最终，函数返回一个包含所有有效选项的 common_params_context 对象，用于后续的程序执行和参数解析。
+    */
     const common_params params_org = ctx_arg.params; // the example can modify the default params
+    /*
+    Note:杨小兵-2025-01-25
+
+    1、不同的示例可以对默认的参数进行修改
+    */
 
     try {
         if (!common_params_parse_ex(argc, argv, ctx_arg)) {
@@ -471,12 +486,32 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
      * - if LLAMA_EXAMPLE_* is set (other than COMMON), we only show the option in the corresponding example
      * - if both {LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_*,} are set, we will prioritize the LLAMA_EXAMPLE_* matching current example
      */
+
+    /*
+    Note:杨小兵-2025-01-25
+
+    1、注释部分描述了一个用于根据示例筛选选项的规则。这些规则定义了如何在不同的示例（examples）之间共享和优先显示选项（options）
+    2、规则
+        2.1 所有示例继承自 LLAMA_EXAMPLE_COMMON 的选项
+        2.2 如果设置了 LLAMA_EXAMPLE_*（除了 COMMON），则只在对应的示例中显示该选项
+        2.3 如果同时设置了 LLAMA_EXAMPLE_COMMON 和 LLAMA_EXAMPLE_*，优先显示与当前示例匹配的 LLAMA_EXAMPLE_* 选项
+    */
+
     auto add_opt = [&](common_arg arg) {
         if ((arg.in_example(ex) || arg.in_example(LLAMA_EXAMPLE_COMMON)) && !arg.is_exclude(ex)) {
             ctx_arg.options.push_back(std::move(arg));
         }
     };
+    /*
+    Note:杨小兵-2025-01-25
 
+    1、上述内容是lambda表达式，从C++11就已经引入的一种特性
+    2、解释
+        2.1 add_opt是匿名函数的名字
+        2.2 [&]捕获列表：以引用的方式可以使用所有的外部变量（在当前函数之内的变量）
+        2.3 (common_arg arg)当前匿名函数的输入参数
+    3、整体作用：该 Lambda 函数在参数 arg 属于当前示例或通用示例且未被排除的情况下，将其添加到 ctx_arg.options 选项列表中。
+    */
 
     add_opt(common_arg(
         {"-h", "--help", "--usage"},

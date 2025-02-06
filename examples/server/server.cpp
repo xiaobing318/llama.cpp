@@ -1,4 +1,4 @@
-#include "utils.hpp"
+﻿#include "utils.hpp"
 
 #include "arg.h"
 #include "common.h"
@@ -3288,15 +3288,41 @@ inline void signal_handler(int signal) {
 int main(int argc, char ** argv) {
     // own arguments required by this example
     common_params params;
+    /*
+    Note:杨小兵-2025-01-24
+
+    1、common_params是common中的一个自定义结构体，用来存储通用的参数信息。
+    2、本示例（llama-server）所需要的自身参数，可以知道不同的示例将会使用不同的参数信息。
+    3、common_params该结构体中的内容是比较多的并且需要知道的背景知识比较多，目前只需要理解一部分就可以了。
+    */
 
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
+    /*
+    Note:杨小兵-2025-01-24
+
+    1、common_params是common中的一个自定义结构体，用来存储通用的参数信息。
+    2、本示例（llama-server）所需要的自身参数，可以知道不同的示例将会使用不同的参数信息。
+    3、common_params该结构体中的内容是比较多的并且需要知道的背景知识比较多，目前只需要理解一部分就可以了。
+    */
 
     common_init();
+    /*
+    Note:杨小兵-2025-01-25
+
+    1、为什么需要调用这个函数？目前不是特别重要可以先不深入了解。
+    2、这个函数做了哪些工作？目前不是特别重要可以先不深入了解。
+    */
 
     // struct that contains llama context and inference
     server_context ctx_server;
+    /*
+    Note:杨小兵-2025-01-25
+
+    1、注释：包含llama context、inferece的自定义结构体
+    2、这部分内容目前理解不深入
+    */
 
     llama_backend_init();
     llama_numa_init(params.numa);
