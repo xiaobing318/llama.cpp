@@ -1064,14 +1064,56 @@ print(completion.choices[0].text)
 ```
 
 ### POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、/v1/chat/completions 的作用
+    1.1 提供一个与 OpenAI Chat Completions API 兼容的接口，用于处理对话生成请求。
+    1.2 接受 ChatML 格式的 messages 描述，返回预测的对话补全结果。
+*/
+```
 
 Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only models with a [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, the ChatML template will be used.
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、/v1/chat/completions 的作用
+    1.1 提供一个与 OpenAI Chat Completions API 兼容的接口，用于处理对话生成请求。
+    1.2 接受 ChatML 格式的 messages 描述，返回预测的对话补全结果。
+    1.3 支持两种模式（无论是预先编写好的脚本化的应用程序，还是需要与用户进行交互的应用程序，都能够正常运行）
+        1.3.1 同步模式：请求完成后直接返回结果
+        1.3.2 流式模式（streaming mode）：允许逐步返回生成内容，适合交互式应用
+2、功能特点
+    2.1 兼容性：虽然未严格声明完全兼容 OpenAI API，但实际经验表明其功能足以支持大部分应用。
+    2.2 支持模型限制
+        2.2.1 只有那些内置或支持特定聊天格式（这里称为“chat template”，具体可以参考链接中列出的模板）的模型，才能在这个接口上发挥最佳效果。如果使用的模型不支持这些聊天模板，那么在使用这个接口时可能无法达到理想的表现。
+        2.2.2 如果你没有特别指定使用其他模板，系统会默认采用 ChatML 模板来格式化和处理消息。
+        2.2.3 模板列表可参考 Supported Chat Templates
+*/
+```
 
 *Options:*
 
 See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). llama.cpp `/completion`-specific features such as `mirostat` are also supported.
 
 The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、参考 OpenAI 官方文档：该描述建议用户参考 OpenAI Chat Completions API 文档 来了解类似的接口和功能，从而对整体工作机制有更深入的认识。
+2、llama.cpp 的特定功能支持：除了与 OpenAI 类似的功能外，该接口还支持 llama.cpp 特有的 /completion 功能，例如 mirostat。这意味着在使用该接口时，不仅能享受到标准化的聊天补全功能，还可以利用一些额外的、专为 llama.cpp 设计的优化或控制选项。
+3、response_format 参数的灵活性
+    3.1 基本 JSON 输出：用户可以选择简单的 JSON 格式输出，例如设置 {"type": "json_object"}，这适用于只需要普通 JSON 数据的场景。
+    3.2 受限于 schema 的 JSON 输出：如果需要更严格的格式约束，可以通过指定 schema 来控制输出。例如，要求生成的字符串满足最小和最大长度的限制，或者定义包含多个属性（如 name、date、participants）的复杂 JSON 结构。
+    3.3 这种设计类似于其他受 OpenAI 启发的 API 提供商，强调了输出格式的多样性和可定制性。
+4、总结
+    4.1 该endpoint不仅支持 OpenAI 类似的聊天补全 API，并且增加了一些专属于 llama.cpp 的特性（如 mirostat）。
+    4.2 接口在输出格式上非常灵活，既可以返回普通的 JSON 数据，也可以根据用户指定的 schema 返回格式受限的 JSON，从而满足不同应用场景的需求。
+*/
+```
 
 *Examples:*
 
@@ -1116,12 +1158,51 @@ curl http://localhost:8080/v1/chat/completions \
 ]
 }'
 ```
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、使用该endpoint的两种方式
+    1.1 使用具有适当检查点的python openai库（通过python版本的openai库来使用该endpoint）
+    1.2 使用HTTP requests（通过HTTP requests来使用该endpoint）
+3、raw HTTP requests
+    3.1 curl是具体的工具
+    3.2 剩余的内容都是格式化的参数
+*/
+```
 
 *Tool call support*
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、这部分内容将会解释tool call内容
+2、这是我一直想要弄清楚/实现的部分，主要目的就是为了拓展QGIS的能力，从而实现产品升级。
+*/
+```
 
 [Function calling](https://platform.openai.com/docs/guides/function-calling) is supported for all models (see https://github.com/ggerganov/llama.cpp/pull/9639):
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、上述给出一个文档参考用来说明openai设计实现的function calling。
+2、主要观点：
+    2.1 全模型支持函数调用：无论使用哪种模型，都支持函数调用功能。这意味着所有模型都可以利用这种机制来执行函数调用，从而扩展其交互和功能性。
+    2.2 参照官方文档和实现细节：提供了指向 OpenAI 关于函数调用的官方文档链接，以便用户了解相关原理和使用方法。也给出了一个 GitHub 拉取请求的链接（https://github.com/ggerganov/llama.cpp/pull/9639），该链接说明了在 llama.cpp 项目中实现和支持函数调用的具体实现情况。
+    2.3 在 llama.cpp 中，所有模型都具备函数调用的能力，并且这种功能与 OpenAI 的相关实现保持一致，进一步增强了模型在应用场景中的灵活性和扩展性。
+*/
+```
 
 - Requires `--jinja` flag
+    ```c
+    /*
+    Note:杨小兵-2025-02-07
+
+    1、如果想要使用llama-server工具中的函数调用功能，则需要启动--jinja参数标志。
+    2、可以通过示例来了解--jinja参数的使用方式。
+    */
+    ```
 - Native tool call formats supported:
   - Llama 3.1 / 3.3 (including builtin tools support - tool names for `wolfram_alpha`, `web_search` / `brave_search`, `code_interpreter`), Llama 3.2
   - Functionary v3.1 / v3.2
@@ -1130,7 +1211,15 @@ curl http://localhost:8080/v1/chat/completions \
   - Firefunction v2
   - Command R7B
   - DeepSeek R1 (WIP / seems reluctant to call any tools?)
+    ```c
+    /*
+    Note:杨小兵-2025-02-07
 
+    1、“Native tool call formats supported” 可以翻译为“支持的原生工具调用格式”。
+    2、这里，“Native” 表示“原生的”，即不依赖外部插件或额外转换的；“tool call formats” 指的是调用工具时所采用的格式；“supported” 则表示“被支持的”或“可用的”。因此，整句话表达的是系统支持上述列出的原生工具调用格式。
+    3、“seems reluctant to call any tools?”可以翻译为“似乎不愿意调用任何工具？”
+    */
+    ```
   <details>
   <summary>Show some common templates and which format handler they use</summary>
 
@@ -1187,16 +1276,48 @@ curl http://localhost:8080/v1/chat/completions \
   | openchat-openchat-3.5-0106.jinja | generic tool calls |
   | teknium-OpenHermes-2.5-Mistral-7B.jinja | generic tool calls |
 
+    ```c
+    /*
+    Note:杨小兵-2025-02-07
+
+    1、上述这些表格内容显示一些常见的模板以及它们使用的格式处理程序。
+    */
+    ```
   This table can be generated with:
 
   ```bash
   ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
+  ```
+  ```c
+  /*
+  Note:杨小兵-2025-02-07
 
+  1、./build/bin/test-chat
+    1.1 这部分调用了当前目录下 build/bin/ 目录中的可执行文件 test-chat。
+  2、../minja/build/tests/*.jinja
+    2.1 这是一个路径参数，指向位于当前目录上一级中的 minja/build/tests/ 目录。
+    2.2 *.jinja 使用了通配符，表示该目录下所有以 .jinja 为后缀的文件都会被选中。
+    2.3 这些文件通常可能是模板或测试用例，用于验证 test-chat 程序的功能。
+  3、2>/dev/null
+    3.1 这部分将标准错误（stderr，文件描述符2）的输出重定向到 /dev/null。
+    3.2 /dev/null 是一个特殊设备文件，所有写入其中的数据都会被丢弃。
+    3.3 这样做可以使程序在运行过程中产生的错误信息不显示在终端上，从而保持输出的整洁。
+  */
+  ```
   </details>
 
 - Generic tool call is supported when the template isn't recognized by native format handlers (you'll see `Chat format: Generic` in the logs).
   - Use `--chat-template-file` to override the template when appropriate (see examples below)
   - Generic support may consume more tokens and be less efficient than a model's native format.
+```c
+/*
+Note:杨小兵-2025-02-07
+
+1、当模板不被原生格式处理程序识别的时候，通用工具调用将会被默认使用（您会在日志中看到“Chat format: Generic”）。
+2、可以在合适的时候使用 `--chat-template-file` 参数覆盖模板（参见下面的示例）
+3、通用支持可能会消耗更多tokens并且效率低于模型的原生格式。
+*/
+```
 
 - Run with:
 
@@ -1226,7 +1347,13 @@ curl http://localhost:8080/v1/chat/completions \
   llama-server --jinja -fa -hf bartowski/gemma-2-2b-it-GGUF:Q8_0
   llama-server --jinja -fa -hf bartowski/c4ai-command-r-v01-GGUF:Q2_K
   ```
+  ```c
+  /*
+  Note:杨小兵-2025-02-07
 
+  1、需要注意的是上述的命令都是在shell中完成的，第一影响就是在linux中完成的，但是“好像”也可以在windows中实现（通过环境变量来设置python解释器）
+  */
+  ```
 - Test in CLI:
 
   ```bash
@@ -1292,7 +1419,14 @@ curl http://localhost:8080/v1/chat/completions \
     "id": "chatcmpl-Htbgh9feMmGM0LEH2hmQvwsCxq3c6Ni8"
   }
   ```
+  ```c
+  /*
+  Note:杨小兵-2025-02-07
 
+  1、该示例应该没有更新。
+  2、输出的应该是和天气查询相关。
+  */
+  ```
   </details>
 
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
