@@ -1,5 +1,9 @@
 *杨小兵-2025-02-10*
 
+> [!NOTE]
+> 可以通过修改[build.yml](./build.yml)文件来处理单个工作流从而节省github actions的使用时间。[build.yml](./build.yml)文件中对整个工作流的命名是CI，可以通过注释其中的一些Jobs来缩短整个CI时间。
+
+
  - 下列内容将会逐行解释 GitHub Actions 工作流配置文件中的每个命令和步骤的作用
  - 解释的文件名为server.yml
 
