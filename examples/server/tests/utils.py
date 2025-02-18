@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Notes:杨小兵-2025-02-18
 
+1、这部分内容在后续理解分析。
+"""
 # type: ignore[reportUnusedImport]
 
 import subprocess
