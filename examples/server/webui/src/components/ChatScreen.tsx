@@ -6,6 +6,18 @@ import ChatMessage from './ChatMessage';
 import { CanvasType, PendingMessage } from '../utils/types';
 import { classNames } from '../utils/misc';
 import CanvasPyInterpreter from './CanvasPyInterpreter';
+/*
+Notes:杨小兵-2025-03-05
+
+1、从react模块中导入useEffect、useState，导入的方式采用的是花括号解析的方式，相当于从工具箱中挑选特定的工具。
+2、从当前目录的上一级下的utils/app.context.ts文件中导入useAppContext，导入的方式采用的是花括号解析的方式，相当于从工具箱中挑选特定的工具。
+3、从当前目录的上一级下的utils/storage.ts文件中导入StorageUtils，导入的方式采用的默认导入方式，这种导入方式灵活性比较高，主要体现在可以在导入的时候重命名。
+4、从react-router模块中导入useNavigate，导入的方式采用的是花括号解析的方式，相当于从工具箱中挑选特定的工具。
+5、从当前目录中的ChatMessage.tsx文件中导入ChatMessage组件，导入的方式采用的默认导入方式，这种导入方式灵活性比较高，主要体现在可以在导入的时候重命名。
+6、从当前目录的上一级下的utils/types.ts文件中导入CanvasType和PendingMessage，导入的方式采用的花括号解析的方式，相当于从工具箱中挑选特定的工具。
+7、从当前目录的上一级下的utils/misc.ts文件中导入classNames，导入的方式采用的是花括号解析的方式，相当于从工具箱中挑选特定的工具。
+8、从当前目录的CanvasPyInterpreter.tsx文件中导入CanvasPyInterpreter组件，导入的方式采用的默认导入方式，这种导入方式灵活性比较高，主要体现在可以在导入的时候重命名。
+*/
 
 export default function ChatScreen() {
   const {
@@ -144,3 +156,11 @@ export default function ChatScreen() {
     </div>
   );
 }
+/*
+Notes:杨小兵-2025-03-05
+
+1、创建一个名为ChatScreen的函数组件。
+2、问题
+    3.1 对上述内容不理解，需要更多关于JavaScript、react相关的知识。
+*/
+
