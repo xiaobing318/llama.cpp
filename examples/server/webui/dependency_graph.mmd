@@ -1,0 +1,32 @@
+graph TD
+    plugin_vector_data_preprocessing_toolbox["plugin_vector_data_preprocessing_toolbox.so"]
+    base_coordinate_transformation["base_coordinate_transformation.so"]
+    qgis_core["qgis_core.so"]
+    gdal308["gdal308.so"]
+    Qt5Core["Qt5Core.so"]
+    Qt5Xml["Qt5Xml.so"]
+    qgis_gui["qgis_gui.so"]
+    Qt5Gui["Qt5Gui.so"]
+    Qt5Svg["Qt5Svg.so"]
+    Qt5Concurrent["Qt5Concurrent.so"]
+    Qt5Sql["Qt5Sql.so"]
+    Qt5Widgets["Qt5Widgets.so"]
+    iconv["iconv.so"]
+    plugin_vector_data_preprocessing_toolbox --> gdal308
+    plugin_vector_data_preprocessing_toolbox --> Qt5Gui
+    plugin_vector_data_preprocessing_toolbox --> Qt5Xml
+    plugin_vector_data_preprocessing_toolbox --> Qt5Core
+    plugin_vector_data_preprocessing_toolbox --> Qt5Widgets
+    plugin_vector_data_preprocessing_toolbox --> qgis_gui
+    plugin_vector_data_preprocessing_toolbox --> qgis_core
+    plugin_vector_data_preprocessing_toolbox --> iconv
+    plugin_vector_data_preprocessing_toolbox --> base_coordinate_transformation
+    base_coordinate_transformation --> gdal308
+    qgis_core --> Qt5Core
+    qgis_core --> Qt5Svg
+    qgis_core --> Qt5Sql
+    qgis_core --> Qt5Concurrent
+    qgis_core --> Qt5Xml
+    qgis_gui --> Qt5Gui
+    qgis_gui --> Qt5Widgets
+    gdal308 --> iconv
