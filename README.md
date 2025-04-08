@@ -1,4 +1,11 @@
 # llama.cpp
+```c
+/*
+Notes:杨小兵-2025-04-08
+
+1、当前分支是我为了学习整个llama.cpp项目fork出来的一个分支。
+*/
+```
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
