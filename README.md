@@ -4,6 +4,11 @@
 Notes:杨小兵-2025-04-08
 
 1、当前分支是我为了学习整个llama.cpp项目fork出来的一个分支。
+2、学习的目标
+    2.1 对llama.cpp项目的整体理解。
+    2.2 目前不对实现的细节进行过多的深入，这是后续将会学习的内容。
+    2.3 需要明确学习的目标从而有阶段性的深入理解。
+3、llama.cpp是该项目的名称，存在一定的历史含义（最初是由meta公司的开源模型llama而来）。
 */
 ```
 
@@ -11,8 +16,31 @@ Notes:杨小兵-2025-04-08
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Server](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml/badge.svg)](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml)
+```c
+/*
+Notes:杨小兵-2025-04-08
 
+1、![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
+    1.1 这种语法可以在markdown文件中显示一张图片，如果图片的资源是不存在的那么markdown渲染将会使用 llama 来代替图片。
+2、[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+    2.1 这种语法可以使得我们直接点击图片从而跳转到对应的网址中，这也是使用用户交互比较方便的一种语法，非常实用。如果图片资源是不存在的，那么markdown渲染器将会使用 License: MIT 来代替图片。
+3、[![Server](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml/badge.svg)](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml)
+    3.1 这种语法可以使得我们直接点击图片从而跳转到对应的网址中，这也是使用用户交互比较方便的一种语法，非常实用。如果图片资源是不存在的，那么markdown渲染器将会使用 Server 来代替图片。
+*/
+```
 [Roadmap](https://github.com/users/ggml-org/projects/7) / [Project status](https://github.com/ggml-org/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggml-org/llama.cpp/discussions/205) / [ggml](https://github.com/ggml-org/ggml)
+```c
+/*
+Notes:杨小兵-2025-04-08
+
+1、上述的四个链接是markdown文件中特有的书写方式，被渲染之后可以通过点击对应的提示文字直接跳转到对应的网址中。
+2、在markdown中渲染资源的方式
+    2.1 渲染图片（单纯的图片展示）
+    2.2 渲染链接（单纯的链接展示）
+    2.3 渲染图片链接（通过点击图片跳转到对应的网址中）
+    2.4 渲染文字链接（通过点击文字跳转到对应的网址中）
+*/
+```
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
@@ -22,11 +50,37 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 > Update your container URLs to: `ghcr.io/ggml-org/llama.cpp`
 >
 > More info: https://github.com/ggml-org/llama.cpp/discussions/11801
+```c
+/*
+Notes:杨小兵-2025-04-08
+
+1、使用纯C/C++实现Meta模型（其他模型）的推理
+    1.1 只使用C/C++（问题：具体的编程语言版本是什么？）
+    1.2 这里的'其他模型'现在已经成为一个重点。
+2、重点解读
+    2.1 llama.cpp package现在位于新的仓库位置（说明之前不是这个位置，已经发生了变化，应该是为了更好的结构化组织）
+    2.2 目前在使用container进行部署llama.cpp的时候需要更新对应的URLs（这部分内容还没有接触过，在有对应的需求的时候可以探索这部分内容）
+    2.3 可以到对应的页面查看更多的信息（关于仓库转移的内容，其实我现在不知道转移的动机是什么？）
+        2.3.1 仓库转移（repository transfer）是指将一个 GitHub 仓库从一个用户或组织账户移动到另一个用户或组织账户的过程。
+        2.3.2 对话背景：ggerganov 可能是 llama.cpp 项目的初始创建者，但随着项目发展，可能有更多贡献者加入，或者项目成为一个更广泛的社区努力（如 ggml-org 组织）。转移到组织账户可以让项目更正式地归属于一个团队，而不是单一的个人。
+        2.3.3 分析：组织账户（如 ggml-org）允许多个成员拥有不同级别的权限（例如管理员、写权限、读权限），这比个人账户更适合管理大型项目。此外，组织账户可以更好地体现项目的“品牌”或“社区”身份，而不仅仅是某个个人的作品。
+*/
+```
 
 ## Recent API changes
 
 - [Changelog for `libllama` API](https://github.com/ggml-org/llama.cpp/issues/9289)
 - [Changelog for `llama-server` REST API](https://github.com/ggml-org/llama.cpp/issues/9291)
+
+```c
+/*
+Notes:杨小兵-2025-04-08
+
+1、最近的API变化
+    1.1 通过指定链接来说明libllama API的变化内容
+    1.2 通过指定链接来说明llama-server REST API的变化内容
+*/
+```
 
 ## Hot topics
 
@@ -37,14 +91,37 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 - Introducing GGUF-my-LoRA https://github.com/ggml-org/llama.cpp/discussions/10123
 - Hugging Face Inference Endpoints now support GGUF out of the box! https://github.com/ggml-org/llama.cpp/discussions/9669
 - Hugging Face GGUF editor: [discussion](https://github.com/ggml-org/llama.cpp/discussions/9268) | [tool](https://huggingface.co/spaces/CISCai/gguf-editor)
+```c
+/*
+Notes:杨小兵-2025-04-08
 
+1、热门话题
+    1.1 如何使用MTLResidencySet来使得GPU memory是活跃的（这部分内容后续了解）
+    1.2 在VS Code中存在对FIM补全的拓展（这部分内容后续了解）
+    1.3 在llama-server存在通用工具调用支持（这部分内容在后续会进行重点关注）
+    1.4 对于FIM 补全有对应的Vim/Neovim插件支持
+    1.5 有关GGUF-my-LoRA内容（这部分内容后续了解）
+    1.6 Hugging Face Inference Endpoints现在支持GGUF（这部分内容后续了解）
+    1.7 Hugging Face中现在有对GGUF进行修改的编辑器（这部分内容后续了解）
+2、这部分中的大部分内容可以在后续进行了解，llama-server中的Universal tool call support将会成为重点关注对象。
+*/
+```
 ----
 
 ## Description
 
 The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide
 range of hardware - locally and in the cloud.
+```c
+/*
+Notes:杨小兵-2025-04-08
 
+1、llama.cpp项目的主要目标
+    1.1 最少的设置实现LLM inference
+    1.2 最先进的性能实现LLM inference
+    1.3 在很多不同的硬件（本地、云端）实现LLM inference
+*/
+```
 - Plain C/C++ implementation without any dependencies
 - Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
 - AVX, AVX2, AVX512 and AMX support for x86 architectures
@@ -52,8 +129,28 @@ range of hardware - locally and in the cloud.
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP and Moore Threads MTT GPUs via MUSA)
 - Vulkan and SYCL backend support
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
+```c
+/*
+Notes:杨小兵-2025-04-08
 
+1、没有任何依赖的、纯C/C++实现
+2、Apple silicon将会是被优先考虑的，通过ARM NEON、Metal frameworks进行优化
+3、对于x86指令集架构支持AVX, AVX2, AVX512, AMX
+4、对于更快速的推理和减少内存使用进行1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization
+5、通过定制化的 CUDA 内核（kernels）来优化大型语言模型（LLMs）在 NVIDIA GPU 上的运行，同时提到对 AMD GPU（通过 HIP）和 Moore Threads MTT GPU（通过 MUSA）的支持。
+6、llama.cpp项目支持Vulkan、SYCL后端
+7、当模型所需要的VRAM要比硬件本身的VRAM capacity还要大的时候可以通过CPU+GPU混合推理实现部分加速。
+*/
+```
 The `llama.cpp` project is the main playground for developing new features for the [ggml](https://github.com/ggml-org/ggml) library.
+```c
+/*
+Notes:杨小兵-2025-04-08
+
+1、llama.cpp 项目是开发和测试 ggml 库新功能的主要实验平台。ggml 是一个托管在 GitHub 上的开源库（位于 ggml-org/ggml 仓库），而 llama.cpp 作为一个独立项目，为开发者提供了一个实践环境，通过在其中实现和验证新特性，推动 ggml 库的功能完善和扩展。
+2、下列内容展示的是llama.cpp项目支持的模型、工具等等。
+*/
+```
 
 <details>
 <summary>Models</summary>
@@ -237,7 +334,28 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 </details>
 
 ## Supported backends
+```c
+/*
+Notes:杨小兵-2025-04-08
 
+1、后端支持列表
+Backend	    Target devices	        通俗解释
+Metal	    Apple Silicon	        苹果设备的专属翻译官
+BLAS/BLIS	All	                    通用的基础翻译官，哪种硬件都能用
+SYCL	    Intel 和 Nvidia GPU	    英特尔和 Nvidia 的双语翻译官
+MUSA	    Moore Threads MTT GPU	摩尔线程 GPU 的专属翻译官
+CUDA	    Nvidia GPU	            Nvidia GPU 的专属翻译官
+HIP	        AMD GPU	                AMD GPU 的专属翻译官
+Vulkan	    GPU	                    通用 GPU 的多功能翻译官
+CANN	    Ascend NPU	            昇腾 NPU 的专属翻译官
+OpenCL	    Adreno GPU	            Adreno GPU 的专属翻译官
+
+2、重点理解
+    2.1 其中BLAS、BLIS、SYCL（支持相对较少）、Vulkan都是通用的，对这部分内容着重理解可以实现通用化的部署从而减少部署的困难性。
+    2.2 后端存在的意义就像一个“翻译官”，让软件能用统一的代码与各种硬件顺畅沟通，不用为每种硬件单独写程序，使用不同的后端平台指挥不同类型的GPU硬件'干活'。
+    2.3 可以尝试使用SYCL和Vulkan来测试部署llama.cpp项目。
+*/
+```
 | Backend | Target devices |
 | --- | --- |
 | [Metal](docs/build.md#metal-build) | Apple Silicon |
@@ -261,18 +379,58 @@ The project also includes many example programs and tools using the `llama` libr
 - Use a Docker image, see [documentation for Docker](docs/docker.md)
 - Download pre-built binaries from [releases](https://github.com/ggml-org/llama.cpp/releases)
 
-## Obtaining and quantizing models
+```c
+/*
+Notes:杨小兵-2025-04-08
 
+1、这部分内容将会解释构建llama.cpp项目的流程。
+2、llama.cpp这个项目的主要成果是llama库。llama library的C风格的接口可以在include/llama.h中找到。llama.cpp项目也包含很多使用llama库的示例程序、工具。这些示例包含从简单的、最小的代码片段到复杂的子项目例如OpenAI-compatible HTTP server。获取这些二进制可执行文件有多种方式：
+    2.1 克隆和在本地及逆行构建（查看对应的文档来获取本地构建的说明）
+    2.2 在MacOS\Linux上可以通过brew\flox\nix来安装llama.cpp。
+    2.3 可以使用Docker image（可以通过查看对应文档获取具体的内容）
+    2.4 可以从releases中下载pre-built的二进制文件。
+*/
+```
+
+## Obtaining and quantizing models
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、这部分内容介绍关于获取模型、量化模型的一些内容。
+2、获取模型
+    2.1 可以在hugging face中直接下载对应的GGUF文件
+    2.2 使用llama.cpp的时候可以通过对应的命令行参数下载对应的模型文件
+*/
+```
 The [Hugging Face](https://huggingface.co) platform hosts a [number of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp`:
 
 - [Trending](https://huggingface.co/models?library=gguf&sort=trending)
 - [LLaMA](https://huggingface.co/models?sort=trending&search=llama+gguf)
 
 You can either manually download the GGUF file or directly use any `llama.cpp`-compatible models from Hugging Face by using this CLI argument: `-hf <user>/<model>[:quant]`
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、Hugging Face 平台拥有许多与 llama.cpp 兼容的 LLM，可以通过trending和llama关键词对模型类型进行筛选。
+2、两种获取模型文件的方式
+    2.1 在hugging face平台上直接下载模型文件
+    2.2 通过命令行参数进行下载模型文件
+*/
+```
 
 After downloading a model, use the CLI tools to run it locally - see below.
 
 `llama.cpp` requires the model to be stored in the [GGUF](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) file format. Models in other data formats can be converted to GGUF using the `convert_*.py` Python scripts in this repo.
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、下载完一个模型文件之后，可以CLI工具本地运行模型，详细内容查看下列内容。
+2、llama.cpp需要模型以GGUF文件格式保存起来。如果模型文件是其他的数据格式，可以使用convert_*.py脚本文件实现存储格式转化。
+*/
+```
 
 The Hugging Face platform provides a variety of online tools for converting, quantizing and hosting models with `llama.cpp`:
 
@@ -282,14 +440,43 @@ The Hugging Face platform provides a variety of online tools for converting, qua
 - Use the [Inference Endpoints](https://ui.endpoints.huggingface.co/) to directly host `llama.cpp` in the cloud (more info: https://github.com/ggml-org/llama.cpp/discussions/9669)
 
 To learn more about model quantization, [read this documentation](examples/quantize/README.md)
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、Hugging Face 平台提供了多种在线工具，用于使用 llama.cpp 转换、量化和托管模型。
+    1.1 GGUF-my-repo space：实现GGUF格式转化、量化模型权重
+    1.2 GGUF-my-LoRA space: 将LoRA adapters转化成GGUF格式
+    1.3 GGUF-editor space：可以直接在浏览器中编辑GGUF元数据
+    1.4 inference endpoints: 可以直接在云端托管llama.cpp
+2、如果想要了解更多关于模型量化的内容，查看给出的文档内容。
+*/
+```
 
 ## [`llama-cli`](examples/main)
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、在llama.cpp项目中一个子项目为llama-cli（可以通过命令行的方式运行模型。
+2、该标题被渲染之后可以通过点击文字直接跳转到对应的目录结构中，这也是markdown格式的一个亮点，在后续的学习、使用中可以使用这里学习到的内容。
+*/
+```
 
 #### A CLI tool for accessing and experimenting with most of `llama.cpp`'s functionality.
 
 - <details open>
     <summary>Run in conversation mode</summary>
 
+    ```c
+    /*
+    Notes:杨小兵-2025-04-09
+
+    1、llama-cli以对话的模式运行模型。
+    2、具有内置聊天模板的模型将自动激活对话模式。如果没有激活，您可以通过添加 `-cnv` 并使用 `--chat-template NAME` 指定合适的聊天模板来手动启用它。
+    3、这里通过details标签来实现一部分内容的折叠，可以在后续的实践中使用这种用法。
+    */
+    ```
     Models with a built-in chat template will automatically activate conversation mode. If this doesn't occur, you can manually enable it by adding `-cnv` and specifying a suitable chat template with `--chat-template NAME`
 
     ```bash
@@ -307,6 +494,15 @@ To learn more about model quantization, [read this documentation](examples/quant
 - <details>
     <summary>Run in conversation mode with custom chat template</summary>
 
+    ```c
+    /*
+    Notes:杨小兵-2025-04-09
+
+    1、llama-cli以使用自定义对话模版的模式运行模型。
+    2、
+    */
+    ```
+
     ```bash
     # use the "chatml" template (use -h to see the list of supported templates)
     llama-cli -m model.gguf -cnv --chat-template chatml
@@ -320,6 +516,15 @@ To learn more about model quantization, [read this documentation](examples/quant
 - <details>
     <summary>Run simple text completion</summary>
 
+    ```c
+    /*
+    Notes:杨小兵-2025-04-09
+
+    1、llama-cli以简单文本补全的方式运行模型。
+    2、这种方式可以用来简单测试模型，实际使用场景是比较少的。
+    */
+    ```
+
     To disable conversation mode explicitly, use `-no-cnv`
 
     ```bash
@@ -332,6 +537,17 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 - <details>
     <summary>Constrain the output with a custom grammar</summary>
+
+    ```c
+    /*
+    Notes:杨小兵-2025-04-09
+
+    1、llama-cli以自定义grammar限制模型输出的方式运行模型。
+    2、应用场景：结构化的输出。
+    3、在grammars目录中包含少量的示例grammars，想要编写自己的grammars可以查看对应的GBNF Guide内容获取更多内容。
+    4、这部分内容可以在后续学习中深入了解。
+    */
+    ```
 
     ```bash
     llama-cli -m model.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
@@ -349,6 +565,18 @@ To learn more about model quantization, [read this documentation](examples/quant
 ## [`llama-server`](examples/server)
 
 #### A lightweight, [OpenAI API](https://github.com/openai/openai-openapi) compatible, HTTP server for serving LLMs.
+
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、特点
+    1.1 轻量级
+    1.2 OpenAI API兼容的
+2、llama-server是llama.cpp项目中的一个子项目，用来为LLMs提供服务。
+3、相关的内容可以在后续深入了解，目前只是大致了解llama.cpp整体情况。
+*/
+```
 
 - <details open>
     <summary>Start a local HTTP server with default configuration on port 8080</summary>
@@ -418,6 +646,15 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## [`llama-perplexity`](examples/perplexity)
 
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、llama-perplexity是llama.cpp项目中的一个子项目。
+2、llama-perplexity这个工具是用来测量一个模型对于一个给定文本的perplexity以及其他的一些metric（目前来说不是特别重要，可以在后续需要的时候查看相应内容）
+*/
+```
+
 #### A tool for measuring the perplexity [^1][^2] (and other quality metrics) of a model over a given text.
 
 - <details open>
@@ -446,6 +683,15 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## [`llama-bench`](examples/llama-bench)
 
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、llama-bench是llama.cpp项目中的一个子项目。
+2、llama-bench工具是用来测试模型对于给定不同参数其推理的性能（目前来说不是特别重要，不过可以尝试一下）。
+*/
+```
+
 #### Benchmark the performance of the inference for various parameters.
 
 - <details open>
@@ -467,6 +713,15 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## [`llama-run`](examples/run)
 
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、llama-run是llama.cpp项目中的一个子项目。
+2、llama-run是一个运行llama.cpp模型的综合实力程序，对于inference来说是有用的（后续需要的时候再深入了解其内容）。
+*/
+```
+
 #### A comprehensive example for running `llama.cpp` models. Useful for inferencing. Used with RamaLama [^3].
 
 - <details>
@@ -482,6 +737,14 @@ To learn more about model quantization, [read this documentation](examples/quant
 
 ## [`llama-simple`](examples/simple)
 
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、llama-simple是llama.cpp项目中的一个子项目。
+2、llama-simple是一个使用llama.cpp实现apps的最小的示例程序，对于开发者来说是有用的（需要深入开发的时候再来了解这部分内容）。
+*/
+```
 #### A minimal example for implementing apps with `llama.cpp`. Useful for developers.
 
 - <details>
@@ -506,6 +769,14 @@ To learn more about model quantization, [read this documentation](examples/quant
 - Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
 - Make sure to read this: [Inference at the edge](https://github.com/ggml-org/llama.cpp/discussions/205)
 - A bit of backstory for those who are interested: [Changelog podcast](https://changelog.com/podcast/532)
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、这部分内容介绍contribute相关内容。
+2、有意思的是这里放出了llama.cpp项目的一些backstory。
+*/
+```
 
 ## Other documentation
 
@@ -545,6 +816,14 @@ Optionally this can be added to your `.bashrc` or `.bash_profile` to load it
 automatically. For example:
 ```console
 $ echo "source ~/.llama-completion.bash" >> ~/.bashrc
+```
+
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、上述内容展示了一个 Bash 脚本片段，用于为 llama-cli 命令行工具启用 Bash 自动补全功能。Bash 是一种常见的 Unix shell，支持命令补全功能，用户可以通过按 Tab 键自动补全命令或参数，从而提升操作效率。
+*/
 ```
 
 ## References
