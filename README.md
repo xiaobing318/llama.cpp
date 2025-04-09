@@ -22,6 +22,7 @@ Notes:杨小兵-2025-04-08
 
 1、![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
     1.1 这种语法可以在markdown文件中显示一张图片，如果图片的资源是不存在的那么markdown渲染将会使用 llama 来代替图片。
+    1.2 图片资源可以是网络中存在的或者是本地中存在的。
 2、[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
     2.1 这种语法可以使得我们直接点击图片从而跳转到对应的网址中，这也是使用用户交互比较方便的一种语法，非常实用。如果图片资源是不存在的，那么markdown渲染器将会使用 License: MIT 来代替图片。
 3、[![Server](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml/badge.svg)](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml)
@@ -96,8 +97,8 @@ Notes:杨小兵-2025-04-08
 Notes:杨小兵-2025-04-08
 
 1、热门话题
-    1.1 如何使用MTLResidencySet来使得GPU memory是活跃的（这部分内容后续了解）
-    1.2 在VS Code中存在对FIM补全的拓展（这部分内容后续了解）
+    1.1 如何使用MTLResidencySet来使得GPU memory是活跃的（MTLResidencySet是metal中的一部分内容，用来管理GPU的VRAM，使得程序员可以控制资源驻留在VRAM中而不会使其在某些情况下被转移到Disk中，通过这种方式来降低资源转移带来的时间开销）
+    1.2 在VS Code中存在对FIM补全的拓展（FIM 是 "Fill-In-the-Middle" 的缩写，意思是“填充中间”。它是一些语言模型提供的一种功能（有些LLMs将会提供这种功能），可以根据你给定的代码或文本的开头和结尾，智能地生成中间缺失的部分。简单来说，FIM 就像是一个超级厉害的代码补全工具，但它不仅仅是猜下一行代码，而是能理解上下文，生成整个函数或代码块。）
     1.3 在llama-server存在通用工具调用支持（这部分内容在后续会进行重点关注）
     1.4 对于FIM 补全有对应的Vim/Neovim插件支持
     1.5 有关GGUF-my-LoRA内容（这部分内容后续了解）
@@ -134,11 +135,11 @@ Notes:杨小兵-2025-04-08
 Notes:杨小兵-2025-04-08
 
 1、没有任何依赖的、纯C/C++实现
-2、Apple silicon将会是被优先考虑的，通过ARM NEON、Metal frameworks进行优化
-3、对于x86指令集架构支持AVX, AVX2, AVX512, AMX
+2、Apple silicon将会是被优先考虑的，通过ARM NEON、Metal frameworks进行优化（Apple 硅是苹果设备（如 Mac 的 M1、M2 芯片）用的 ARM 架构处理器，与传统 x86 不同。ARM NEON 是 ARM 处理器的一种 SIMD 指令集，允许一次处理多个数据，类似并行计算。Accelerate 是苹果提供的计算框架，优化线性代数和信号处理。Metal 是苹果的 GPU 编程接口，类似 OpenGL，但专为苹果设备设计。）
+3、对于x86指令集架构支持AVX, AVX2, AVX512, AMX（AVX（Advanced Vector Extensions）是 x86 处理器（如 Intel、AMD）的扩展指令集，支持 SIMD 操作。AVX 支持 256 位寄存器，AVX2 增加整数支持，AVX512 扩展到 512 位。AMX 可能为苹果矩阵协处理器，但这里可能误写，实际指 x86 的高级计算支持。这些指令让 CPU 并行处理数据，加速计算。）
 4、对于更快速的推理和减少内存使用进行1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization
 5、通过定制化的 CUDA 内核（kernels）来优化大型语言模型（LLMs）在 NVIDIA GPU 上的运行，同时提到对 AMD GPU（通过 HIP）和 Moore Threads MTT GPU（通过 MUSA）的支持。
-6、llama.cpp项目支持Vulkan、SYCL后端
+6、llama.cpp项目支持Vulkan、SYCL后端（Vulkan 是跨平台的 GPU 计算接口，支持 Windows、Linux 等，类似 OpenGL，但更低级，适合高性能计算。SYCL 是一种统一编程模型，允许用 C++ 写代码运行在 CPU、GPU、FPGA 等硬件上，增强跨平台兼容性。支持这些后端让软件运行在多种硬件上。）
 7、当模型所需要的VRAM要比硬件本身的VRAM capacity还要大的时候可以通过CPU+GPU混合推理实现部分加速。
 */
 ```
