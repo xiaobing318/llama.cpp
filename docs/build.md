@@ -1,4 +1,12 @@
 # Build llama.cpp locally
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、这部分内容将会解释本地化构建llama.cpp项目。
+2、GitHub的好处之一是存在GitHub actions，那么当新的特性在本地构建成功之后便可以使用GitHub actions来实现自动化构建流程。
+*/
+```
 
 **To get the Code:**
 
@@ -8,8 +16,35 @@ cd llama.cpp
 ```
 
 The following sections describe how to build with different backends and options.
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、下列内容描述了如何使用不同的backends和options来构建llama.cpp。
+  1.1 CPU Build
+  1.2 BLAS Build
+  1.3 Metal Build
+  1.4 SYCL Build
+  1.5 CUDA Build
+  1.6 MUSA Build
+  1.7 HIP Build
+  1.8 Vulkan Build
+  1.9 CANN Build
+  1.10 Android Build
+2、llama.cpp 中提到的后端包括 CPU、BLAS（CPU 优化）、Metal、SYCL、CUDA、MUSA、HIP、Vulkan、CANN 和 OpenCL，CPU是一种后端，可以同GPU后端、NPU后端一起理解为不同的计算硬件选择。（可以参考2025-04-09.docx文件内容）
+*/
+```
 
 ## CPU Build
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、使用CMake构建以CPU为backend的llama.cpp。
+2、具体来说就是llama.cpp主要计算将会运行在CPU上。
+3、这部分内容在需要使用的时候再进行深入理解。
+*/
+```
 
 Build llama.cpp using `CMake`:
 
@@ -65,12 +100,54 @@ cmake --build build --config Release
       ```
 
 ## BLAS Build
+```c
+/*
+Notes:杨小兵-2025-04-09
+
+1、使用CMake构建以CPU为backend的llama.cpp。
+2、具体来说就是llama.cpp主要计算将会运行在CPU上。
+3、BLAS（基本线性代数子程序）是一个在科学计算和工程领域广泛使用的标准接口，定义了一组低级例程，用于执行常见的线性代数操作，如向量加法、标量乘法、点积、线性组合和矩阵乘法。这些操作是许多算法的核心，尤其在机器学习和深度学习中，如神经网络的训练和推理。BLAS 的设计目标是提供高效、可移植的解决方案，允许开发者利用优化的库来加速计算，而无需从头实现复杂的线性代数操作。
+  3.1 BLAS是一个接口规范并不是具体的实现，针对不同的硬件将会存在不同的BLAS具体实现，这样做的目的就是为了追求极致的性能。
+  3.2 BLAS具体的实现有
+    3.2.1 Accelerate Framework 专为 Mac 设备设计，利用苹果硬件的特性
+    3.2.2 OpenBLAS 是一个通用的 CPU 实现，适用于多种平台
+    3.2.3 Intel oneMKL 针对 Intel 处理器优化，利用特定指令集如 AVX
+    3.2.4 BLIS 是一个开源框架，注重多核性能和可移植性
+4、BLAS 解决了高效执行线性代数操作的问题，这些操作在许多计算密集型任务中是基础。例如，在机器学习中，矩阵乘法是训练神经网络的关键步骤，直接影响训练速度和资源利用率。BLAS 通过提供优化的例程，减少了开发者手动优化的负担，同时利用硬件的特定特性（如多核 CPU、矢量指令）来加速计算。
+
+实现          平台          优化目标                      开源/专有
+Accelerate    Framework     Mac	苹果硬件（VEC、多核）	     专有
+OpenBLAS      通用 CPU      多线程、缓存优化	             开源
+BLIS          通用 CPU      多核并行、可移植性	           开源
+Intel         oneMKL        Intel 处理器	AVX、AVX512	    专有
+cuBLAS        NVIDIA        GPU	GPU 加速、深度学习	      专有
+*/
+```
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Using BLAS doesn't affect the generation performance. There are currently several different BLAS implementations available for build and use:
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、BLAS：是用来对基础矩阵运算进行加速的一个规范，存在很多针对不同进行具体实现的库。
+2、LLM的处理步骤：分词、词嵌入、模型推理、解码。
+  2.1 具体的内容还需要参考、学习更多的资料。
+  2.2 这部分内容将会在后续进行补充完善。
+*/
+```
 
 ### Accelerate Framework
 
 This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
+
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、Accelerate Framework：是针对Mac硬件BLAS的具体实现，也是目前Mac上唯一可以用的BLAS库。默认情况下这个库是被自动启用的。可以使用正常的指令进行构建即可。
+2、这部分内容的探索可以放在后续进行理解。
+*/
+```
 
 ### OpenBLAS
 
@@ -83,9 +160,26 @@ This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS i
     cmake --build build --config Release
     ```
 
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、OpenBLAS:在仅使用CPU的情况下OpenBLAS提供了BLAS加速。首先确保这个库已经在你的机器上安装了。
+2、上述整体的构建方式采用的是CMake。
+*/
+```
+
 ### BLIS
 
 Check [BLIS.md](./backend/BLIS.md) for more information.
+
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、BLIS：对于BLIS相关内容通过查看BLIS.md从而获取更多的信息。
+*/
+```
 
 ### Intel oneMKL
 
@@ -103,10 +197,35 @@ Building through oneAPI compilers will make avx_vnni instruction set available f
   If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-basekit](https://hub.docker.com/r/intel/oneapi-basekit). Then, you can use the commands given above.
 
 Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、Intel oneMKL：是针对intel硬件的BLAS的具体实现。
+2、通过使用oneAPI编译器，开发者可以在不支持AVX512和AVX512_VNNI指令集的Intel处理器上启用AVX_VNNI指令集，从而提升应用程序的性能，同时提供了实现这一目标的具体方法和注意事项。
+3、AVX_VNNI指令集的作用与启用方式
+  3.1 AVX_VNNI是一种指令集扩展，它允许在不支持AVX512的Intel处理器上执行部分AVX512指令，从而优化计算任务的性能。
+  3.2 通过oneAPI编译器构建项目时，即使处理器的硬件不支持AVX512或AVX512_VNNI，开发者仍然可以利用AVX_VNNI指令集来提升应用程序的执行效率。
+4、不支持Intel GPU的限制
+  4.1 这种构建配置不支持Intel GPU。如果开发者需要Intel GPU的支持，需要参考llama.cpp for SYCL的相关文档（具体链接为./backend/SYCL.md）
+5、两种使用oneAPI启用AVX_VNNI指令集的方式
+  5.1 开发者需要先安装oneAPI，并通过上述命令设置环境变量
+  5.2 为了避免手动安装和配置环境变量的麻烦，开发者可以直接使用预配置的oneAPI-basekit docker镜像（镜像地址：https://hub.docker.com/r/intel/oneapi-basekit），然后运行上述cmake命令构建项目。
+6、上述内容的重点在于指导开发者如何利用oneAPI编译器在不支持AVX512的Intel处理器上启用AVX_VNNI指令集，以提升性能。同时，它提醒了这种配置不支持Intel GPU，并提供了手动安装和docker镜像两种实现途径，方便开发者根据需求选择适合的方式。
+*/
+```
 
 ### Other BLAS libraries
 
 Any other BLAS library can be used by setting the `GGML_BLAS_VENDOR` option. See the [CMake documentation](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) for a list of supported vendors.
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、任何其他的BLAS库可以通过设置GGML_BLAS_VENDOR设置来使用。查看具体的CMake文档查看具体支持的vendor列表。
+2、后续使用的到的时候再详细查看这部分内容。
+*/
+```
 
 ## Metal Build
 
@@ -122,10 +241,27 @@ SYCL is a higher-level programming model to improve programming productivity on 
 llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
 
 For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、基于SYCL的llama.cpp是用来支持 Intel GPU 加速计算的。
+2、这部分内容需要重点关注一下，可以在内网环境中部署体量更大的推理模型，从而验证该项目中的RPC子项目的能力，这部分内容还需要深入了解。
+*/
+```
 
 ## CUDA
 
 This provides GPU acceleration using an NVIDIA GPU. Make sure to have the [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) installed.
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、这部分内容将会解释如何在llama.cpp项目中使用CUDA这个backend，目前这部分介绍的是使用CUDA后端构建llama.cpp项目。
+2、可以使用CUDA来指挥NVIDIA GPU干活从而加速计算，确保已经安装了CUDA toolkit相关内容。
+3、这部分在需要构建的时候可以详细理解这部分内容，目前只是理解起作用即可。
+*/
+```
 
 #### Download directly from NVIDIA
 You may find the official downloads here: [NVIDIA developer site](https://developer.nvidia.com/cuda-downloads).
@@ -406,3 +542,21 @@ The GPU may still be used to accelerate some parts of the computation even when 
 In most cases, it is possible to build and use multiple backends at the same time. For example, you can build llama.cpp with both CUDA and Vulkan support by using the `-DGGML_CUDA=ON -DGGML_VULKAN=ON` options with CMake. At runtime, you can specify which backend devices to use with the `--device` option. To see a list of available devices, use the `--list-devices` option.
 
 Backends can be built as dynamic libraries that can be loaded dynamically at runtime. This allows you to use the same llama.cpp binary on different machines with different GPUs. To enable this feature, use the `GGML_BACKEND_DL` option when building.
+```c
+/*
+Notes:杨小兵-2025-04-11
+
+1、GPU加速的控制
+  1.1 部分启用：即使在使用 -ngl 0 选项（通常用于禁用 GPU 层）时，GPU 仍可能被用于加速计算的某些部分（也就是说这种方式不能完全禁止GPU的使用，但具体应该不会存在这种类似的需求）。
+  1.2 完全禁用：若需彻底禁用 GPU 加速，可以使用 --device none 选项。
+2、多种后端支持
+  2.1 同时构建：llama.cpp 支持同时构建多个 GPU 后端。例如，通过在 CMake 中设置 -DGGML_CUDA=ON -DGGML_VULKAN=ON，可以启用 CUDA 和 Vulkan 支持（影响一个主机可能包含两个不同的 GPU 后端，另外 GPU集群也可能是由不同的 GPU 硬件组成的）。
+  2.2 灵活性：这种设计允许用户根据需求选择不同的后端技术。
+3、运行时配置
+  3.1 设备选择：在运行时，可通过 --device 选项指定使用哪个后端设备。
+  3.2 设备查询：使用 --list-devices 选项可以查看当前系统中可用的设备列表，方便管理和调试。
+4、动态库支持
+  4.1 动态加载：后端可以构建为动态库，在运行时动态加载。这种方式使得同一份 llama.cpp 二进制文件能够在不同机器和 GPU 环境下使用。
+  4.2 启用方式：构建时需使用 GGML_BACKEND_DL 选项以启用此功能。
+*/
+```
