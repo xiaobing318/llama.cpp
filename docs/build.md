@@ -3,8 +3,8 @@
 /*
 Notes:杨小兵-2025-04-09
 
-1、这部分内容将会解释本地化构建llama.cpp项目。
-2、GitHub的好处之一是存在GitHub actions，那么当新的特性在本地构建成功之后便可以使用GitHub actions来实现自动化构建流程。
+1、该文件内容将会解释如何本地化构建llama.cpp项目。
+2、GitHub的好处之一是存在GitHub actions，那么当新的特性在本地构建成功之后便可以使用GitHub actions来实现自动化构建流程，如果想要进行调试的话，那么本地构建是比较方便的，如果为了构建、发布、多人协作，还是GitHub actions是比较方便的。
 */
 ```
 
@@ -41,8 +41,8 @@ Notes:杨小兵-2025-04-09
 Notes:杨小兵-2025-04-09
 
 1、使用CMake构建以CPU为backend的llama.cpp。
-2、具体来说就是llama.cpp主要计算将会运行在CPU上。
-3、这部分内容在需要使用的时候再进行深入理解。
+2、具体来说就是llama.cpp全部计算将会运行在CPU上。
+3、在需要进行以CPU为backend进行构建的时候再详细查看这部分内容。
 */
 ```
 
@@ -105,7 +105,7 @@ cmake --build build --config Release
 Notes:杨小兵-2025-04-09
 
 1、使用CMake构建以CPU为backend的llama.cpp。
-2、具体来说就是llama.cpp主要计算将会运行在CPU上。
+2、具体来说就是llama.cpp全部计算将会运行在CPU上。
 3、BLAS（基本线性代数子程序）是一个在科学计算和工程领域广泛使用的标准接口，定义了一组低级例程，用于执行常见的线性代数操作，如向量加法、标量乘法、点积、线性组合和矩阵乘法。这些操作是许多算法的核心，尤其在机器学习和深度学习中，如神经网络的训练和推理。BLAS 的设计目标是提供高效、可移植的解决方案，允许开发者利用优化的库来加速计算，而无需从头实现复杂的线性代数操作。
   3.1 BLAS是一个接口规范并不是具体的实现，针对不同的硬件将会存在不同的BLAS具体实现，这样做的目的就是为了追求极致的性能。
   3.2 BLAS具体的实现有
@@ -223,7 +223,7 @@ Any other BLAS library can be used by setting the `GGML_BLAS_VENDOR` option. See
 Notes:杨小兵-2025-04-11
 
 1、任何其他的BLAS库可以通过设置GGML_BLAS_VENDOR设置来使用。查看具体的CMake文档查看具体支持的vendor列表。
-2、后续使用的到的时候再详细查看这部分内容。
+2、后续使用其他BLAS构建llama.cpp项目的时候再详细查看这部分内容。
 */
 ```
 
