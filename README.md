@@ -6,7 +6,7 @@ Notes:杨小兵-2025-04-08
 1、当前分支是我为了学习整个llama.cpp项目fork出来的一个分支。
 2、学习的目标
     2.1 对llama.cpp项目的整体理解。
-    2.2 目前不对实现的细节进行过多的深入，这是后续将会学习的内容。
+    2.2 目前不对实现的细节进行过多深入了解，这是后续将会学习的内容。
     2.3 需要明确学习的目标从而有阶段性的深入理解。
 3、llama.cpp是该项目的名称，存在一定的历史含义（最初是由meta公司的开源模型llama而来）。
 */
@@ -56,7 +56,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 Notes:杨小兵-2025-04-08
 
 1、使用纯C/C++实现Meta模型（其他模型）的推理
-    1.1 只使用C/C++（问题：具体的编程语言版本是什么？）
+    1.1 只使用C/C++（问题：具体的编程语言版本是什么？针对每一个项目可以查看具体的构建脚本操作确定使用编程语言的版本信息，这里的构建脚本指的就是CMakeLists.txt）
     1.2 这里的'其他模型'现在已经成为一个重点。
 2、重点解读
     2.1 llama.cpp package现在位于新的仓库位置（说明之前不是这个位置，已经发生了变化，应该是为了更好的结构化组织）
@@ -135,11 +135,20 @@ Notes:杨小兵-2025-04-08
 Notes:杨小兵-2025-04-08
 
 1、没有任何依赖的、纯C/C++实现
-2、Apple silicon将会是被优先考虑的，通过ARM NEON、Metal frameworks进行优化（Apple 硅是苹果设备（如 Mac 的 M1、M2 芯片）用的 ARM 架构处理器，与传统 x86 不同。ARM NEON 是 ARM 处理器的一种 SIMD 指令集，允许一次处理多个数据，类似并行计算。Accelerate 是苹果提供的计算框架，优化线性代数和信号处理。Metal 是苹果的 GPU 编程接口，类似 OpenGL，但专为苹果设备设计。）
+2、Apple silicon将会是被优先考虑的，通过ARM NEON、Metal frameworks进行优化（Apple silicon是苹果设备（如 Mac 的 M1、M2 芯片）用的 ARM 架构处理器，与传统 x86 不同。ARM NEON 是 ARM 处理器的一种 SIMD 指令集，允许一次处理多个数据，类似并行计算。Accelerate 是苹果提供的计算框架，优化线性代数和信号处理。Metal 是苹果的 GPU 编程接口，类似 OpenGL，但专为苹果设备设计。）
+    2.1 ARM NEON 是 ARM 处理器的一个 SIMD（单指令多数据）指令集扩展。
+    2.2 Accelerate 是 Apple 提供的一个框架，包含一系列优化库，专门用于高性能计算任务，比如矩阵运算、信号处理和图像操作。
+    2.3 Metal 是 Apple 提供的一个低级 API，允许你直接访问 GPU 来执行图形渲染和并行计算任务。这特别适合需要高性能的应用程序，比如游戏或科学模拟。它让你可以利用 GPU 的并行处理能力来加速计算。
+    2.4 总结一下，ARM NEON 是 CPU 的 SIMD 指令集，Accelerate 是优化计算的库集合，Metal 是用于 GPU 编程的框架（metal是软件接口，可以使用这个软件接口从而来控制GPU）。
 3、对于x86指令集架构支持AVX, AVX2, AVX512, AMX（AVX（Advanced Vector Extensions）是 x86 处理器（如 Intel、AMD）的扩展指令集，支持 SIMD 操作。AVX 支持 256 位寄存器，AVX2 增加整数支持，AVX512 扩展到 512 位。AMX 可能为苹果矩阵协处理器，但这里可能误写，实际指 x86 的高级计算支持。这些指令让 CPU 并行处理数据，加速计算。）
 4、对于更快速的推理和减少内存使用进行1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization
 5、通过定制化的 CUDA 内核（kernels）来优化大型语言模型（LLMs）在 NVIDIA GPU 上的运行，同时提到对 AMD GPU（通过 HIP）和 Moore Threads MTT GPU（通过 MUSA）的支持。
+    5.1 CUDA Kerneal是使用C++语言编写的运行在NVIDIA GPU上的函数，CUDA Kernal不能运行在其他类型的GPU和CPU上，这就说明CUDA Kernal是专门为NVIDIA GPU设计的。
+    5.2 如果想要运行CUDA Kernal那么需要NVIDIA GPU硬件和NVIDIA GPU driver。
+    5.3 CUDA Kernal在NVIDIA GPU上运行利用的就是NVIDIA GPU的多线程并行能力。
 6、llama.cpp项目支持Vulkan、SYCL后端（Vulkan 是跨平台的 GPU 计算接口，支持 Windows、Linux 等，类似 OpenGL，但更低级，适合高性能计算。SYCL 是一种统一编程模型，允许用 C++ 写代码运行在 CPU、GPU、FPGA 等硬件上，增强跨平台兼容性。支持这些后端让软件运行在多种硬件上。）
+    6.1 Vulkan是需要了解的。
+    6.2 SYCL也是需要了解的。
 7、当模型所需要的VRAM要比硬件本身的VRAM capacity还要大的时候可以通过CPU+GPU混合推理实现部分加速。
 */
 ```
@@ -149,6 +158,7 @@ The `llama.cpp` project is the main playground for developing new features for t
 Notes:杨小兵-2025-04-08
 
 1、llama.cpp 项目是开发和测试 ggml 库新功能的主要实验平台。ggml 是一个托管在 GitHub 上的开源库（位于 ggml-org/ggml 仓库），而 llama.cpp 作为一个独立项目，为开发者提供了一个实践环境，通过在其中实现和验证新特性，推动 ggml 库的功能完善和扩展。
+    1.1 后续将会对GGML进行详细的了解。
 2、下列内容展示的是llama.cpp项目支持的模型、工具等等。
 */
 ```
@@ -342,7 +352,7 @@ Notes:杨小兵-2025-04-08
 1、后端支持列表
 Backend	    Target devices	        通俗解释
 Metal	    Apple Silicon	        苹果设备的专属翻译官
-BLAS/BLIS	All	                    通用的基础翻译官，哪种硬件都能用
+BLAS/BLIS	All	                    通用的基础翻译官，哪种硬件都能用（计算CPU上矩阵相关计算）
 SYCL	    Intel 和 Nvidia GPU	    英特尔和 Nvidia 的双语翻译官
 MUSA	    Moore Threads MTT GPU	摩尔线程 GPU 的专属翻译官
 CUDA	    Nvidia GPU	            Nvidia GPU 的专属翻译官
@@ -414,7 +424,7 @@ You can either manually download the GGUF file or directly use any `llama.cpp`-c
 /*
 Notes:杨小兵-2025-04-09
 
-1、Hugging Face 平台拥有许多与 llama.cpp 兼容的 LLM，可以通过trending和llama关键词对模型类型进行筛选。
+1、Hugging Face 平台拥有许多与 llama.cpp 兼容的 LLM，可以通过trending和llama关键词或者标签对模型类型进行筛选。
 2、两种获取模型文件的方式
     2.1 在hugging face平台上直接下载模型文件
     2.2 通过命令行参数进行下载模型文件
@@ -451,6 +461,8 @@ Notes:杨小兵-2025-04-09
     1.3 GGUF-editor space：可以直接在浏览器中编辑GGUF元数据
     1.4 inference endpoints: 可以直接在云端托管llama.cpp
 2、如果想要了解更多关于模型量化的内容，查看给出的文档内容。
+    2.1 这部分内容对于量化文件参数的理解是有帮助的。
+    2.2 可以通过查看更多相关资料来理解的模型量化相关内容。
 */
 ```
 
