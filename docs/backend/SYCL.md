@@ -3,7 +3,7 @@
 /*
 Notes:杨小兵-2025-04-14
 
-1、该文档将会介绍如何SYCL和llama.cpp之间的结合，或者说llama.cpp项目如何获得SYCL的支持。
+1、该文档介绍如何将SYCL和llama.cpp进行结合，或者说llama.cpp项目如何获得SYCL的支持。
 2、llama.cpp支持的一个后端便是SYCL，这样做的好处可以使得计算效率提高。
 3、SYCL
   3.1 SYCL是一种基于C++17的并行编程标准，其目的在于简化异构计算开发
