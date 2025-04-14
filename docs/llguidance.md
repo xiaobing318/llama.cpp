@@ -59,6 +59,8 @@ Notes:杨小兵-2025-04-14
 1、windows平台上述使用cmake作为构建工具。
 2、非windows平台上可以通过使用cmake的宏定义来启动LLGuidance支持。
 3、如果想要成功构建有LLGuidance支持的llama.cpp，则需要Rust compiler和cargo工具。
+    3.1 Rust compiler:后续进行了解
+    3.2 cargo：后续进行了解
 */
 ```
 
