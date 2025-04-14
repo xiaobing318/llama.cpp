@@ -1,4 +1,33 @@
 # llama.cpp for SYCL
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、该文档将会介绍如何SYCL和llama.cpp之间的结合，或者说llama.cpp项目如何获得SYCL的支持。
+2、llama.cpp支持的一个后端便是SYCL，这样做的好处可以使得计算效率提高。
+3、SYCL
+  3.1 SYCL是一种基于C++17的并行编程标准，其目的在于简化异构计算开发
+    3.1.1 SYCL:并行编程标准
+    3.1.2 SYCL:目的为了简化异构计算开发，SYCL并行编程标准（对于并行编程可以查看对应的资料学习）主要为了解决硬件兼容性和代码可移植性问题，体现的效果就是可以在多种硬件加速器上实现并行计算。支持的硬件类型包括CPU、GPU、FPGA和其他加速器，具体取决于实现。
+  3.2 SYCL 的简单发展历史
+    3.2.1 SYCL 由 Khronos Group 在 2014 年 3 月首次宣布，初始版本 1.2 在 2015 年 5 月 finalized。2017 年 12 月发布了 SYCL 1.2.1，2020 年 6 月推出了 SYCL 2020 临时规范，2021 年 2 月 finalized。最新版本是 2022 年 11 月发布的 SYCL 2020 revision 6，支持 C++17 和 OpenCL 3.0。
+  3.3 SYCL 是一个软件库和对应工具组成的软件平台吗？
+    3.3.1 不是，SYCL 是一个编程标准或模型，不是软件库，而是定义如何编写可运行于不同硬件的 C++ 代码的规范。要使用 SYCL，需要像 Intel 的 DPC++ 或 AdaptiveCpp 这样的编译器实现。
+    3.3.2 SYCL是一个并行编程规范和模型，那么说明这个并行编程规范和模型定义了行为效果。
+  3.4 SYCL 解决了什么问题？
+    3.4.1 SYCL 解决了在不同硬件（如 CPU、GPU、FPGA）上编写可移植代码的难题。它允许开发者用单一代码库编写程序，简化开发过程，减少维护不同硬件的复杂性，类似于 C 语言在不同 CPU 上的可移植性。
+    3.4.2 SYCL的效果和C语言在不同的CPU上的可移植性之间的类比是比较易懂的。
+  3.5 SYCL 可以使用在哪些硬件平台上？
+    3.5.1 CPU：Intel、AMD、ARM 等
+    3.5.2 GPU：Intel 集成和独立 GPU、NVIDIA GPU（通过 AdaptiveCpp）、AMD GPU、ARM Mali GPU。
+    3.5.3 FPGA：Intel FPGA，可能包括其他品牌。
+    3.5.4 其他加速器：如 NEC SX-Aurora TSUBASA。
+    3.5.5 具体支持取决于 SYCL 实现，如 Intel DPC++ 主要支持 Intel 硬件，而 AdaptiveCpp 支持更广泛的 GPU。
+  3.6 硬件兼容性：允许开发者编写单一代码库，可在 CPU、GPU、FPGA 等多种硬件上运行，减少为每种硬件编写专用代码的需要。单一代码库减少维护成本，类似于 C 语言在不同 CPU 架构上的可移植性。
+  3.7 SYCL 定义了一系列抽象机制，以实现异构设备编程——这一现代社会中极为重要但在 ISO C++ 中尚未直接解决的能力。SYCL 的发展旨在通过创建产品化的验证实例，从而在 C++ 演进过程中影响其对异构计算的支持方向。
+    3.7.1 ISO C++并没有支持异构设备编程。
+*/
+```
 
 - [Background](#background)
 - [Recommended Release](#recommended-release)
@@ -23,10 +52,39 @@
 - **oneAPI Libraries**: A set of highly optimized libraries targeting multiple domains *(e.g. oneMKL and oneDNN)*.
 - **oneAPI LevelZero**: A high performance low level interface for fine-grained control over intel iGPUs and dGPUs.
 - **Nvidia & AMD Plugins**: These are plugins extending oneAPI's DPCPP support to SYCL on Nvidia and AMD GPU targets.
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、SYCL 是一种高级并行编程模型，旨在提高开发人员在各种硬件加速器（例如 CPU、GPU 和 FPGA）上编写代码的效率。它是一种专为异构计算而设计的单源语言，基于标准 C++17。
+  1.1 SYCL 是一个并行编程模型。
+  1.2 SYCL 是为了提高开发者编写代码的效率，使用一套代码可以在各种硬件加速器上运行，而不是针对每一种硬件分别编写特定的代码。
+  1.3 目前所产生有关并行的技术都是为了解决相同的一个问题：鉴于单核处理器性能提升的瓶颈日益凸显，并行计算已成为提升应用程序性能的关键技术。
+2、SYCL同C编程语言直接的类比
+  2.1 内核与函数： 在 SYCL 中，运行在加速器上的并行代码称为“内核”。这类似于 C 语言中的函数，但内核旨在由许多处理单元并行执行。（kernal类似于function）
+  2.2 缓冲区与内存管理： SYCL 的 buffer 对象可以类比于 C 语言中的内存分配（例如，使用数组或 malloc）。SYCL 中的缓冲区管理着将在设备上的内核中使用的数据。
+  2.3 访问器与指针： SYCL 中的 accessor 对象提供了一种从内核内部访问存储在缓冲区中的数据的方式。这可以类比于 C 语言中的指针，指针用于访问内存位置。访问器还具有访问模式（读、写、读写），这可以与 C 语言中指针的不同使用方式相关联。
+  2.4 队列与命令执行： SYCL 的 queue 可以看作是将工作（内核）提交到特定设备的机制。这类似于在 C 程序中调度任务或管理执行流程的方式，尽管 SYCL 的队列通常涉及异步执行。
+  2.5 统一共享内存（USM）与指针： 对于 SYCL 2020 及更高版本，统一共享内存（USM）提供了一个可以被主机和设备访问的单一地址空间。这允许直接使用指针，对于 C 程序员来说可能是一个更熟悉的概念。
+  2.6 Lambda 函数与匿名函数/函数指针： 如果您对 C++ 的 lambda 函数不熟悉，可以将它们理解为类似于 C 语言中的匿名函数或函数指针，但 lambda 函数能够捕获周围作用域中的变量。Lambda 函数在 SYCL 中常用于定义简洁的内核。
+3、oneAPI 是一个开放的生态系统和基于标准的规范，支持多种架构，包括但不限于英特尔 CPU、GPU 和 FPGA。oneAPI 生态系统的关键组件包括：
+  3.1 DPCPP (数据并行 C++)：oneAPI SYCL 的主要实现，包含 icpx/icx 编译器。（作用：这是 oneAPI 的 SYCL 实现，包括 icpx/icx 编译器，允许用 C++ 编写可移植代码，运行于 CPU、GPU 和 FPGA 等。）
+  3.2 oneAPI 库：一组针对多个领域（例如 oneMKL 和 oneDNN）高度优化的库。（作用：如 oneMKL（数学）和 oneDNN（深度学习）等优化库，提供硬件优化的算法和函数。）
+  3.3 oneAPI LevelZero：用于对英特尔 iGPU 和 dGPU 进行细粒度控制的高性能底层接口。（o作用：低级接口，提供对 Intel GPU 的细粒度控制，适合需要最高性能的场景。）
+  3.4 Nvidia 和 AMD 插件：这些插件将 oneAPI 的 DPCPP 支持扩展至 Nvidia 和 AMD GPU 上的 SYCL。（扩展 DPCPP，支持 Nvidia 和 AMD GPU 上的 SYCL 代码运行。）
+*/
+```
 
 ### Llama.cpp + SYCL
 
 The llama.cpp SYCL backend is designed to support **Intel GPU** firstly. Based on the cross-platform feature of SYCL, it also supports other vendor GPUs: Nvidia and AMD.
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、llama.cpp项目中的 SYCL backend首先被设计支持 Intel GPU。基于 SYCL 的跨平台能力，SYCL 也会支持其他的GPU提供商：NVIDIA\AMD。
+*/
+```
 
 ## Recommended Release
 
@@ -38,9 +96,30 @@ The following release is verified with good quality:
 |-|-|-|-|-|
 |3bcd40b3c593d14261fb2abfabad3c0fb5b9e318|b4040 |[llama-b4040-bin-win-sycl-x64.zip](https://github.com/ggml-org/llama.cpp/releases/download/b4040/llama-b4040-bin-win-sycl-x64.zip) |Arc770/Linux/oneAPI 2024.1<br>MTL Arc GPU/Windows 11/oneAPI 2024.1| 2024-11-19|
 |fb76ec31a9914b7761c1727303ab30380fd4f05c|b3038 |[llama-b3038-bin-win-sycl-x64.zip](https://github.com/ggml-org/llama.cpp/releases/download/b3038/llama-b3038-bin-win-sycl-x64.zip) |Arc770/Linux/oneAPI 2024.1<br>MTL Arc GPU/Windows 11/oneAPI 2024.1||
+```c
+/*
+Notes:杨小兵-2025-04-14
 
+1、这部分内容描述的是一些推荐的release，这里存在推荐的原因是有些release不是稳定的，因为有些PRs将会使得SYCL backend崩溃。
+2、上述罗列出来的两个release已经被验证具有良好的质量。
+3、注意
+  3.1 在线 CI（Continuous Integration，持续集成）是指一个运行在互联网上的自动系统，每次代码有变更时，它会自动构建和测试代码，确保软件仍然能正常工作。想象它像一个机器人，每次有人修改代码后，它会检查代码是否还能编译和运行。常见的在线 CI 服务包括 GitHub Actions （llama.cpp目前使用GitHub Actions来进行 CI ）或 Travis CI，特别是在开源项目中很常见。 对于有 C 语言背景的朋友，可以理解为：每次你写完一段 C 代码并想加入大项目时，这个系统会自动帮你编译并运行测试，就像每次修改代码后手动运行 gcc 和测试程序，但它是在云端自动完成的。 
+  3.2 因为没有在线 CI 这个自动测试系统，一些代码变更（称为拉取请求，PR）被合并进了主代码库，但这些变更导致 SYCL 后端出现了问题。对于 C 语言背景的朋友，可以想象：你在写一个大 C 项目，别人提交的代码片段可能不小心破坏了你的函数，但因为没有自动编译和测试，这些问题没被发现，程序就出错了。 
+  3.3 对于有 C 语言背景的用户，建议从理解 CI 的基本概念开始，想象它像每次修改代码后自动运行 make test 的过程，但是在云端完成。SYCL 后端可以看作一个特殊模块，让程序能用 GPU 加速，类似你在 C 中用 OpenMP 优化多核 CPU。缺乏 CI 就相当于没有自动测试，容易让坏代码混入，导致功能损坏。 
+    3.3.1 CI 的基本概念（整体的作用）：每次膝盖代码之后自动运行make test的过程，只不过是在云端完成的。
+    3.3.2 对于make test目前一直没有接触过，可以在后续接触学习，也是一个重点。
+*/
+```
 
 ## News
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、这部分内容将会发布一些简短更新说明。
+2、其中有些内容可以作为参看，目前只是大致了解其功能即可。
+*/
+```
 
 - 2024.11
   - Use syclcompat to improve the performance on some platforms. This requires to use oneAPI 2025.0 or newer.
@@ -80,6 +159,16 @@ The following release is verified with good quality:
 
 
 ## Hardware
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、这部分内容介绍SYCL支持的硬件类型。
+  1.1 Intel GPU
+    1.1.1 SYCL backend支持 Intel GPU 家族：Intel Data Center Max Series、Intel Flex Series, Arc Series、Intel Built-in Arc GPU、Intel iGPU in Core CPU
+  1.2 其他厂商的GPU
+*/
+```
 
 ### Intel GPU
 
@@ -109,6 +198,16 @@ SYCL backend supports Intel GPU Family:
 
 - **Execution Unit (EU)**
   - If the iGPU has less than 80 EUs, the inference speed will likely be too slow for practical use.
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、GPU的共享内存
+  1.1 集成 GPU（比如 Intel 核显）：它没有自己的专用内存，而是从电脑的主内存（RAM）里分一块出来用。这就像你在 C 程序里从一大块内存中切出一部分给某个变量用。如果你的 RAM 只有 8GB，但模型要 8GB，可能会不够，因为系统本身还要用一些内存。
+  1.2 独立 GPU（比如 NVIDIA 显卡）：它有自己的内存，不用跟 RAM 抢，所以需求会低一些（比如 4GB）。
+  1.3 用你朋友熟悉的 C 语言来比喻：内存就像堆分配，EU 就像 CPU 核心。内存不够，程序分配失败；EU 太少，计算就慢。说明里提醒你，跑大模型得检查这两点，确保硬件够强，才能顺畅运行！
+*/
+```
 
 ### Other Vendor GPU
 
@@ -126,8 +225,22 @@ SYCL backend supports Intel GPU Family:
 
 Note: AMD GPU support is highly experimental and is incompatible with F16.
 Additionally, it only supports GPUs with a sub_group_size (warp size) of 32.
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、AMD GPU总体来说支持的不是特别理想。
+*/
+```
 
 ## Docker
+```c
+/*
+Notes:杨小兵-2025-04-14
+
+1、这部分内容在后续使用的时候深入了解。
+*/
+```
 The docker build option is currently limited to *intel GPU* targets.
 
 ### Build image
@@ -156,7 +269,13 @@ docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/ren
 - You may need to install Intel GPU driver on the **host** machine *(Please refer to the [Linux configuration](#linux) for details)*.
 
 ## Linux
+```c
+/*
+Notes:杨小兵-2025-04-14
 
+1、这部分内容在后续使用的时候深入了解。
+*/
+```
 ### I. Setup Environment
 
 1. **Install GPU drivers**
@@ -446,7 +565,13 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 ```
 
 ## Windows
+```c
+/*
+Notes:杨小兵-2025-04-14
 
+1、这部分内容在后续使用的时候深入了解。
+*/
+```
 ### I. Setup Environment
 
 1. Install GPU driver
@@ -665,7 +790,13 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 ## Known Issues
 
 - `Split-mode:[row]` is not supported.
+```c
+/*
+Notes:杨小兵-2025-04-14
 
+1、以split mode方式存储的GGUF在llama.cpp + SYCL中是不支持的，可能在后续会支持。
+*/
+```
 ## Q&A
 
 - Error:  `error while loading shared libraries: libsycl.so.7: cannot open shared object file: No such file or directory`.
