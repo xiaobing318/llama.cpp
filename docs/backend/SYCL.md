@@ -69,8 +69,11 @@ Notes:杨小兵-2025-04-14
   2.6 Lambda 函数与匿名函数/函数指针： 如果您对 C++ 的 lambda 函数不熟悉，可以将它们理解为类似于 C 语言中的匿名函数或函数指针，但 lambda 函数能够捕获周围作用域中的变量。Lambda 函数在 SYCL 中常用于定义简洁的内核。
 3、oneAPI 是一个开放的生态系统和基于标准的规范，支持多种架构，包括但不限于英特尔 CPU、GPU 和 FPGA。oneAPI 生态系统的关键组件包括：
   3.1 DPCPP (数据并行 C++)：oneAPI SYCL 的主要实现，包含 icpx/icx 编译器。（作用：这是 oneAPI 的 SYCL 实现，包括 icpx/icx 编译器，允许用 C++ 编写可移植代码，运行于 CPU、GPU 和 FPGA 等。）
+    3.1.1 DPCPP：负责将（SYCL + CPP）编写的代码翻译成具体硬件设备上运行的可执行程序的编译器，类似于GCC。
   3.2 oneAPI 库：一组针对多个领域（例如 oneMKL 和 oneDNN）高度优化的库。（作用：如 oneMKL（数学）和 oneDNN（深度学习）等优化库，提供硬件优化的算法和函数。）
+    3.2.1 类似于C编程语言的一些标准库。
   3.3 oneAPI LevelZero：用于对英特尔 iGPU 和 dGPU 进行细粒度控制的高性能底层接口。（o作用：低级接口，提供对 Intel GPU 的细粒度控制，适合需要最高性能的场景。）
+    3.3.1 对 Intel GPU 更加细节的控制。
   3.4 Nvidia 和 AMD 插件：这些插件将 oneAPI 的 DPCPP 支持扩展至 Nvidia 和 AMD GPU 上的 SYCL。（扩展 DPCPP，支持 Nvidia 和 AMD GPU 上的 SYCL 代码运行。）
 */
 ```
@@ -797,6 +800,7 @@ Notes:杨小兵-2025-04-14
 1、以split mode方式存储的GGUF在llama.cpp + SYCL中是不支持的，可能在后续会支持。
 */
 ```
+
 ## Q&A
 
 - Error:  `error while loading shared libraries: libsycl.so.7: cannot open shared object file: No such file or directory`.
