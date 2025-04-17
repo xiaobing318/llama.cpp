@@ -26,3 +26,7 @@
 
 **小结（对比 C 背景）**
 就像你在 C 项目里写 `Makefile` 以管理源文件、库依赖和编译选项，Swift 生态里用 **Package.swift** 来做同样的事：代码的组织、第三方库的管理、构建规则都写在这里，一行命令就能自动化完成构建和测试。
+
+ - Package.swift:Swift Package Manager（SwiftPM）的“清单”文件，用 Swift 语法写成，定义了模块（targets）、依赖库及版本、编译选项等。等同于 C 项目中的 Makefile 或 CMake 的 CMakeLists.txt，由 swift build、swift test 等命令读取使用。
+ - SwiftPM 集成:指使用 Swift Package Manager 管理和构建依赖的流程。在项目根目录运行 swift build 时，它会读取 Package.swift，自动拉取依赖、编译源代码并生成可执行文件或库。
+ - XCFramework:苹果推出的一种二进制框架打包格式，可以把多个平台（iOS、macOS、simulator、Catalyst 等）的二进制库一并打包，使用时自动选取对应平台版本。适用于纯二进制分发，但不支持 Linux。
