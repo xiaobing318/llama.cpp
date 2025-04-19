@@ -72,7 +72,8 @@ autogen-*.md
 /server
 
 # CI
-
+# 因为github actions的缓存机制（目前表现出来的结果就是Git没有对md文件进行追踪），不能直接忽略这个文件夹。
+!.github/workflows/*.md
 !.github/workflows/*.yml
 
 # Models
