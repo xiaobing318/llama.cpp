@@ -333,7 +333,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         # build, using set_source_files_properties() to set the arch flags is not possible
         set(GGML_CPU_FEATS_NAME ${GGML_CPU_NAME}-feats)
         add_library(${GGML_CPU_FEATS_NAME} OBJECT ggml-cpu/cpu-feats-x86.cpp)
-        target_include_directories(${GGML_CPU_FEATS_NAME} PRIVATE . .. ../include)
+        target_include_directories(${GGML_CPU_FEATS_NAME} PRIVATE . ../include)
         target_compile_definitions(${GGML_CPU_FEATS_NAME} PRIVATE ${ARCH_DEFINITIONS})
         target_compile_definitions(${GGML_CPU_FEATS_NAME} PRIVATE GGML_BACKEND_DL GGML_BACKEND_BUILD GGML_BACKEND_SHARED)
         set_target_properties(${GGML_CPU_FEATS_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
