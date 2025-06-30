@@ -1,17 +1,48 @@
+/*
+Notes:杨小兵-2025-06-30
+
+1、通过相对路径的方式包含指定的头文件，编译系统在编译该编译单元的时候首先将会在额外指定的目录中查找对应的头文件，然后在默认系统目录中查找
+对应的头文件。也就是说编译系统将会在系统配置目录和额外指定目录中查找对应的头文件，通过这种方式可以避免在包含头文件的时候使用绝对路径，这样
+做的好处就是可以使得代码的可移植性更好，避免了在不同的系统上使用不同的绝对路径来包含头文件的问题。
+*/
 #include "ggml-backend-impl.h"
 
+/*
+Notes:杨小兵-2025-06-30
+
+1、下列整体是一个条件编译块，只有在满足特定条件时才会编译和包含其中的代码，整体是为了编译特定于Intel/AMD的x86/x86-64系列处理器。
+    1.1 条件一：编译器是 x86_64 架构的编译器。
+    1.2 条件二：编译器是 Microsoft Visual C++ 编译器，并且目标架构是 AMD64。
+*/
 #if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
 
+/*
+Notes:杨小兵-2025-06-30
+
+1、如果编译器是 Microsoft Visual C++ 编译器，则包含指定的头文件。
+2、该头文件提供了对 CPUID 指令的访问，这个指令可以用来查询处理器的特性和功能。
+*/
 #ifdef _MSC_VER
 #include <intrin.h>
 #endif
 
+/*
+Notes:杨小兵-2025-06-30
+
+1、包含 C/C++ 标准库中的头文件。
+*/
 #include <cstring>
 #include <vector>
 #include <bitset>
 #include <array>
 #include <string>
 
+/*
+Notes:杨小兵-2025-06-30
+
+1、声明一个结构体 cpuid_x86，用于查询和存储 x86/x86-64 处理器的特性和功能。
+2、结构体 cpuid_x86 的声明参考了 Intel 的软件开发手册（SDM），该手册提供了关于 x86/x86-64 架构的详细信息。
+*/
 // ref: https://cdrdv2-public.intel.com/782156/325383-sdm-vol-2abcd.pdf
 struct cpuid_x86 {
     bool SSE3(void) { return f_1_ecx[0]; }
@@ -110,19 +141,55 @@ struct cpuid_x86 {
 #endif
 
     cpuid_x86() {
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、定义了一个整数数组 cpui，用于存储 CPUID 指令的结果，为什么是4个整数？因为CPUID指令返回的结果包含四个32位整数，
+        分别存储在 eax、ebx、ecx 和 edx 寄存器中，我们使用4个整数来存储这些结果。
+        2、定义了一个二维数组 data，用于存储 CPUID 指令的结果，每个元素是一个包含四个整数的数组，可以存储多个上述4个整数的结果，
+        为什么要用向量？因为我们会多次调用 CPUID 指令，每次调用返回的结果可能会不同，并且为了将这些不同的结果都存储起来，因此
+        需要使用动态数组来存储这些结果。
+        */
         std::array<int, 4> cpui;
         std::vector<std::array<int, 4>> data;
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、首先调用了 cpuid 函数（CPUID 指令的封装），传入 0，意思是问 CPU：“你支持的最大基本功能编号是多少？”结果会填到 cpui 里。
+        2、然后 CPU 把最大功能编号（highest valid function ID）存在 cpui[0]（对应 EAX 寄存器），我们把它取出来存到 n_ids 里。
+        为什么要这么做？因为接下来我们要用这个编号决定查多少次 CPUID。
+        */
         // calling __cpuid with 0x0 as the function_id argument
         // gets the number of the highest valid function ID.
         cpuid(cpui.data(), 0);
         int n_ids = cpui[0];
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、下列代码是一个循环，从 0 跑到 n_ids，每次加 1。为什么要循环？因为 CPUID 支持多个功能编号（0、1、2...），每个编号返回不同信息，
+        需要把它们都收集起来。
+        2、调用指定函数，传入功能编号 i 和子叶 0（ECX=0），结果存到 cpui 里。为什么要用 cpuidex？因为它能更精确地查询某些信息。
+        3、把这次查询的结果塞进动态数组中存储起来。为什么要存起来？因为后面要用这些数据提取厂商名、功能标志等。
+        */
         for (int i = 0; i <= n_ids; ++i) {
             cpuidex(cpui.data(), i, 0);
             data.push_back(cpui);
         }
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、首先声明一个局部临时的字符数组 vendor，用于存储 CPU 厂商字符串，长度为 32 字节（0x20 = 32）。为什么要 32 字节？
+        够大，能装下标准厂商字符串。
+        2、从动态数组（功能编号 0 的结果）里取 EBX（data[0][1]），塞到 vendor 的前 4 个字节。为什么要这样？
+        因为 CPUID 用 EBX、EDX、ECX 返回厂商字符串的字符。
+        3、从动态数组（功能编号 0 的结果）里取 EDX（data[0][3]），塞到 vendor 的第 5 到 8 字节。
+        4、从动态数组（功能编号 0 的结果）里取 ECX（data[0][2]），塞到 vendor 的第 9 到 12 字节。为什么要按这个顺序？
+        因为 CPUID 返回的顺序是 EBX-EDX-ECX，拼起来就是厂商名。
+        5、将拼接好的厂商名存储到成员变量中。
+        */
         // capture vendor string
         char vendor[0x20] = {};
         *reinterpret_cast<int *>(vendor)     = data[0][1];
@@ -135,12 +202,27 @@ struct cpuid_x86 {
             is_amd = true;
         }
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、检查最大功能编号是不是至少到 1。如果是，才继续。为什么要检查？因为不是所有 CPU 都支持功能 1。
+        2、从 data[1]（功能编号 1）取 ECX 的值，存到 f_1_ecx。为什么要存？ECX 包含一堆功能标志，比如 SSE3 支持。
+        3、取 EDX 的值，存到 f_1_edx。EDX 也有功能标志，比如 MMX 支持。
+        */
         // load bitset with flags for function 0x00000001
         if (n_ids >= 1) {
             f_1_ecx = data[1][2];
             f_1_edx = data[1][3];
         }
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、检查是否支持功能编号 7（现代 CPU 才支持）。为什么要检查？老 CPU 可能不支持。
+        2、从 data[7]（功能编号 7，ECX=0）取 EBX，存到 f_7_ebx。这些是高级功能标志，比如 AVX2。相对应的还有 ECX 和 EDX 。
+        3、再查一次功能 7，但这次 ECX=1，获取额外信息。为什么要再查？因为功能 7 有子叶，ECX=1 返回不同数据。
+        4、把这次的 EAX 存到 f_7_1_eax，记录更多功能。
+        */
         // load bitset with flags for function 0x00000007
         if (n_ids >= 7) {
             f_7_ebx = data[7][1];
@@ -150,23 +232,54 @@ struct cpuid_x86 {
             f_7_1_eax = cpui[0];
         }
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、调用 CPUID，传入 0x80000000，问：“你支持的最大扩展功能编号是多少？”结果存到 cpui。
+        2、把最大扩展编号存到 n_ex_ids。为什么要查扩展？因为基本功能（0 开始）和扩展功能（0x80000000 开始）是分开的。
+        */
         // calling __cpuid with 0x80000000 as the function_id argument
         // gets the number of the highest valid extended ID.
         cpuid(cpui.data(), 0x80000000);
         unsigned int n_ex_ids = cpui[0];
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、声明定义一个动态二维数组用来存储扩展功能的 CPUID 结果，从 0x80000000 到 n_ex_ids。
+        2、循环从 0x80000000 到 n_ex_ids，每次调用 cpuidex，传入 i（功能编号）和 0，获取扩展功能信息。
+        3、把每次的结果存到 ext_data 中。为什么要这么做？因为扩展功能编号也有很多，不能只查一个。
+        */
         std::vector<std::array<int, 4>> ext_data;
         for (unsigned int i = 0x80000000; i <= n_ex_ids; ++i) {
             cpuidex(cpui.data(), i, 0);
             ext_data.push_back(cpui);
         }
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、检查最大扩展功能编号是不是至少到 0x80000001。如果是，才继续。为什么要检查？因为不是所有 CPU 都支持功能 0x80000001。
+        2、从 ext_data[1]（扩展功能编号 2）取 ECX 的值，存到 f_81_ecx。为什么要存？ECX 包含一堆功能标志，比如 64 位支持。
+        3、从 ext_data[1]（扩展功能编号 3）取 EDX 的值，存到 f_81_edx。
+        */
         // load bitset with flags for function 0x80000001
         if (n_ex_ids >= 0x80000001) {
             f_81_ecx = ext_data[1][2];
             f_81_edx = ext_data[1][3];
         }
 
+        /*
+        Notes:杨小兵-2025-06-30
+
+        1、整体的目的是解析 CPU 的品牌字符串。
+        2、首先声明一个字符数组 brand，长度为 64 字节（0x40 = 64）。为什么要 64 字节？因为品牌字符串可能很长，需要足够空间。
+        3、检查最大扩展功能编号是不是至少到 0x80000004。如果是，才继续。为什么要检查？因为不是所有 CPU 都支持品牌字符串。
+        4、从 ext_data[2]（扩展功能编号 4）取数据，复制到 brand 的前 16 字节。为什么要复制？因为品牌字符串分成了多个部分。
+        5、从 ext_data[3]（扩展功能编号 5）取数据，复制到 brand 的第 17 到 32 字节。
+        6、从 ext_data[4]（扩展功能编号 6）取数据，复制到 brand 的第 33 到 48 字节。为什么要分三块？因为品牌名太长，分三部分返回。
+        7、最后把 brand 转换成字符串，存到成员变量 this->brand 中。为什么要转换？因为我们需要一个易读的品牌名。
+        */
         // interpret CPU brand string if reported
         char brand[0x40] = {};
         if (n_ex_ids >= 0x80000004) {
