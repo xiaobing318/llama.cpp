@@ -1,7 +1,12 @@
 #pragma once
 
 // GGML CPU internal header
+/*
+Notes:杨小兵-2025-07-01
 
+1、包含GGML自定义实现的一些头文件以及 C++ 标准头文件。
+2、这里将stdlib的头文件放在最前面是为了避免 MinGW 的一个 bug，该 bug 会导致在某些情况下无法正确识别 C++ 标准库的头文件。
+*/
 #include "ggml.h"
 #include "ggml-impl.h"
 #include <stdlib.h> // load `stdlib.h` before other headers to work around MinGW bug: https://sourceforge.net/p/mingw-w64/bugs/192/
@@ -10,7 +15,12 @@
 #include <string.h> // memcpy
 #include <math.h>   // fabsf
 
+/*
+Notes:杨小兵-2025-07-01
 
+1、这是一个条件编译块，只有在 C++ 编译器下才会包含这些头文件，在 C 编译器下则不会包含。
+2、这么做的目的是为了在 C++ 中使用 C 语言的函数和数据结构，同时避免 C++ 的名称修饰（name mangling）问题，同时兼顾了 C 和 C++ 的兼容性。
+*/
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -26,7 +36,18 @@ struct ggml_compute_params {
     struct ggml_threadpool * threadpool;
 };
 
+/*
+Notes:杨小兵-2025-07-01
 
+1、这是一个条件编译块，该 _MSC_VER 宏是 Microsoft Visual C++ 编译器的预定义宏，用来标识 Microsoft Visual C++ 编译器的版本，用在
+这里是用来判断当前的编译器是否是 Microsoft Visual C++ 编译器。
+2、AVX-512 数据类型
+类型	        寄存器宽度	        典型含义	                                        资料
+__m512	    512 bit	            16×FP32	                                        —
+__m512i	    512 bit	            64×int8 / 32×int16 / 16×int32 / 8×int64	        Intel Intrinsics Guide (portal.nacad.ufrj.br)
+__m512bh	512 bit	32×BF16（bfloat16）	                                        Intel DL Boost BF16 白皮书 (intel.com)    2.1 _m512bh 出现在 AVX-512 BF16 指令集（Cooper Lake / Sapphire Rapids 等），常与 _mm512_cvtbf16_ps、_mm512_dpbf16_ps 等
+    指令配合，用来直接在 BF16 权重上做矩阵乘法或卷积 
+*/
 #if defined(_MSC_VER)
 
 #define m512bh(p) p
