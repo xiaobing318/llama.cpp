@@ -32,7 +32,20 @@
 // Module maintainer: Johannes Gäßler (@JohannesGaessler, johannesg@5d6.de)
 
 #pragma once
+/*
+Notes:杨小兵-2025-07-11
 
+1、上述命令将会被 C/C++ 编译系统中预处理器处理，这个预处理命令目前在主流的 C/C++ 编译系统中都是被支持的，即该预处理命令是支持跨平台的。
+2、这个预处理命令的作用就是使得 C/C++ 头文件能够被多次包含而不会引起编译错误，在 C/C++ 中包含头文件，编译系统中的预处理器将会把头文件中
+中的内容复制拷贝到被包含头文件的源文件中，当然在这个过程中遇到其他包含头文件的命令，预处理器是会递归进行处理的。假设没有该命令或者条件编
+译的方式那么多次被包含的头文件会导致编译错误，因为头文件中的内容会被多次复制拷贝到源文件中，导致重复定义的错误。
+3、现代 C/C++ 编译系统推荐的方式是通过 #pragma once 预处理命令实现的，之前是通过条件编译的方式实现的，条件编译的方式是通过宏定义来实现的，
+例如：
+   #ifndef GGUF_H
+   #define GGUF_H
+   // 头文件内容
+   #endif
+*/
 #include "ggml.h"
 
 #include <stdbool.h>
@@ -44,6 +57,11 @@
 #define GGUF_KEY_GENERAL_ALIGNMENT "general.alignment"
 
 #define GGUF_DEFAULT_ALIGNMENT 32
+/*
+Notes:杨小兵-2025-07-11
+
+1、上述宏定义本质上将会进行字符串、数值等等类型的替换，即在 C/C++ 中看到宏定义要从文本替换的角度考虑。
+*/
 
 #ifdef  __cplusplus
 extern "C" {
