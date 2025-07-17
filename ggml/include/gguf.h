@@ -33,12 +33,14 @@
 
 #pragma once
 /*
-Notes:杨小兵-2025-07-11
+Notes:杨小兵-2025-07-15
 
 1、上述命令将会被 C/C++ 编译系统中预处理器处理，这个预处理命令目前在主流的 C/C++ 编译系统中都是被支持的，即该预处理命令是支持跨平台的。
 2、这个预处理命令的作用就是使得 C/C++ 头文件能够被多次包含而不会引起编译错误，在 C/C++ 中包含头文件，编译系统中的预处理器将会把头文件中
 中的内容复制拷贝到被包含头文件的源文件中，当然在这个过程中遇到其他包含头文件的命令，预处理器是会递归进行处理的。假设没有该命令或者条件编
-译的方式那么多次被包含的头文件会导致编译错误，因为头文件中的内容会被多次复制拷贝到源文件中，导致重复定义的错误。
+译的方式那么多次被包含的头文件会导致编译错误，因为头文件中的内容会被多次复制拷贝到源文件中，导致重复定义的错误。该命令用在头文件里可确保
+同一翻译单元中该头文件最多被处理一次，从而免除重复定义与加快编译，这里的翻译单元是指 C/C++ 编译系统中的一个概念，指的是一个源文件及其包
+含的头文件。
 3、现代 C/C++ 编译系统推荐的方式是通过 #pragma once 预处理命令实现的，之前是通过条件编译的方式实现的，条件编译的方式是通过宏定义来实现的，
 例如：
    #ifndef GGUF_H
@@ -50,6 +52,15 @@ Notes:杨小兵-2025-07-11
 
 #include <stdbool.h>
 #include <stdint.h>
+/*
+Notes:杨小兵-2025-07-15
+
+1、首先包含了 ggml.h 头文件，这个头文件是 ggml 库的核心头文件，包含了 ggml 库的主要功能和数据结构定义。
+2、接下来包含了标准的 C 头文件 <stdbool.h> 和 <stdint.h>，这两个头文件提供了布尔类型和固定宽度整数类型的定义。
+   - <stdbool.h> 提供了 bool 类型和 true/false 常量。
+   - <stdint.h> 提供了固定宽度整数类型的定义，例如 int32_t、uint64_t 等等，这些类型在不同的平台上具有相同的大小。
+   - 这里的宽度指的是 bit 宽度，例如 int32_t 是一个 32 位的整数类型，uint64_t 是一个 64 位的无符号整数类型。
+*/
 
 #define GGUF_MAGIC   "GGUF"
 #define GGUF_VERSION 3
@@ -58,9 +69,10 @@ Notes:杨小兵-2025-07-11
 
 #define GGUF_DEFAULT_ALIGNMENT 32
 /*
-Notes:杨小兵-2025-07-11
+Notes:杨小兵-2025-07-15
 
-1、上述宏定义本质上将会进行字符串、数值等等类型的替换，即在 C/C++ 中看到宏定义要从文本替换的角度考虑。
+1、宏定义确实是纯粹的 “文本替换” 或更准确地说是 “符号序列替换” (Token Replacement)。预处理器本身不理解C/C++的语法
+和数据类型。它不会进行类型检查，也不会分析代码的含义。
 */
 
 #ifdef  __cplusplus
@@ -115,7 +127,13 @@ Notes:杨小兵-2025-07-14
         // if not NULL, create a ggml_context and allocate the tensor data in it
         struct ggml_context ** ctx;
     };
-
+    /*
+    Notes:杨小兵-2025-07-16
+    
+    1、声明定义一个名为 gguf_init_params 的结构体类型，这个结构体用于初始化 GGUF 上下文时的参数。
+    2、其中成员变量 ctx 是一个指向 ggml_context 结构体的指针的指针，这样可以在初始化时创建一个 ggml_context，并将其地址存储在 ctx 中。
+    但是如果 ctx 为 NULL，则不创建 ggml_context 并且对其不熟悉。
+    */
     GGML_API struct gguf_context * gguf_init_empty(void);
     GGML_API struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params);
     //GGML_API struct gguf_context * gguf_init_from_buffer(..);
@@ -130,6 +148,11 @@ Notes:杨小兵-2025-07-14
 
     GGML_API int64_t      gguf_get_n_kv(const struct gguf_context * ctx);
     GGML_API int64_t      gguf_find_key(const struct gguf_context * ctx, const char * key); // returns -1 if key is not found
+    /*
+    Notes:杨小兵-2025-07-16
+    
+    1、gguf_find_key 函数的整体作用是查找 GGUF 上下文中是否存在指定的键，并返回该键的 ID（索引）。如果键不存在，则返回 -1。
+    */
     GGML_API const char * gguf_get_key (const struct gguf_context * ctx, int64_t key_id);
 
     GGML_API enum gguf_type gguf_get_kv_type (const struct gguf_context * ctx, int64_t key_id);
