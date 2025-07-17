@@ -840,100 +840,190 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
                 break;
             }
         }
+        //  如果读取 GGUF 格式文件状态不是 true ，那么跳出读取张量信息的循环
         if (!ok) {
             break;
         }
+        /*
+        Notes:杨小兵-2025-07-18
+
+        1、从 GGUF 格式文件中读取出当前张量的维度数量、各个维度的元素数量，并且检查这些元素数量是否符合 GGML_MAX_DIMS 的限制。从整体上
+        来看就是为了从 GGUF 格式文件中读取出当前张量的形状信息，并且检查这些形状信息是否符合 GGML_MAX_DIMS 的限制。
+        */
 
         // tensor type
         {
+            //  如果当前 GGUF 格式文件中的信息经过前面的读取步骤成功，并且读取当前张量的类型信息成功，则将其存储到 info.t.type 中。
             ok = ok && gr.read(info.t.type);
 
             // check that tensor type is within defined range
+            //  如果从 GGUF 格式文件中的读取的当前张量类型信息不在 GGML_TYPE_COUNT 的范围内，则输出错误信息。
             if (info.t.type < 0 || info.t.type >= GGML_TYPE_COUNT) {
+                //  使用 fprintf 函数输出错误信息，表示当前张量的类型信息不在 GGML_TYPE_COUNT 的范围内。
                 fprintf(stderr, "%s: tensor '%s' has invalid ggml type %d (%s)\n",
                     __func__, info.t.name, info.t.type, ggml_type_name(info.t.type));
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
+                //  跳出读取张量信息的循环
                 break;
             }
+            //  获取当前张量类型的大小，即当前张量类型所占用的字节数，并且将其存储到 size_t 类型的变量 type_size 中。
             const size_t  type_size = ggml_type_size(info.t.type);
+            //  获取当前张量类型的块大小，即当前张量类型的每个块所占用的字节数，并且将其存储到 int64_t 类型的变量 blck_size 中。
             const int64_t blck_size = ggml_blck_size(info.t.type);
 
             // check that row size is divisible by block size
+            //  如果当前张量类型的块大小为0，或者当前张量的第一个维度的元素数量不是块大小的倍数，则输出错误信息。
             if (blck_size == 0 || info.t.ne[0] % blck_size != 0) {
+                //  使用 fprintf 函数输出错误信息，表示当前张量的第一个维度的元素数量不是块大小的倍数。
                 fprintf(stderr, "%s: tensor '%s' of type %d (%s) has %" PRId64 " elements per row, "
                     "not a multiple of block size (%" PRId64 ")\n",
                     __func__, info.t.name, (int) info.t.type, ggml_type_name(info.t.type), info.t.ne[0], blck_size);
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
+                //  跳出读取张量信息的循环
                 break;
             }
 
+            /*
+            Notes:杨小兵-2025-07-18
+
+            1、这里对给定形状、类型的张量，计算每个维度的字节步长（nb）是为了后续在读取张量数据时能够正确地定位到每个元素。
+            */
             // calculate byte offsets given the tensor shape and type
+            //  计算当前张量的第零个维度的字节步长，即张量类型的字节大小。
             info.t.nb[0] = type_size;
+            //  计算当前张量的第一个维度的字节步长，即第一个维度的元素数量乘以当前张量类型的大小除以块大小。
             info.t.nb[1] = info.t.nb[0]*(info.t.ne[0]/blck_size);
+            //  如果当前张量的维度数量大于1，则计算当前张量的第二个维度的字节步长，即第一个维度的字节步长乘以第二个维度的元素数量。
             for (int j = 2; j < GGML_MAX_DIMS; ++j) {
                 info.t.nb[j] = info.t.nb[j - 1]*info.t.ne[j - 1];
             }
         }
+        //  如果读取 GGUF 格式文件状态不是 true ，那么跳出读取张量信息的循环。
         if (!ok) {
+            //  跳出读取张量信息的循环
             break;
         }
+        /*
+        Notes:杨小兵-2025-07-18
+
+        1、从 GGUF 格式文件中读取出当前张量的类型信息，并且计算当前张量的各个维度的字节步长信息。这里的字节步长信息是为了后续在读取张量
+        数据时能够正确地定位到每个元素，对这部分内容现在还没有完全理解透彻。
+        */
 
         // tensor data offset within buffer
+        //  如果当前 GGUF 格式文件中的信息经过前面的读取步骤成功，并且读取当前张量的数据偏移量成功，则将其存储到 info.offset 中。
         ok = ok && gr.read(info.offset);
 
+        //  将从 GGUF 格式文件中的读取的张量信息存储到 ctx->info 中。
         ctx->info.push_back(info);
     }
     /*
     Notes:杨小兵-2025-07-16
 
-    1、待总结
+    1、循环从 GGUF 格式文件中读取每个张量的信息，包括张量名称、维度数量、各个维度的元素数量、张量类型和数据偏移量等信息，并且将
+    这些信息存储到 ctx->info 中。
     */
 
+    //  如果读取 GGUF 格式文件的状态不是 true ，那么输出错误信息并跳出读取张量信息的循环。
     if (!ok) {
+        //  使用 fprintf 函数输出错误信息，表示读取 GGUF 格式文件中的张量信息失败。
         fprintf(stderr, "%s: failed to read tensor info\n", __func__);
+        //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
         gguf_free(ctx);
+        //  直接返回。
         return nullptr;
     }
+    /*
+        检查读取到的实际张量数量是否与从 GGUF 格式文件中存储的张量数量 n_tensors 相等，如果不相等则输出错误信息并释放已经分配
+    的 gguf_context 对象 ctx。
+    */
     GGML_ASSERT(int64_t(ctx->info.size()) == n_tensors);
 
     // we require the data section to be aligned, so take into account any padding
+    /*
+    Notes:杨小兵-2025-07-18
+
+    1、因为 GGUF 格式文件中要求数据部分对齐，因此要考虑任何填充，如果知道了填充的大小，那么就可以将文件指针移动到数据部分的开始位置。
+    这样便可以对存储在 GGUF 格式文件中的张量数据进行正确的读取和处理。
+    2、下列 fseek 函数的目的就是为了将文件指针移动到数据部分的开始位置，这样便可以对存储在 GGUF 格式文件中的张量数据进行正确的读取和处理。
+    具体的实现细节目前不需要进行考虑，只需要知道其达到的效果即可。
+    */
     if (fseek(file, GGML_PAD(ftell(file), ctx->alignment), SEEK_SET) != 0) {
+        //  使用 fprintf 函数输出错误信息，表示无法将文件指针移动到数据部分的开始位置。
         fprintf(stderr, "%s: failed to seek to beginning of data section\n", __func__);
+        //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
         gguf_free(ctx);
+        //  直接返回。
         return nullptr;
     }
 
     // store the current file offset - this is where the data section starts
+    //  记录当前文件指针的位置，即数据部分的开始位置。
     ctx->offset = ftell(file);
 
     // compute the total size of the data section, taking into account the alignment
+    //  计算数据部分的总大小，同时考虑对齐。
     {
+        //  将 ctx 对象中的 size 成员设置成零。
         ctx->size = 0;
+        //  循环对每一个张量信息中的数据部分大小进行计算
         for (size_t i = 0; i < ctx->info.size(); ++i) {
+            //  创建一个引用对象，即 ctx 对象中的当前张量信息，需要注意的是这里的 ctx 就是 GGUF 格式文件被自定义结构之后的“内存表示”。
             const gguf_tensor_info & ti = ctx->info[i];
+            //  如果当前张量信息中的偏移量和 ctx 对象中的 size 大小是不相等的，那么输出错误信息。
             if (ti.offset != ctx->size) {
+                //  使用 fprintf 函数输出错误信息，表示当前张量信息中的偏移量和 ctx 对象中的 size 大小不相等。
                 fprintf(stderr, "%s: tensor '%s' has offset %" PRIu64 ", expected %zu\n",
                     __func__, ti.t.name, ti.offset, ctx->size);
                 fprintf(stderr, "%s: failed to read tensor data\n", __func__);
+                //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
                 gguf_free(ctx);
+                //  直接返回。
                 return nullptr;
             }
+            /*
+                将当前张量信息中的数据部分大小（字节数、考虑对齐）累加到 ctx 对象中的 size 成员中，从这里可以知道 ctx 中的 size 用来表示
+            GGUF 格式文件中的张量数据部分的总大小。
+            */
             ctx->size += GGML_PAD(ggml_nbytes(&ti.t), ctx->alignment);
         }
     }
+    /*
+    Notes:杨小兵-2025-07-16
+
+    1、计算 GGUF 格式文件中所有张量的数据部分的总大小。
+    2、注意
+        2.1 这里的大小指的是字节数量。
+        2.2 考虑对齐。
+    */
 
     // load the tensor data only if requested
+    //  直接当真正需要使用张量数据的时候才加载具体的张量数据，这算是一种延迟加载的策略。
     if (params.ctx != nullptr) {
+        /*
+        Notes:杨小兵-2025-07-18
+
+        1、当传入的 gguf_context 标志为 no_alloc（不分配内存）时，仅仅创建一组“空”的张量（ggml_tensor 结构体），但不去读取或加载它们
+        的实际数据。否则（即允许分配内存的情况），会把整个二进制大块数据（binary blob）读入到 ggml_context 管理的内存中，并让每个张量
+        的 data 指针指向这块大数据中对应存储它们数据的位置。
+        2、“Blob” 在这里指的是一整块连续的二进制数据区域，用来一次性存放模型的所有权重、偏置等张量数据。它本质上只是一个 uint8_t*（字节
+        指针），后面通过偏移量来定位每个张量的起始地址和大小。
+        */
+
         // if the provided gguf_context is no_alloc, then we create "empty" tensors and do not read the binary blob
         // otherwise, we load the binary blob into the created ggml_context as well, and point the "data" members of
         //   the ggml_tensor structs to the appropriate locations in the binary blob
 
         // compute the exact size needed for the new ggml_context
+        //  计算在分配 ggml_context 所需要内存的确切大小，张量元数据本身所需要的字节大小 + 张量数据部分的字节大小
         const size_t mem_size =
             params.no_alloc ?
             (n_tensors    )*ggml_tensor_overhead() :
             (n_tensors + 1)*ggml_tensor_overhead() + ctx->size;
 
+        //  创建一个临时的 ggml_init_params 结构体用来存储 GGUF 格式文件中张量数据部分所需要的大小、缓冲区、内存分配标志。
         struct ggml_init_params pdata = {
             /*mem_size   =*/ mem_size,
             /*mem_buffer =*/ nullptr,
