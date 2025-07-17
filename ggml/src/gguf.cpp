@@ -670,49 +670,88 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         */
         GGML_ASSERT(int64_t(ctx->kv.size()) == n_kv);
 
+        //  在 GGUF 格式文件的上下文对象中查找是否存在 general.alignment 名称的 Key 值，如果存在返回其在 KV 对字段中的索引，反之则返回 -1
         const int alignment_idx = gguf_find_key(ctx, GGUF_KEY_GENERAL_ALIGNMENT);
+        /*
+            如果没有在 GGUF 格式文件的上下文对象中查找到 general.alignment 名称的 Key 值，那么需要更新 GGUF 格式文件的上下文对象中的
+        alignment 字段值。
+        */
         ctx->alignment = alignment_idx == -1 ? GGUF_DEFAULT_ALIGNMENT : gguf_get_val_u32(ctx, alignment_idx);
 
+        /*
+        Notes:杨小兵-2025-07-17
+
+        1、如果 GGUF 格式文件的上下文对象中的 alignment 字段为零或者
+        2、假设 alignment 字段值为 3，则其二进制表示为 11 ，alignment - 1 字段值为 2 ，其二进制表示为 10，那么 alignment
+        和 alignment - 1 之间的逐位与为 01，其结果不等于零，说明 alignment 字段值不是 2 的幂次方，可以通过具体的位级表示
+        来验证该算法。
+        3、这里学习到了一种检查一个数是否为 2 的幂次方的算法：如果一个数 n 的二进制表示中只有一个位为 1，那么 n & (n - 1) 的结果为 0。
+            3.1 情况一：如果 n 为 0，则 n & (n - 1) 的结果为 0。
+            3.2 情况二：如果 n 为 2 的幂次方，则 n & (n - 1) 的结果为 0。
+        */
         if (ctx->alignment == 0 || (ctx->alignment & (ctx->alignment - 1)) != 0) {
+            //  使用 fprintf 函数输出错误信息，表示 GGUF 格式文件的上下文对象中的 alignment 字段值不是 2 的幂次方。
             fprintf(stderr, "%s: alignment %zu is not a power of 2\n", __func__, ctx->alignment);
+            //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
             gguf_free(ctx);
+            //  直接返回
             return nullptr;
         }
     }
     /*
     Notes:杨小兵-2025-07-16
 
-    1、
+    1、上述代码块的整体作用就是读取 GGUF 格式文件中的 key-value 对，并且将其存储到 ctx->kv 中，同时检查 GGUF 格式文件的上下文对象中的
+    alignment 字段值是否为 2 的幂次方，如果不是则输出错误信息并释放已经分配的 gguf_context 对象 ctx。
     */
 
     // read the tensor info
+    //  如果前面读取 GGUF 格式文件中的前四个字节内容、版本信息、张量数量字段和 KV 对数量字段成功，则循环处理每一个张量信息字段。
     for (int64_t i = 0; ok && i < n_tensors; ++i) {
+        //  创建一个 gguf_tensor_info 结构体变量 info，用来存储当前处理的张量信息。
         struct gguf_tensor_info info;
 
         // tensor name
         {
+            //  创建一个字符串临时变量 name，用来存储当前处理的张量名称。
             std::string name;
+            //  使用 C++ 中的 try-catch 语句来捕获可能发生的异常。
             try {
+                //  如果当前 GGUF 格式文件中的信息经过前面的读取步骤成功，并且读取当前张量名称成功，则将其存储到 name 字符串变量中。
                 ok = ok && gr.read(name);
             } catch (std::length_error &) {
+                //  如果捕获到 std::length_error 异常，则输出错误信息，表示读取张量名称时发生了长度错误。
                 fprintf(stderr, "%s: encountered length_error while reading tensor name %" PRIi64 "\n", __func__, i);
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
             } catch (std::bad_alloc &) {
+                //  如果捕获到 std::bad_alloc 异常，则输出错误信息，表示读取张量名称时发生了内存分配错误。
                 fprintf(stderr, "%s: encountered bad_alloc error while reading tensor name %" PRIi64 "\n", __func__, i);
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
             }
+            //  如果读取到 GGUF 格式文件中的张量名称长度超过了 GGML_MAX_NAME，则输出错误信息。
             if (name.length() >= GGML_MAX_NAME) {
+                //  使用 fprintf 函数输出错误信息，表示当前张量名称长度超过了 GGML_MAX_NAME。
                 fprintf(stderr, "%s: tensor name %" PRIi64 " is too long: %zu >= %d\n", __func__, i, name.length(), GGML_MAX_NAME);
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
+                //  直接跳出当前循环。
                 break;
             }
+            //  代码执行到这里，说明已经成功读取 GGUF 格式文件中的当前张量名称，将其存储到临时张量信息结构体变量 info 中。
             ggml_set_name(&info.t, name.c_str());
 
             // make sure there are no duplicate tensor names
+            //  如果 GGUF 格式文件经过前面的读取步骤成功，并且在已经从 GGUF 格式文件中读取的张量信息中查找是否有重复的张量名称。
             for (int64_t j = 0; ok && j < i; ++j) {
+                //  检查当前从 GGUF 格式文件中读取的张量名称是否与之前从 GGUF 格式文件中读取的张量名称重复，如果重复则输出错误信息。
                 if (strcmp(info.t.name, ctx->info[j].t.name) == 0) {
+                    //  使用 fprintf 函数输出错误信息，表示当前张量名称与之前的张量名称重复。
                     fprintf(stderr, "%s: duplicate tensor name '%s' for tensors %" PRIi64 " and %" PRIi64 "\n", __func__, info.t.name, j, i);
+                    //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                     ok = false;
+                    //  直接跳出当前循环。
                     break;
                 }
             }
@@ -720,41 +759,84 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         if (!ok) {
             break;
         }
+        /*
+        Notes:杨小兵-2025-07-16
+
+        1、从 GGUF 格式文件中读取出当前张量名称，并且检查该张量名称是否符合 GGML_MAX_NAME 的限制，同时检查该张量名称是否与之前
+        的张量名称重复。在这个读取过程中，指向 GGUF 格式文件相关的指针将会随之向后移动。如果一切读取顺利的话，那么将会把从 GGUF
+        格式文件中读取的当前张量名称存储到临时张量信息结构体变量 info 中。
+        */
 
         // tensor shape
         {
+            //  创建一个临时变量 n_dims 用来存储当前张量的维度数量，并且将其初始化为 -1，表示当前张量的维度数量未知。
             uint32_t n_dims = -1;
+            //  如果当前 GGUF 格式文件中的信息经过前面的读取步骤成功，并且读取当前张量的维度数量成功，则将其存储到 n_dims 变量中。
             ok = ok && gr.read(n_dims);
+            //  如果从 GGUF 格式文件中读取的张量维度数量大于 GGML_MAX_DIMS，则输出错误信息。
             if (n_dims > GGML_MAX_DIMS) {
+                //  使用 fprintf 函数输出错误信息，表示当前张量的维度数量超过了 GGML_MAX_DIMS。
                 fprintf(stderr, "%s: tensor '%s' has invalid number of dimensions: %" PRIu32 " > %" PRIu32 "\n",
                     __func__, info.t.name, n_dims, GGML_MAX_DIMS);
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
+                //  跳出读取张量信息的循环
                 break;
             }
+            //  如果当前 GGUF 格式文件中的信息经过前面的读取步骤成功，循环读取当前张量各个维度的元素数量，并且将其存储到 info.t.ne 中。
             for (uint32_t j = 0; ok && j < GGML_MAX_DIMS; ++j) {
+                //  将临时张量信息结构体变量 info 中的张量当前维度的元素数量初始化为 1，表示当前维度的元素数量为 1。
                 info.t.ne[j] = 1;
+                //  如果当前索引小于 n_dims，则表示当前维度的元素数量有效，继续读取当前维度的元素数量。
                 if (j < n_dims) {
+                    //  如果当前 GGUF 格式文件中的信息经过前面的读取步骤成功，并且读取当前维度的元素数量成功，则将其存储到 info.t.ne[j] 中。
                     ok = ok && gr.read(info.t.ne[j]);
                 }
 
                 // check that all ne are non-negative
+                //  对于每个维度的元素数量进行检查，如果当前维度的元素数量小于 0，则输出错误信息。
                 if (info.t.ne[j] < 0) {
+                    //  使用 fprintf 函数输出错误信息，表示当前张量的维度 j 的元素数量小于 0。
                     fprintf(stderr, "%s: tensor '%s' dimension %" PRIu32 " has invalid number of elements: %" PRIi64 " < 0\n",
                         __func__, info.t.name, j, info.t.ne[j]);
+                    //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                     ok = false;
+                    //  跳出读取当前张量各个维度元素数量的循环。
                     break;
                 }
             }
 
+            /*
+            Notes:杨小兵-2025-07-17
+
+            1、在 GGML 内部，一个张量使用 ne[4] 数组存放各维度的元素个数（Number of Elements），nb[4] 存放各维度的字节步长
+            （Number of Bytes per stride），因此正确地解析 ne 是后续计算张量大小、定位数据偏移的前提。
+            2、GGUF 解析函数 gguf_init_from_file_impl 会逐个读取文件中的张量描述并存入 info.t.ne[]；随后才会用 ggml_nbytes()
+            之类的工具把“元素数 × 单元素字节数”累加到总模型大小里。
+            3、溢出检测技巧
+                3.1 对正整数 a × b 进行安全乘法，常见写法是先判断 a > MAX/b；若为真则乘法一定溢出。
+                3.2 正整数乘法溢出检测技巧在 CSAPP 中有介绍，可以回顾复习。
+            4、为什么必须这样做？
+                4.1 张量维度来自文件，完全可能被恶意或损坏的 GGUF 设置成极大值。
+                4.2 如果不做溢出判断，ne[0] * ne[1] * … 在 64 位有符号整数上回卷为很小的正数；后面根据该“假尺寸”去 malloc，得到
+                的缓冲区比真实数据小得多，写入/读取即发生越界。
+                4.3 2025-07-10 官方发布的安全公告就披露了 “GGUF 解析整数溢出→堆缓冲区越界” 漏洞，根因正是累积大小时缺乏上限检测。
+                当前片段正是修补漏洞的防御代码。
+            5、这段 GGUF 解析代码通过除法-再-比较的经典技巧，在读文件时预判张量维度乘积是否会超出 int64_t 的表达范围，提前报错并
+            终止解析，避免了后续因为整数溢出导致的内存分配错误和潜在的安全漏洞。
+            */
             // check that the total number of elements is representable
             if (ok && ((INT64_MAX/info.t.ne[1] <= info.t.ne[0]) ||
                        (INT64_MAX/info.t.ne[2] <= info.t.ne[0]*info.t.ne[1]) ||
                        (INT64_MAX/info.t.ne[3] <= info.t.ne[0]*info.t.ne[1]*info.t.ne[2]))) {
 
+                //  使用 fprintf 函数输出错误信息，表示当前张量的总元素数量超过了 int64_t 的最大值。
                 fprintf(stderr, "%s: total number of elements in tensor '%s' with shape "
                     "(%" PRIi64 ", %" PRIi64 ", %" PRIi64 ", %" PRIi64 ") is >= %" PRIi64 "\n",
                     __func__, info.t.name, info.t.ne[0], info.t.ne[1], info.t.ne[2], info.t.ne[3], INT64_MAX);
+                //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
                 ok = false;
+                //  跳出读取张量信息的循环。
                 break;
             }
         }
@@ -801,6 +883,11 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
 
         ctx->info.push_back(info);
     }
+    /*
+    Notes:杨小兵-2025-07-16
+
+    1、待总结
+    */
 
     if (!ok) {
         fprintf(stderr, "%s: failed to read tensor info\n", __func__);
