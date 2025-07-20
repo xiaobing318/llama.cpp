@@ -417,17 +417,29 @@ bool gguf_read_emplace_helper(const struct gguf_reader & gr, std::vector<struct 
     return true;
 }
 
+/*
+Notes:杨小兵-2025-07-20
+
+1、这个函数中的 gguf_init_from_file_impl 函数是一个实现函数，用于从文件中初始化 GGUF 上下文。
+2、函数中的有些实现细节还没有完全理解清楚，可能需要进一步的学习和实践。
+*/
 struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params) {
+    //  在当前函数作用域中创建一个结构体常量类型的 gguf_reader 对象 gr，用于读取 GGUF 格式文件。
     const struct gguf_reader gr(file);
+    //  在当前函数作用域中创建一个临时的、指针类型的 ctx 变量，用来指向新创建的 gguf_context 对象，即保存新创建的 gguf_context 对象的地址。
     struct gguf_context * ctx = new gguf_context;
 
+    //  在当前函数作用域中创建一个布尔类型的变量，用来表示读取 GGUF 格式文件的状态情况，如果读取成功则为 true，否则为 false。
     bool ok = true;
     /*
-    Notes:杨小兵-2025-07-16
+    Notes:杨小兵-2025-07-20
 
     1、使用参数一 file 创建一个 gguf_reader 对象，从而使用其成员函数读取解析 GGUF 文件。
-    2、创建一个 gguf_context 对象 ctx，用于存储 GGUF 文件的上下文信息，使用指针 ctx 指向该对象。
+    2、创建一个 gguf_context 对象 ctx，用于存储 GGUF 文件的上下文信息，使用指针 ctx 指向该对象，将 GGUF 格式文件中保存的信息读取到内存中
+    自定义的 C++ 对象。
     */
+
+
     // file magic
     {
         //  创建一个字节类型的动态数组用来保存从 GGUF 格式文件中读取出来的前四个字节内容。
@@ -459,9 +471,10 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         }
     }
     /*
-    Notes:杨小兵-2025-07-16
+    Notes:杨小兵-2025-07-20
 
-    1、这段代码块的整体作用就是读取 GGUF 格式文件的前四个字节内容，并检查这些字节是否符合预期的 GGUF 四个字符。
+    1、这段代码块的整体作用就是读取 GGUF 格式文件的前四个字节内容，并检查这些字节是否符合预期的 GGUF 四个字符，其目的就是检查文件的 magic
+    number 是否为 GGUF ？但是不将读取的前四个字节内容保存到 ctx 中。
     */
 
     // header
@@ -484,6 +497,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
                 __func__, ctx->version, GGUF_VERSION);
             ok = false;
         }
+        //  如果从 GGUF 格式文件中读取的版本信息不是上述两种情况，则继续执行后续的代码。
     } else {
         //  设置变量 ok 为 false，表示读取 GGUF 格式文件的版本信息失败。
         ok = false;
@@ -503,6 +517,8 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         1、static_assert(condition, message);
             1.1 condition：必须是编译时常量表达式，结果为bool类型
             1.2 message：字符串字面量，当断言失败时显示的错误消息
+        2、 C++ 中编译时期将会进行的断言检查，确保 sizeof(size_t) 小于等于 8 且 sizeof(gguf_tensor_info) 大于等于 2，不会体现在最终
+        代码层面。
         */
         static_assert(sizeof(size_t) <= 8 && sizeof(gguf_tensor_info) >= 2, "int64_t insufficient for indexing");
         //  检查从 GGUF 格式文件中读取的张量数量是否在合法范围内，即大于等于 0 且小于等于 SIZE_MAX/sizeof(gguf_tensor_info)。
@@ -510,10 +526,11 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             //  如果从 GGUF 格式文件中读取的张量数量不在合法范围内，则输出错误信息。
             fprintf(stderr, "%s: number of tensors is %" PRIi64 " but must be in [0, %zu]\n",
                 __func__, n_tensors, SIZE_MAX/sizeof(gguf_tensor_info));
-            //  设置变量 ok 为 false，表示读取 GGUF 格式文件的版本信息失败。
+            //  设置变量 ok 为 false，表示读取 GGUF 格式文件的信息失败。
             ok = false;
         }
     } else {
+        //  如果读取 GGUF 格式文件中的张量数量字段失败，则将表示读取 GGUF 格式文件信息状态的变量设置为 false，表示读取 GGUF 格式文件失败。
         ok = false;
     }
     /*
@@ -531,6 +548,8 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         1、static_assert(condition, message);
             1.1 condition：必须是编译时常量表达式，结果为bool类型
             1.2 message：字符串字面量，当断言失败时显示的错误消息
+        2、C++ 中编译时期将会进行的断言检查，确保 sizeof(size_t) 小于等于 8 且 sizeof(gguf_tensor_info) 大于等于 2，不会体现
+        在最终代码层面。
         */
         static_assert(sizeof(size_t) <= 8 && sizeof(gguf_tensor_info) >= 2, "int64_t insufficient for indexing");
         //  检查从 GGUF 格式文件中读取的 KV 对数量是否在合法范围内，即大于等于 0 且小于等于 SIZE_MAX/sizeof(gguf_kv)。
@@ -542,6 +561,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             ok = false;
         }
     } else {
+        //  如果读取 GGUF 格式文件中的 KV 对数量字段失败，则将表示读取 GGUF 格式文件信息状态的变量设置为 false，表示读取 GGUF 格式文件失败。
         ok = false;
     }
     /*
@@ -555,7 +575,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
     输出错误信息、释放已经分配的 gguf_context 对象 ctx，并返回 nullptr。
     */
     if (!ok) {
-        //  使用 fprintf 函数输出错误信息，表示读取 GGUF 格式文件的头部信息失败。
+        //  使用 fprintf 函数输出错误信息，表示读取 GGUF 格式文件的头部信息失败，头部信息包含：魔数、版本信息、张量数量和 KV 对数量字段。
         fprintf(stderr, "%s: failed to read header\n", __func__);
         //  使用自定义函数 gguf_free 释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
         gguf_free(ctx);
@@ -571,13 +591,13 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
 
     // KV pairs 
     {
-        //  当前 GGUF 格式文件的头部信息读取成功，那么循环处理每一个 KV 对字段。
+        //  代码执行到这里说明当前 GGUF 格式文件的头部信息读取成功，那么循环处理每一个 KV 对字段。
         for (int64_t i = 0; ok && i < n_kv; ++i) {
-            //  创建一个字符串临时变量用来存储 KV 对字段中的 key 值。
+            //  创建一个字符串类型的变量用来存储当前 KV 对字段中的 key 值。
             std::string key;
-            /*  创建一个枚举类型的变量并且将其初始化为底层实现最大值，因为 -1 = 0xffffffff（这里假设枚举类型使用 32 bit实现的）如果解释
-            成无符号整数则是其能表示的最大值。目前的这个理解应该是错误的，对于 C++ 17 来说如果枚举声明中没有对应的值，那么默认情况下则是
-            无效的。
+            /*
+                创建一个枚举类型的变量并且将其初始化为无效值，对于 C++ 17 来说如果枚举声明中没有对应的值，那么默认情况下则是无效的，这里
+            不需要去纠结具体的语法问题，只需要知道达到的效果。
             */
             gguf_type   type     = gguf_type(-1);
             //  创建一个布尔类型的变量 is_array 并且将其初始化为 false，表示当前 KV 对字段中的值不是数组类型。
@@ -631,7 +651,11 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             if (!ok) {
                 break;
             }
-            //  根据不同的类型信息 type，调用不同的模板函数 gguf_read_emplace_helper 来读取当前 KV 对字段中的值，并且将其存储到 ctx->kv 中。
+            /*
+                根据不同的类型信息 type，调用不同的模板函数 gguf_read_emplace_helper 来读取当前 KV 对字段中的值，并且将其存储到 ctx->kv 中，
+            这里的 gguf_read_emplace_helper 函数就是将从 GGUF 格式文件中读取的 KV 对字段中的值存储到 ctx 中，即内存中表示 GGUF 格式文件的
+            C++ 对象。
+            */
             switch (type) {
                 case GGUF_TYPE_UINT8:   ok = ok && gguf_read_emplace_helper<uint8_t>    (gr, ctx->kv, key, is_array, n); break;
                 case GGUF_TYPE_INT8:    ok = ok && gguf_read_emplace_helper<int8_t>     (gr, ctx->kv, key, is_array, n); break;
@@ -655,9 +679,9 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
                     } break;
             }
         }
-        //  如果读取 GGUF 格式文件状态为false，则表示读取 GGUF 格式文件中当前 KV 对字段失败，输出日志信息、释放资源并返回 nullptr。
+        //  如果读取 GGUF 格式文件状态为false，则表示读取 GGUF 格式文件中当前 KV 对字段失败。
         if (!ok) {
-            //  使用 fprintf 函数输出错误信息，表示读取 GGUF 格式文件中的 key-value 对失败。
+            //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示读取 GGUF 格式文件中的 key-value 对失败。
             fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
             //  失败后释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
             gguf_free(ctx);
@@ -670,7 +694,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         */
         GGML_ASSERT(int64_t(ctx->kv.size()) == n_kv);
 
-        //  在 GGUF 格式文件的上下文对象中查找是否存在 general.alignment 名称的 Key 值，如果存在返回其在 KV 对字段中的索引，反之则返回 -1
+        //  在 GGUF 格式文件的上下文对象中查找是否存在 general.alignment 名称的 Key 值，如果存在返回其在 KV 对字段中的索引，反之则返回 -1。
         const int alignment_idx = gguf_find_key(ctx, GGUF_KEY_GENERAL_ALIGNMENT);
         /*
             如果没有在 GGUF 格式文件的上下文对象中查找到 general.alignment 名称的 Key 值，那么需要更新 GGUF 格式文件的上下文对象中的
@@ -679,7 +703,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         ctx->alignment = alignment_idx == -1 ? GGUF_DEFAULT_ALIGNMENT : gguf_get_val_u32(ctx, alignment_idx);
 
         /*
-        Notes:杨小兵-2025-07-17
+        Notes:杨小兵-2025-07-20
 
         1、如果 GGUF 格式文件的上下文对象中的 alignment 字段为零或者
         2、假设 alignment 字段值为 3，则其二进制表示为 11 ，alignment - 1 字段值为 2 ，其二进制表示为 10，那么 alignment
@@ -688,13 +712,16 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         3、这里学习到了一种检查一个数是否为 2 的幂次方的算法：如果一个数 n 的二进制表示中只有一个位为 1，那么 n & (n - 1) 的结果为 0。
             3.1 情况一：如果 n 为 0，则 n & (n - 1) 的结果为 0。
             3.2 情况二：如果 n 为 2 的幂次方，则 n & (n - 1) 的结果为 0。
+        4、“alignment（对齐）”指的是把张量数据与文件或内存地址的某个固定边界（通常 32 或 64 字节）对齐。这样做既能让 CPU/GPU 一次取到
+        完整 SIMD 块、保证量化块整数倍读取，也能让同一 GGUF 文件在不同系统上被 mmap / 直接 SEEK-READ 而无需逐张量 copy。这样做的最终
+        目的就是为了能够提高数据读取的效率和性能，尤其是在处理大规模数据时。
         */
         if (ctx->alignment == 0 || (ctx->alignment & (ctx->alignment - 1)) != 0) {
-            //  使用 fprintf 函数输出错误信息，表示 GGUF 格式文件的上下文对象中的 alignment 字段值不是 2 的幂次方。
+            //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示 GGUF 格式文件的上下文对象中的 alignment 字段值不是 2 的幂次方。
             fprintf(stderr, "%s: alignment %zu is not a power of 2\n", __func__, ctx->alignment);
             //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
             gguf_free(ctx);
-            //  直接返回
+            //  直接返回。
             return nullptr;
         }
     }
@@ -713,7 +740,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
 
         // tensor name
         {
-            //  创建一个字符串临时变量 name，用来存储当前处理的张量名称。
+            //  创建一个字符串类型的变量 name，用来存储当前处理的张量名称。
             std::string name;
             //  使用 C++ 中的 try-catch 语句来捕获可能发生的异常。
             try {
@@ -757,6 +784,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             }
         }
         if (!ok) {
+            //  如果从 GGUF 格式文件中读取当前张量名称失败，则跳出读取张量信息的循环。
             break;
         }
         /*
@@ -849,6 +877,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
 
         1、从 GGUF 格式文件中读取出当前张量的维度数量、各个维度的元素数量，并且检查这些元素数量是否符合 GGML_MAX_DIMS 的限制。从整体上
         来看就是为了从 GGUF 格式文件中读取出当前张量的形状信息，并且检查这些形状信息是否符合 GGML_MAX_DIMS 的限制。
+        2、这里有关张量的步长等计算还没有完全理解透彻，后续会继续学习相关内容。
         */
 
         // tensor type
@@ -859,7 +888,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             // check that tensor type is within defined range
             //  如果从 GGUF 格式文件中的读取的当前张量类型信息不在 GGML_TYPE_COUNT 的范围内，则输出错误信息。
             if (info.t.type < 0 || info.t.type >= GGML_TYPE_COUNT) {
-                //  使用 fprintf 函数输出错误信息，表示当前张量的类型信息不在 GGML_TYPE_COUNT 的范围内。
+                //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示当前张量的类型信息不在 GGML_TYPE_COUNT 的范围内。
                 fprintf(stderr, "%s: tensor '%s' has invalid ggml type %d (%s)\n",
                     __func__, info.t.name, info.t.type, ggml_type_name(info.t.type));
                 //  将 GGUF 格式文件读取状态设置成 false，表示读取 GGUF 格式文件中的信息失败。
@@ -875,7 +904,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             // check that row size is divisible by block size
             //  如果当前张量类型的块大小为0，或者当前张量的第一个维度的元素数量不是块大小的倍数，则输出错误信息。
             if (blck_size == 0 || info.t.ne[0] % blck_size != 0) {
-                //  使用 fprintf 函数输出错误信息，表示当前张量的第一个维度的元素数量不是块大小的倍数。
+                //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示当前张量的第一个维度的元素数量不是块大小的倍数。
                 fprintf(stderr, "%s: tensor '%s' of type %d (%s) has %" PRId64 " elements per row, "
                     "not a multiple of block size (%" PRId64 ")\n",
                     __func__, info.t.name, (int) info.t.type, ggml_type_name(info.t.type), info.t.ne[0], blck_size);
@@ -928,7 +957,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
 
     //  如果读取 GGUF 格式文件的状态不是 true ，那么输出错误信息并跳出读取张量信息的循环。
     if (!ok) {
-        //  使用 fprintf 函数输出错误信息，表示读取 GGUF 格式文件中的张量信息失败。
+        //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示读取 GGUF 格式文件中的张量信息失败。
         fprintf(stderr, "%s: failed to read tensor info\n", __func__);
         //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
         gguf_free(ctx);
@@ -1000,14 +1029,21 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
     */
 
     // load the tensor data only if requested
-    //  直接当真正需要使用张量数据的时候才加载具体的张量数据，这算是一种延迟加载的策略。
+    /*
+        直接当真正需要使用张量数据的时候才加载具体的张量数据，这算是一种延迟加载的策略，参数 params 相当于是一种配置，用来控制读取 GGUF 格式
+    文件过程中的行为。
+    */
     if (params.ctx != nullptr) {
         /*
-        Notes:杨小兵-2025-07-18
+        Notes:杨小兵-2025-07-20
 
         1、当传入的 gguf_context 标志为 no_alloc（不分配内存）时，仅仅创建一组“空”的张量（ggml_tensor 结构体），但不去读取或加载它们
         的实际数据。否则（即允许分配内存的情况），会把整个二进制大块数据（binary blob）读入到 ggml_context 管理的内存中，并让每个张量
         的 data 指针指向这块大数据中对应存储它们数据的位置。
+            1.1 这里的一个关键点是 GGUF 格式文件中的张量数据是以二进制 blob 的形式存储的，那么为了将其读取到内存中，就需要创建一个自定义
+        的 C++ 对象，即 ggml_context，用来表示张量内存表示。这个 ggml_context 对象会包含所有张量的元数据（如名称、形状、类型等）
+        以及实际的数据部分（即二进制 blob）。
+            1.2 ggml_context 就是当前 GGUF 格式文件中所有张量的内存表示，它包含了所有张量的元数据和实际的数据部分？
         2、“Blob” 在这里指的是一整块连续的二进制数据区域，用来一次性存放模型的所有权重、偏置等张量数据。它本质上只是一个 uint8_t*（字节
         指针），后面通过偏移量来定位每个张量的起始地址和大小。
         */
@@ -1017,86 +1053,131 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
         //   the ggml_tensor structs to the appropriate locations in the binary blob
 
         // compute the exact size needed for the new ggml_context
-        //  计算在分配 ggml_context 所需要内存的确切大小，张量元数据本身所需要的字节大小 + 张量数据部分的字节大小
+
+        /*
+        Notes:杨小兵-2025-07-20
+
+        1、计算在分配 ggml_context 所需要内存的确切大小，张量元数据本身所需要的字节大小 + 张量数据部分的字节大小。
+        2、这里的 mem_size 变量表示的是 ggml_context 所需要的内存大小，根据不同的需求分为两种情况：
+            2.1 如果 no_alloc 标志为 true，则表示不分配内存，仅仅创建一组“空”的张量（ggml_tensor 结构体），那么 mem_size 就是
+            n_tensors * ggml_tensor_overhead()，即每个张量的元数据所需要的字节大小乘以张量数量。
+            2.2 如果 no_alloc 标志为 false，则表示需要分配内存来存储张量数据，那么 mem_size 就是 (n_tensors + 1) * ggml_tensor_overhead() + ctx->size，
+            即每个张量的元数据所需要的字节大小乘以张量数量加上 ctx->size（即所有张量的数据部分的总大小）。
+        3、从 mem_size 变量的计算方式可以看出 ggml_context 对象表示的是 GGUF 格式文件中的所有张量内存表示而不是某一个张量的内存表示。
+        */
         const size_t mem_size =
             params.no_alloc ?
             (n_tensors    )*ggml_tensor_overhead() :
             (n_tensors + 1)*ggml_tensor_overhead() + ctx->size;
 
-        //  创建一个临时的 ggml_init_params 结构体用来存储 GGUF 格式文件中张量数据部分所需要的大小、缓冲区、内存分配标志。
+        //  创建一个临时的 ggml_init_params 结构体用来保存初始化 ggml_context 所需要的参数。
         struct ggml_init_params pdata = {
             /*mem_size   =*/ mem_size,
             /*mem_buffer =*/ nullptr,
             /*no_alloc   =*/ params.no_alloc,
         };
 
+        //  使用 ggml_init 函数来初始化 ggml_context，并且将其存储到传入的 params.ctx 中。
         *params.ctx = ggml_init(pdata);
+        //  如果初始化 ggml_context 失败，则输出错误信息并释放已经分配的 gguf_context 对象 ctx。
         if (*params.ctx == nullptr) {
+            //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示初始化 ggml_context 失败。
             fprintf(stderr, "%s: failed to initialize ggml context for storing tensors\n", __func__);
+            //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
             gguf_free(ctx);
+            //  直接返回。
             return nullptr;
         }
 
+        //  代码执行到这里，说明已经成功初始化 ggml_context，创建一个临时变量 ctx_data 用来保存 ggml_context 的指针。
         struct ggml_context * ctx_data = *params.ctx;
 
+        //  创建一个临时变量用来保存执行张量数据在内存中的位置，初始值为 nullptr。
         struct ggml_tensor * data = nullptr;
 
+        //  如果 no_alloc 标志不为 true，则表示需要分配内存来存储张量数据。
         if (!params.no_alloc) {
+            //  使用 ggml_new_tensor_1d 函数来创建一个新的张量，张量存储数据的类型是 GGML_TYPE_I8（即 8 位整数），张量的大小为 ctx->size。
             data = ggml_new_tensor_1d(ctx_data, GGML_TYPE_I8, ctx->size);
 
+            //  如果当前 GGUF 格式文件经过前面的读取步骤成功，并且创建张量 data 成功，那么将 GGUF 格式文件读取状态设置为 true。
             ok = ok && data != nullptr;
 
+            //  如果 GGUF 格式文件读取状态是 true，则设置张量 data 的名称为 "GGUF tensor data binary blob"。
             if (ok) {
+                //  使用 ggml_set_name 函数来设置张量 data 的名称为 "GGUF tensor data binary blob"。
                 ggml_set_name(data, "GGUF tensor data binary blob");
             }
 
             // read the binary blob with the tensor data
+            //  如果当前 GGUF 格式文件读取状态为 true，并且从 GGUF 格式文件中读取张量数据成功，则将读取的张量数据存储到 data->data 中。
             ok = ok && gr.read(data->data, ctx->size);
 
+            //  如果当前 GGUF 格式文件读取状态不为 true 。
             if (!ok) {
+                //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示读取张量数据的二进制 blob 失败。
                 fprintf(stderr, "%s: failed to read tensor data binary blob\n", __func__);
+                //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
                 ggml_free(ctx_data);
+                //  将传入的 params.ctx 设置为 nullptr，表示没有有效的 ggml_context。
                 *params.ctx = nullptr;
+                //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
                 gguf_free(ctx);
+                //  直接返回。
                 return nullptr;
             }
-
+            //  代码执行到这里，说明已经成功从 GGUF 格式文件中读取张量数据，并且将其存储到 data->data 中。
             ctx->data = data->data;
         }
-
+        //  使用 ggml_set_no_alloc 函数来设置 ggml_context 的 no_alloc 标志为 true，表示不分配内存。
         ggml_set_no_alloc(ctx_data, true);
 
         // create the tensors
+        //  循环在内存中创建每个张量所需要的 ggml_tensor 结构体，并且将其存储到 ctx->info 中。
         for (size_t i = 0; i < ctx->info.size(); ++i) {
+            //  创建一个临时变量 info 用来引用 ctx->info 中的第 i 个张量信息，方便后续操作使用。
             const struct gguf_tensor_info & info = ctx->info[i];
 
+            //  创建一个临时指针 cur 用来指向新创建的 ggml_tensor 结构体，使用 ggml_new_tensor 函数来创建一个新的张量。
             struct ggml_tensor * cur = ggml_new_tensor(ctx_data, info.t.type, GGML_MAX_DIMS, info.t.ne);
 
+            //  如果当前 GGUF 格式文件读取状态为 true，并且新创建的张量 cur 不为 nullptr，则将当前 GGUF 格式文件读取状态设置为 true。
             ok = ok && cur != nullptr;
-
+            //  如果当前 GGUF 格式文件读取状态不为 true，则直接跳出当前循环。
             if (!ok) {
                 break;
             }
 
+            //  使用 ggml_set_name 函数设置 cur 指向的张量的名称为 info.t.name，即当前张量信息中的名称。
             ggml_set_name(cur, info.t.name);
 
             // point the data member to the appropriate location in the binary blob using the tensor info
+            //  如果参数 params.no_alloc 为 false，则表示需要分配内存来存储张量数据。
             if (!params.no_alloc) {
+                //  将 cur 指向的张量的 data 成员指向 data->data + info.offset，即当前张量数据在二进制 blob 中的偏移位置。
                 cur->data = (char *) data->data + info.offset;
             }
         }
 
+        //  如果当前 GGUF 格式文件读取状态不为 true
         if (!ok) {
+            //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示创建张量失败。
             fprintf(stderr, "%s: failed to create tensors\n", __func__);
+            //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
             ggml_free(ctx_data);
+            //  将传入的 params.ctx 设置为 nullptr，表示没有有效的 ggml_context。
             *params.ctx = nullptr;
+            //  释放已经分配的 gguf_context 对象 ctx，整体的目标就是释放资源。
             gguf_free(ctx);
+            //  直接返回。
             return nullptr;
         }
 
+        //  使用 ggml_set_no_alloc 函数来设置 ggml_context 的 no_alloc 标志为 false，表示允许分配内存。
         ggml_set_no_alloc(ctx_data, params.no_alloc);
     }
 
+    //  返回创建的 gguf_context 对象 ctx。
     return ctx;
 }
 
