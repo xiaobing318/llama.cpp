@@ -1182,11 +1182,17 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
 }
 
 struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
-
+    /*
+        通过自定义的 ggml_fopen 函数打开 GGUF 格式文件 fname，并且以二进制模式读取文件内容，返回一个文件指针 file，该自定义函数为了实现
+    在不同的操作系统平台上能够通过相同的接口打开指定文件，即做了跨平台操作。
+    */
     FILE * file = ggml_fopen(fname, "rb");
 
+    //  如果文件指针 file 为 nullptr，表示打开 GGUF 格式文件失败，则输出错误信息并返回 nullptr。
     if (!file) {
+        //  使用 C++ 标准库中的 fprintf 函数输出错误信息，表示打开 GGUF 格式文件失败。
         fprintf(stderr, "%s: failed to open GGUF file '%s'\n", __func__, fname);
+        //  返回 nullptr。
         return nullptr;
     }
     /*
@@ -1197,8 +1203,15 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     2、并且判断文件是否打开成功，如果打开失败，则在错误流中输出日志信息，并且返回 nullptr，反之则继续执行后续的代码。
     */
 
+    /*
+    1、通过 gguf_init_from_file_impl 函数从文件中读取 GGUF 格式的数据，并将其解析为 gguf_context 结构体。
+    2、可以将 GGUF 格式的数据转换为 gguf_context 结构体，这样做是为了在后续的代码中可以方便地使用 gguf_context 结构体来访问
+    GGUF 格式的数据。类似将文件中的数据转换为内存中的数据结构，从而更加方便地进行数据处理和访问。
+    */
     struct gguf_context * result = gguf_init_from_file_impl(file, params);
+    //  使用 C++ 标准库中的函数 fclose 来关闭文件指针 file，释放资源。
     fclose(file);
+    //  返回解析后的 gguf_context 结构体指针 result。
     return result;
     /*
     Notes:杨小兵-2025-07-16
