@@ -3383,19 +3383,44 @@ inline void signal_handler(int signal) {
 }
 
 int main(int argc, char ** argv) {
+    /*
+    Notes:杨小兵-2025-07-24
+
+    1、在 C、C++ 编程语言中，`main` 函数是程序的入口点。它是程序执行的起始位置，操作系统在启动程序时会调用这个函数，上述两个参数 `argc`
+    和 `argv` 分别表示命令行参数的数量和参数列表。    
+    2、对于参数 `argv` 来说是一个指向字符指针数组的指针，每个字符指针指向一个字符串，这些字符串是从命令行传递给程序的参数，在 C 和 C++ 中
+    字符指针指向的字符串是以 `\0` 结尾的。
+    */
+
     // own arguments required by this example
+    /*
+        本示例所需的自身参数，现在不需要知道这些参数的具体细节，只需要知道这些参数将会在 llama-server 例程中被使用，创建一个自定义结构的
+    C++ 对象，在这个 C++ 对象中保存的是 llama-server 例程将会使用的参数，创建该 C++ 对象的时候将会赋值给默认值，会通过后续的命令行解析将
+    手动输入的参数赋值给该 C++ 对象的成员变量。
+    */
     common_params params;
 
+    //  使用 common_params_parse 函数解析命令行参数，参数列表为 argc 和 argv，解析结果将会存储在 params 对象中，
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
 
+    //  common_init 函数用于初始化日志记录系统，并输出构建信息，包括构建号、提交、编译器和目标平台。
     common_init();
 
     // struct that contains llama context and inference
+    /*
+    Notes:杨小兵-2025-07-24
+
+    1、包含 llama 上下文和 llama 推理的结构。
+    2、llama context 指的就是 llama 模型的上下文环境，它包含了模型的参数、状态和其他相关信息。
+    3、llama inference 指的是使用 llama 模型进行推理的过程，即根据输入数据生成输出结果的过程，在这个过程中所需要的一些内容都是包含在其中的。
+    */
     server_context ctx_server;
 
+    //  使用 llama_backend_init 函数初始化 llama 后端，这个函数会设置一些必要的环境和参数。
     llama_backend_init();
+    //  使用llama_numa_init 函数初始化 NUMA（非统一内存访问）支持，这个函数会根据参数中的 NUMA 设置进行初始化。
     llama_numa_init(params.numa);
 
     LOG_INF("system info: n_threads = %d, n_threads_batch = %d, total_threads = %d\n", params.cpuparams.n_threads, params.cpuparams_batch.n_threads, std::thread::hardware_concurrency());
@@ -3483,6 +3508,7 @@ int main(int argc, char ** argv) {
     // Necessary similarity of prompt for slot selection
     ctx_server.slot_prompt_similarity = params.slot_prompt_similarity;
 
+#pragma region "中间件（Middlewares）"
     //
     // Middlewares
     //
@@ -3537,6 +3563,7 @@ int main(int argc, char ** argv) {
         }
         return true;
     };
+#pragma endregion
 
     // register server middlewares
     svr->set_pre_routing_handler([&middleware_validate_api_key, &middleware_server_state](const httplib::Request & req, httplib::Response & res) {
@@ -3558,6 +3585,7 @@ int main(int argc, char ** argv) {
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
+#pragma region "路由处理程序（Route handlers）"
     //
     // Route handlers (or controllers)
     //
@@ -4363,6 +4391,9 @@ int main(int argc, char ** argv) {
         res_ok(res, result->to_json());
     };
 
+#pragma endregion
+
+#pragma region "Router"
     //
     // Router
     //
@@ -4424,6 +4455,9 @@ int main(int argc, char ** argv) {
     // Save & load slots
     svr->Get ("/slots",               handle_slots);
     svr->Post("/slots/:id_slot",      handle_slots_action);
+
+#pragma endregion
+
 
     //
     // Start the server
