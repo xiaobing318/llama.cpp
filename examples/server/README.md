@@ -1,8 +1,31 @@
 # LLaMA.cpp HTTP Server
+```c
+/*
+Notes:杨小兵-2025-07-27
 
+1、在这个文档中将会介绍 llama.cpp 项目中名为 llama-server 即一个 HTTP 类型的服务，这个名为 llama-server 的服务是为了加载、运行 LLM 专门开发出来的，也就是说可以使用这个服务来运行 LLM 从而向外界提供一系列的 HTTP/REST 的服务接口。
+*/
+```
 Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
 
 Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、llama-server 的特点
+    1.1 性能高
+    1.2 轻量化
+    1.3 纯 C/C++ 编写的
+2、依赖三个库
+    2.1 httplib
+    2.2 nlohmann::json
+    2.3 llama.cpp
+3、提供了两部分内容
+    3.1 服务后端：一组 LLM REST APIs
+    3.2 服务前端：可以同服务后端进行交互的简单前端
+*/
+```
 
 **Features:**
  * LLM inference of F16 and quantized models on GPU and CPU
@@ -15,6 +38,22 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * Schema-constrained JSON response format
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggml-org/llama.cpp/issues/4216).
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、特性
+    1.1 F16 和量化后的模型可以在 GPU 和 CPU 上进行推理。
+    1.2 兼容 OpenAI API的 chat completions 和 embeddings 路由。
+    1.3 Reranking endpoint（正在开发中，但是在最新的版本中已经开发完成了）
+    1.4 支持多用户的并行解码。
+    1.5 持续的批量化。
+    1.6 多模态支持（正在开发中，但是在最新的版本中已经开发完成了）
+    1.7 对 endpoints 进行监控。
+    1.8 可以由 Schema 限制的 JSON 返回格式。
+2、这个项目目前处于活跃的开发状态，并且我们正在寻求可以提供反馈和提供开发的成员。
+*/
+```
 
 ## Usage
 
@@ -217,15 +256,45 @@ services:
   ```
 
 ## Web UI
+```c
+/*
+Notes:杨小兵-2025-07-27
 
+1、目前我想要对这部分内容进行详细的了解，从而可以对这 Web UI 进行部分改造，从而实现在 Web UI 中可以进行 function calling。
+*/
+```
 The project includes a web-based user interface that enables interaction with the model through the `/chat/completions` endpoint.
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、这个项目包含了一个基于 web 的用户交互界面，这个用户交互界面可以通过 /chat/completions 端点（可以理解成函数接口）来同后端模型进行交互。
+*/
+```
 
 The web UI is developed using:
 - `react` framework for frontend development
 - `tailwindcss` and `daisyui` for styling
 - `vite` for build tooling
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、这个 Web UI 使用了下列三个框架进行开发，我需要对这三个部分有一个大概的了解例如 react 底层就是使用 JavaScript 开发的一个框架，其目的就是提供一些预制的接口、工具来方便开发者使用。
+    1.1 专门用来进行前端开发的 react 框架。
+    1.2 专门用来进行样式开发。
+    1.3 专门用于构建工具的 vite。
+*/
+```
 
 A pre-built version is available as a single HTML file under `/public` directory.
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、一个 pre-built 版本的 Web UI 是可以直接使用的，其存在形态是单个 HTML 文件，位于 /public 目录下。
+*/
+```
 
 To build or to run the dev server (with hot reload):
 
@@ -244,11 +313,26 @@ After `public/index.html.gz` has been generated we need to generate the c++
 headers (like build/examples/server/index.html.gz.hpp) that will be included
 by server.cpp. This is done by building `llama-server` as described in the
 [build](#build) section above.
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、在 public/index.html.gz 文件已经被生成之后，我们需要将这个 public/index.html.gz 文件生成为 C++ 的头文件（类似于build/examples/server/index.html.gz.hpp），这个生成的 C++ 头文件将会被 server.cpp 通过 #include 预处理命令包含。前面描述的这些内容可以通过构建 llama-server 来完成，具体操作请参见上文的构建部分。
+2、第一条中描述的内容涉及到的步骤是在 llama-server 的 CMakeLists.txt 中完成的。
+*/
+```
 
 NOTE: if you are using the vite dev server, you can change the API base URL to llama.cpp. To do that, run this code snippet in browser's console:
 
 ```js
 localStorage.setItem('base', 'http://localhost:8080')
+```
+```c
+/*
+Notes:杨小兵-2025-07-27
+
+1、目前不清楚这部分的真正意图。
+*/
 ```
 
 ## Quick Start
