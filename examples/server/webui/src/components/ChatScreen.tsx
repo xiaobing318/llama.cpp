@@ -1,9 +1,16 @@
+// 使用 module 模式从 react 库中导入 useEffect、useMemo 和 useState 符号，这些符号是 React 的钩子函数，用于在函数组件中管理状态和副作用。
 import { useEffect, useMemo, useState } from 'react';
+// 使用 module 模式从自定义的 app.context 文件中导入 CallbackGeneratedChunk 和 useAppContext 符号，这些符号用于访问应用的上下文和处理生成的消息块。
 import { CallbackGeneratedChunk, useAppContext } from '../utils/app.context';
+// 使用 module 模式从当前目录下的 ChatMessage 文件中导入 ChatMessage 组件，这个组件用于渲染单个聊天消息。
 import ChatMessage from './ChatMessage';
+// 使用 module 模式从自定义的 types 文件中导入 CanvasType、Message 和 PendingMessage 符号，这些符号定义了应用中使用的数据类型。
 import { CanvasType, Message, PendingMessage } from '../utils/types';
+// 使用 module 模式从自定义的 misc 文件中导入 classNames 和 throttle 符号，这些符号用于处理类名和节流函数。
 import { classNames, throttle } from '../utils/misc';
+// 使用 module 模式从当前目录下的 CanvasPyInterpreter 文件中导入 CanvasPyInterpreter 组件，这个组件用于渲染 Python 解释器画布。
 import CanvasPyInterpreter from './CanvasPyInterpreter';
+// 使用 module 模式从自定义的 storage 文件中导入 StorageUtils 符号，这个符号用于处理存储相关的操作。
 import StorageUtils from '../utils/storage';
 
 /**
@@ -17,6 +24,7 @@ export interface MessageDisplay {
   isPending?: boolean;
 }
 
+// 定义一个名为 getListMessageDisplay 的函数，这个函数接受两个参数 msgs 和 leafNodeId，返回一个 MessageDisplay 数组。
 function getListMessageDisplay(
   msgs: Readonly<Message[]>,
   leafNodeId: Message['id']
@@ -52,6 +60,7 @@ function getListMessageDisplay(
   return res;
 }
 
+// 定义一个名为 scrollToBottom 的节流函数，这个函数用于滚动到页面底部，接受两个参数 requiresNearBottom 和 delay。
 const scrollToBottom = throttle(
   (requiresNearBottom: boolean, delay: number = 80) => {
     const mainScrollElem = document.getElementById('main-scroll');
@@ -71,6 +80,10 @@ const scrollToBottom = throttle(
 );
 
 export default function ChatScreen() {
+  /*
+  1、从 useAppContext 函数返回的对象中获取 viewingChat、sendMessage、isGenerating、stopGenerating、pendingMessages、canvasData 和
+  replaceMessageAndGenerate。
+  */
   const {
     viewingChat,
     sendMessage,
@@ -80,19 +93,25 @@ export default function ChatScreen() {
     canvasData,
     replaceMessageAndGenerate,
   } = useAppContext();
+  // 创建两个名为 inputMsg 和 setInputMsg 的常量，并且将其赋值为 useState('') 的返回值，即从返回值中解构出这两个变量。
   const [inputMsg, setInputMsg] = useState('');
 
   // keep track of leaf node for rendering
+  // 从 useState(-1) 的返回值中解构出 currNodeId 和 setCurrNodeId 这两个变量，并且将其赋值为 useState(-1) 的返回值。
   const [currNodeId, setCurrNodeId] = useState<number>(-1);
+  // 创建一个名为 messages 的常量，并且将其赋值为 useMemo 的返回值，这个常量用于存储当前会话的消息列表。
   const messages: MessageDisplay[] = useMemo(() => {
     if (!viewingChat) return [];
     else return getListMessageDisplay(viewingChat.messages, currNodeId);
   }, [currNodeId, viewingChat]);
 
+  // 获取当前会话的 ID，如果没有当前会话，则为 null。
   const currConvId = viewingChat?.conv.id ?? null;
+  // 获取当前会话的待处理消息，如果没有则为 undefined。
   const pendingMsg: PendingMessage | undefined =
     pendingMessages[currConvId ?? ''];
 
+  // 使用 useEffect 钩子函数，当 currConvId 变化时，重置 currNodeId 并滚动到页面底部。
   useEffect(() => {
     // reset to latest node when conversation changes
     setCurrNodeId(-1);
@@ -100,6 +119,7 @@ export default function ChatScreen() {
     scrollToBottom(false, 1);
   }, [currConvId]);
 
+  // 定义一个名为 onChunk 的函数，这个函数用于处理生成的消息块，接受一个可选参数 currLeafNodeId。
   const onChunk: CallbackGeneratedChunk = (currLeafNodeId?: Message['id']) => {
     if (currLeafNodeId) {
       setCurrNodeId(currLeafNodeId);
@@ -107,20 +127,33 @@ export default function ChatScreen() {
     scrollToBottom(true);
   };
 
+  /*
+  1、定义一个异步函数，这个函数用于发送新的消息。
+  2、这个异步函数就是当我们输入消息并且按下回车键或者点击发送按钮时触发的。
+  3、这个函数内部调用真正发送消息的函数，其函数是处理前端与后端的消息交互。
+  */
   const sendNewMessage = async () => {
+    // 如果输入的消息为空或者当前会话正在生成消息，则直接返回。
     if (inputMsg.trim().length === 0 || isGenerating(currConvId ?? '')) return;
+    // 将输入的消息设置为当前会话的输入消息，当后端模型推理失败后将其再次显示到输入框中。
     const lastInpMsg = inputMsg;
+    // 因为将消息发送给后端模型处理的时候，需要清空输入框，这样看起来像是将消息发送出去。
     setInputMsg('');
+    // 将当前页面滚动到最底部
     scrollToBottom(false);
+    // 将当前节点 ID 设置为 -1，表示没有当前节点。
     setCurrNodeId(-1);
     // get the last message node
+    // 获取当前会话的最后一条消息的 ID，如果没有消息则为 null。
     const lastMsgNodeId = messages.at(-1)?.msg.id ?? null;
+    // 等待 sendMessage 函数执行完成，如果发送失败，则将输入的消息恢复为之前的值。
     if (!(await sendMessage(currConvId, lastMsgNodeId, inputMsg, onChunk))) {
       // restore the input message if failed
       setInputMsg(lastInpMsg);
     }
   };
 
+  // 定义一个名为 handleEditMessage 的异步函数，这个函数用于处理编辑消息的操作。
   const handleEditMessage = async (msg: Message, content: string) => {
     if (!viewingChat) return;
     setCurrNodeId(msg.id);
@@ -135,6 +168,7 @@ export default function ChatScreen() {
     scrollToBottom(false);
   };
 
+  // 定义一个名为 handleRegenerateMessage 的异步函数，这个函数用于处理重新生成消息的操作。
   const handleRegenerateMessage = async (msg: Message) => {
     if (!viewingChat) return;
     setCurrNodeId(msg.parent);
@@ -149,6 +183,7 @@ export default function ChatScreen() {
     scrollToBottom(false);
   };
 
+  // 判断是否有画布数据
   const hasCanvas = !!canvasData;
 
   // due to some timing issues of StorageUtils.appendMsg(), we need to make sure the pendingMsg is not duplicated upon rendering (i.e. appears once in the saved conversation and once in the pendingMsg)

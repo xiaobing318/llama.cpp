@@ -9,8 +9,10 @@ import App from './App.tsx';
 
 /*
 Note:杨小兵-2025-08-03
-    使用 createRoot 函数创建一个 React 应用的根节点，并将其挂载到 HTML 文档中的 id 为 'root' 的元素上。
+
+1、使用 createRoot 函数创建一个 React 应用的根节点，并将其挂载到 HTML 文档中的 id 为 'root' 的元素上。
 通过 StrictMode 包裹 App 组件，以便在开发模式下启用额外的检查和警告，帮助开发者发现潜在的问题。
+2、在 React 中，<App /> 是<App></App> 的缩写，其条件是 HTML element 中间为空。
 */
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

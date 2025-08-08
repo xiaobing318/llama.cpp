@@ -24,8 +24,14 @@ function App() {
   );
 }
 
+/*
+1、这是一个 React 的组件，就我目前对 React 的理解，这个组件是一个函数组件，在 React 中，函数组件是通过函数定义的组件，它可以接收 props 作为参数，
+并返回一个 React 元素。
+*/
 function AppLayout() {
+  // 从 useAppContext 函数返回的对象中获取 showSettings 和 setShowSettings。
   const { showSettings, setShowSettings } = useAppContext();
+  // 返回
   return (
     <>
       <Sidebar />
@@ -46,4 +52,5 @@ function AppLayout() {
   );
 }
 
+//  这是 JavaScript 中导出默认符号的语法，通过这种方式可以使得其他模块导入和使用这个符号/组件。
 export default App;
