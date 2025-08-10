@@ -11,6 +11,15 @@
 #include <fstream>
 #include <memory>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/wait.h>
+#include <cerrno>
+#include <cstring>
+#include <unistd.h>
+#endif
+
 using json = nlohmann::ordered_json;
 
 struct AgentConfig {
@@ -88,6 +97,61 @@ public:
         }
     }
 
+    bool waitForServerStartup() {
+        const int max_attempts = 60; // 最多尝试60次
+        const int retry_interval_ms = 1000; // 每次间隔1秒
+        
+        LOG_INF("正在等待 llama-server 启动...\n");
+        
+        for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+            // 检查进程是否还在运行（避免无谓的等待）
+#ifdef _WIN32
+            if (llama_process.hProcess) {
+                DWORD exit_code;
+                if (GetExitCodeProcess(llama_process.hProcess, &exit_code) && exit_code != STILL_ACTIVE) {
+                    LOG_ERR("llama-server 进程已退出，退出码: %lu\n", exit_code);
+                    return false;
+                }
+            }
+#else
+            if (llama_pid > 0) {
+                int status;
+                pid_t result = waitpid(llama_pid, &status, WNOHANG);
+                if (result > 0) {
+                    if (WIFEXITED(status)) {
+                        LOG_ERR("llama-server 进程已退出，退出码: %d\n", WEXITSTATUS(status));
+                    } else if (WIFSIGNALED(status)) {
+                        LOG_ERR("llama-server 进程被信号终止: %d\n", WTERMSIG(status));
+                    }
+                    return false;
+                } else if (result < 0 && errno != ECHILD) {
+                    LOG_ERR("检查进程状态失败: %s\n", strerror(errno));
+                    return false;
+                }
+            }
+#endif
+
+            // 尝试连接健康检查端点
+            auto res = llama_client->Get("/health");
+            if (res && res->status == 200) {
+                LOG_INF("llama-server 启动成功！(尝试 %d/%d 次)\n", attempt, max_attempts);
+                return true;
+            }
+            
+            // 输出等待进度
+            if (attempt % 10 == 0) {
+                LOG_INF("等待 llama-server 启动中... (%d/%d)\n", attempt, max_attempts);
+            }
+            
+            // 等待后重试
+            std::this_thread::sleep_for(std::chrono::milliseconds(retry_interval_ms));
+        }
+        
+        LOG_ERR("llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒\n", 
+                max_attempts, max_attempts * retry_interval_ms / 1000);
+        return false;
+    }
+
     bool startLlamaServer() {
         // 如果自动启动 llama-server 服务器被禁用，则假设 llama-server 已经在运行。
         if (!config.auto_start_server) {
@@ -125,21 +189,11 @@ public:
         }
 #endif
 
-        // TODO：等待服务器启动，更好的实现是自动检测启动是否成功。
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        // 创建一个 HTTP 客户端，可以理解成是一个 HTTP 请求的客户端，用于向 llama-server 发送请求。
+        // 创建 HTTP 客户端用于健康检查
         llama_client = std::make_unique<httplib::Client>(config.llama_server_host, config.llama_server_port);
-        // 向 llama-server 服务器 /health 端口发送 GET 请求，检查服务器是否启动成功。
-        auto res = llama_client->Get("/health");
-        // 如果响应不为空且状态码为 200，则表示服务器启动成功。
-        if (res && res->status == 200) {
-            LOG_INF("llama-server 启动成功！\n");
-            return true;
-        }
         
-        LOG_ERR("llama-server 启动失败！\n");
-        return false;
+        // 等待并检测 llama-server 启动状态
+        return waitForServerStartup();
     }
 
     void stopLlamaServer() {
@@ -147,18 +201,48 @@ public:
         if (!config.auto_start_server) {
             return;
         }
+        
+        LOG_INF("正在停止 llama-server...\n");
+        
         // 根据不同的平台，使用不同的方法停止 llama-server 进程。
 #ifdef _WIN32
-        // 如果 llama_process.hProcess 有效，则使用 TerminateProcess 终止进程，并关闭句柄。
+        // 如果 llama_process.hProcess 有效，则优雅地终止进程
         if (llama_process.hProcess) {
-            TerminateProcess(llama_process.hProcess, 0);
+            // 首先尝试优雅终止
+            if (TerminateProcess(llama_process.hProcess, 0)) {
+                // 等待进程结束，最多等待5秒
+                DWORD waitResult = WaitForSingleObject(llama_process.hProcess, 5000);
+                if (waitResult == WAIT_TIMEOUT) {
+                    LOG_WRN("llama-server 进程在5秒内未响应，强制终止\n");
+                }
+            }
             CloseHandle(llama_process.hProcess);
             CloseHandle(llama_process.hThread);
+            // 清理进程信息
+            memset(&llama_process, 0, sizeof(llama_process));
         }
 #else
-        // 如果 llama_pid 大于 0，则使用 kill 函数发送 SIGTERM 信号终止进程。
+        // 如果 llama_pid 大于 0，则优雅地终止进程
         if (llama_pid > 0) {
-            kill(llama_pid, SIGTERM);
+            // 首先发送 SIGTERM 信号进行优雅关闭
+            if (kill(llama_pid, SIGTERM) == 0) {
+                // 等待进程结束，最多等待5秒
+                int wait_count = 0;
+                while (wait_count < 50 && kill(llama_pid, 0) == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    wait_count++;
+                }
+                
+                // 如果进程仍在运行，强制终止
+                if (kill(llama_pid, 0) == 0) {
+                    LOG_WRN("llama-server 进程在5秒内未响应，强制终止\n");
+                    kill(llama_pid, SIGKILL);
+                    // 再等待1秒确保进程被终止
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+            }
+            // 清理进程ID
+            llama_pid = -1;
         }
 #endif
         LOG_INF("llama-server 已停止。\n");
@@ -301,6 +385,12 @@ public:
 
         // 如果启动 llama-server 失败的话直接返回。
         if (!startLlamaServer()) {
+            LOG_ERR("无法启动 llama-server，Agent 启动失败\n");
+            LOG_ERR("请检查：\n");
+            LOG_ERR("  1. llama-server 路径是否正确: %s\n", config.llama_server_path.c_str());
+            LOG_ERR("  2. 模型文件路径是否正确: %s\n", config.model_path.c_str());
+            LOG_ERR("  3. 端口 %d 是否被占用\n", config.llama_server_port);
+            LOG_ERR("  4. 系统资源是否充足（内存、GPU等）\n");
             return false;
         }
 
@@ -338,9 +428,19 @@ public:
 };
 
 std::atomic<bool> g_running{true};
+LlamaAgent* g_agent_instance = nullptr;
 
-void signal_handler(int) {
+void signal_handler(int signal_num) {
+    const char* signal_name = (signal_num == SIGINT) ? "SIGINT" : 
+                             (signal_num == SIGTERM) ? "SIGTERM" : "UNKNOWN";
+    LOG_INF("收到信号 %s，正在关闭服务...\n", signal_name);
+    
     g_running = false;
+    
+    // 如果有代理实例的引用，直接调用停止方法以确保立即停止
+    if (g_agent_instance) {
+        g_agent_instance->stop();
+    }
 }
 
 int main(int argc, char** argv) {
@@ -359,16 +459,19 @@ int main(int argc, char** argv) {
 
     // 创建 LlamaAgent 实例
     LlamaAgent agent;
+    g_agent_instance = &agent;  // 设置全局引用以便信号处理器使用
 
     // 如果代理实例加载配置文件失败，则输出错误信息并退出程序。
     if (!agent.loadConfig(config_file)) {
         LOG_ERR("加载配置失败！\n");
+        g_agent_instance = nullptr;
         return 1;
     }
 
     // 如果代理实例启动失败，则输出错误信息并退出程序。
     if (!agent.start()) {
         LOG_ERR("启动 Agent 失败！\n");
+        g_agent_instance = nullptr;
         return 1;
     }
 
@@ -384,6 +487,10 @@ int main(int argc, char** argv) {
     LOG_INF("正在停止运行 Agent 。\n");
     // 停止运行 Agent 。
     agent.stop();
+    
+    // 清理全局引用
+    g_agent_instance = nullptr;
+    LOG_INF("Agent 已完全停止。\n");
 
     return 0;
 }
