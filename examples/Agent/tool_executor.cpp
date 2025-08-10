@@ -3,6 +3,17 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <unistd.h>      // pipe, fork, dup2, execlp/execvp, read, write, close, STDIN_FILENO...
+    #include <sys/types.h>   // pid_t
+    #include <sys/wait.h>    // waitpid, WIFEXITED, WEXITSTATUS, WIFSIGNALED, WTERMSIG
+    #include <fcntl.h>       // 可选：pipe2, O_CLOEXEC 等
+    #include <errno.h>       // errno
+    #include <cstdlib>       // exit, _exit
+    #include <cstring>       // strerror（若要打印错误）
+#endif
 
 ToolExecutor::ToolExecutor() {
     registerBuiltinTools();

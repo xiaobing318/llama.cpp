@@ -275,7 +275,10 @@ public:
                 // 解析请求体中的 JSON 数据
                 json request_body = json::parse(req.body);
 
-                // Add tools to request if not present
+                /*
+                1、如果请求体中不存在 "tools" 字段，则需要将工具执行器中的工具（包含内置工具定义、配置中的外部工具定义）添加到请求体中。
+                2、TODO：应该不考虑请求体中的工具定义，因为没有具体的实现。
+                */
                 json all_tools = tool_executor->getTools();
                 if (!request_body.contains("tools") && !all_tools.empty()) {
                     request_body["tools"] = all_tools;
@@ -285,6 +288,7 @@ public:
                 auto llama_res = llama_client->Post("/v1/chat/completions",
                     request_body.dump(), "application/json");
 
+                // 如果 llama-server 的响应体为空，则设置 llama-agent 的响应体。
                 if (!llama_res) {
                     json error = {{"error", "Failed to connect to llama-server"}};
                     res.set_content(error.dump(), "application/json");
@@ -381,7 +385,8 @@ public:
                             all_tool_results.push_back(result);
                         }
 
-                        int max_iterations = 10; // 防止无限循环
+                        // 防止无限循环
+                        int max_iterations = 10;
                         int iteration = 0;
                         
                         while (iteration < max_iterations) {
@@ -475,30 +480,6 @@ public:
                 res.status = 400;
             }
         });
-
-        /*
-        // Proxy other requests to llama-server
-        server->set_default_handler([this](const httplib::Request& req, httplib::Response& res) {
-            httplib::Client client(config.llama_server_host, config.llama_server_port);
-
-            httplib::Result result;
-            if (req.method == "GET") {
-                result = client.Get(req.path);
-            } else if (req.method == "POST") {
-                result = client.Post(req.path, req.body, req.get_header_value("Content-Type"));
-            } else {
-                res.status = 405;
-                return;
-            }
-
-            if (result) {
-                res.set_content(result->body, result->get_header_value("Content-Type"));
-                res.status = result->status;
-            } else {
-                res.status = 502;
-            }
-        });
-        */
     }
 
     bool start() {
