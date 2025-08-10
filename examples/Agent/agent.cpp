@@ -12,12 +12,12 @@
 #include <memory>
 
 #ifdef _WIN32
-#include <windows.h>
+    #include <windows.h>
 #else
-#include <sys/wait.h>
-#include <cerrno>
-#include <cstring>
-#include <unistd.h>
+    #include <sys/wait.h>
+    #include <cerrno>
+    #include <cstring>
+    #include <unistd.h>
 #endif
 
 using json = nlohmann::ordered_json;
@@ -91,18 +91,19 @@ public:
             LOG_INF("配置加载成功！\n");
             return true;
         } catch (const std::exception& e) {
-            // 
             LOG_ERR("加载配置失败： %s\n", e.what());
             return false;
         }
     }
 
     bool waitForServerStartup() {
-        const int max_attempts = 60; // 最多尝试60次
-        const int retry_interval_ms = 1000; // 每次间隔1秒
-        
+        // 最多尝试60次
+        const int max_attempts = 60;
+        // 每次间隔1秒
+        const int retry_interval_ms = 1000;
+
         LOG_INF("正在等待 llama-server 启动...\n");
-        
+
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
             // 检查进程是否还在运行（避免无谓的等待）
 #ifdef _WIN32
@@ -137,17 +138,17 @@ public:
                 LOG_INF("llama-server 启动成功！(尝试 %d/%d 次)\n", attempt, max_attempts);
                 return true;
             }
-            
+
             // 输出等待进度
             if (attempt % 10 == 0) {
                 LOG_INF("等待 llama-server 启动中... (%d/%d)\n", attempt, max_attempts);
             }
-            
+
             // 等待后重试
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_interval_ms));
         }
-        
-        LOG_ERR("llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒\n", 
+
+        LOG_ERR("llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒\n",
                 max_attempts, max_attempts * retry_interval_ms / 1000);
         return false;
     }
@@ -191,7 +192,7 @@ public:
 
         // 创建 HTTP 客户端用于健康检查
         llama_client = std::make_unique<httplib::Client>(config.llama_server_host, config.llama_server_port);
-        
+
         // 等待并检测 llama-server 启动状态
         return waitForServerStartup();
     }
@@ -201,9 +202,9 @@ public:
         if (!config.auto_start_server) {
             return;
         }
-        
+
         LOG_INF("正在停止 llama-server...\n");
-        
+
         // 根据不同的平台，使用不同的方法停止 llama-server 进程。
 #ifdef _WIN32
         // 如果 llama_process.hProcess 有效，则优雅地终止进程
@@ -232,7 +233,7 @@ public:
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     wait_count++;
                 }
-                
+
                 // 如果进程仍在运行，强制终止
                 if (kill(llama_pid, 0) == 0) {
                     LOG_WRN("llama-server 进程在5秒内未响应，强制终止\n");
@@ -431,12 +432,12 @@ std::atomic<bool> g_running{true};
 LlamaAgent* g_agent_instance = nullptr;
 
 void signal_handler(int signal_num) {
-    const char* signal_name = (signal_num == SIGINT) ? "SIGINT" : 
+    const char* signal_name = (signal_num == SIGINT) ? "SIGINT" :
                              (signal_num == SIGTERM) ? "SIGTERM" : "UNKNOWN";
     LOG_INF("收到信号 %s，正在关闭服务...\n", signal_name);
-    
+
     g_running = false;
-    
+
     // 如果有代理实例的引用，直接调用停止方法以确保立即停止
     if (g_agent_instance) {
         g_agent_instance->stop();
@@ -448,6 +449,7 @@ int main(int argc, char** argv) {
     common_init();
 
     // 解析命令行参数，获取配置文件的路径
+    //std::string config_file = "F:/llama.cpp-data/llama-b5215-bin-win-cuda-cu12.4-x64/config.json";
     std::string config_file = "config.json";
     if (argc > 1) {
         config_file = argv[1];
@@ -487,7 +489,7 @@ int main(int argc, char** argv) {
     LOG_INF("正在停止运行 Agent 。\n");
     // 停止运行 Agent 。
     agent.stop();
-    
+
     // 清理全局引用
     g_agent_instance = nullptr;
     LOG_INF("Agent 已完全停止。\n");

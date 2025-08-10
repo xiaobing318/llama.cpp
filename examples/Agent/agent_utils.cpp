@@ -28,6 +28,8 @@ void common_init() {
     // Enable UTF-8 console output on Windows
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+    // 强制 C++ 输出流使用 UTF-8 locale
+    std::setlocale(LC_ALL, ".UTF-8");
 #endif
 
     // Log initialization
