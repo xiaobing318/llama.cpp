@@ -265,6 +265,7 @@ public:
         // Chat completion with tool support
         server->Post("/v1/chat/completions", [this](const httplib::Request& req, httplib::Response& res) {
             try {
+                // 解析请求体中的 JSON 数据
                 json request_body = json::parse(req.body);
 
                 // Add tools to request if not present
@@ -283,21 +284,72 @@ public:
                     return;
                 }
 
+                /*
+                1、解析 llama-server 的响应
+                2、下列是 llama-server 响应的一个 JSON 格式的例子。
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "tool_calls",
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": null,
+                                "tool_calls": [
+                                    {
+                                        "type": "function",
+                                        "function": {
+                                            "name": "encoding_detection",
+                                            "arguments": "{\"layer_path\":\"F:/llama.cpp-data/models/DN12.shp\"}"
+                                        },
+                                        "id": "Hd6Adx1ePqjQearhRcp9Wlnadd36iyXQ"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "created": 1754833006,
+                    "model": "Qwen3-4B-Q8_0",
+                    "system_fingerprint": "b5215-5f5e39e1",
+                    "object": "chat.completion",
+                    "usage": {
+                        "completion_tokens": 33,
+                        "prompt_tokens": 607,
+                        "total_tokens": 640
+                    },
+                    "id": "chatcmpl-Xd5V9Yp5nQud9zxLvEzB6md7c9FeC3vQ",
+                    "timings": {
+                        "prompt_n": 607,
+                        "prompt_ms": 368.11,
+                        "prompt_per_token_ms": 0.6064415156507413,
+                        "prompt_per_second": 1648.9636250033957,
+                        "predicted_n": 33,
+                        "predicted_ms": 675.522,
+                        "predicted_per_token_ms": 20.470363636363636,
+                        "predicted_per_second": 48.851110696616836
+                    }
+                }
+                */
                 json response = json::parse(llama_res->body);
 
-                // Check for tool calls in response
+                // 如果 llama-server 响应体中包含 "choices" 字段，并且该字段不为空，则执行代码块中的内容。
                 if (response.contains("choices") && !response["choices"].empty()) {
+                    // 获取得到 llama-server 响应体中的第一个 choice 的内容。
                     auto& choice = response["choices"][0];
+                    // 如果 choice 中包含 "message" 字段，并且该字段中包含 "tool_calls" 字段，则执行工具调用。
                     if (choice.contains("message") && choice["message"].contains("tool_calls")) {
-                        // Execute tool calls
+                        // 创建一个 JSON 数组来存储工具调用的结果。
                         json tool_results = json::array();
+                        // 循环遍历每个工具调用，并执行相应的工具。
                         for (const auto& tool_call : choice["message"]["tool_calls"]) {
+                            // 获取当前工具调用的名称和参数，并将其解析为 JSON 对象。
                             std::string function_name = tool_call["function"]["name"];
                             json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                            LOG_INF("Executing tool: %s\n", function_name.c_str());
+                            LOG_INF("执行工具: %s\n", function_name.c_str());
+                            // 调用 ToolExecutor 执行工具，并获取结果。
                             json result = tool_executor->execute(function_name, arguments);
-
+                            // 将调用工具结果以及一些额外信息包装成 JSON 保存到 tool_results 数组中，这里假设会执行多个工具调用。
                             tool_results.push_back({
                                 {"tool_call_id", tool_call["id"]},
                                 {"role", "tool"},
@@ -306,27 +358,36 @@ public:
                             });
                         }
 
-                        // Add tool results to conversation and get final response
+                        // 获取请求体中的 "messages" 字段。
                         auto messages = request_body["messages"];
+                        // 将 llama-server 响应体中的 choice 的 message 添加到 messages 中，相当于将模型的响应添加到消息列表中。
                         messages.push_back(choice["message"]);
+                        // 循环将工具调用的结果添加到消息列表中。
                         for (const auto& result : tool_results) {
                             messages.push_back(result);
                         }
 
+                        /*
+                        1、TODO：到目前位置只是对 llama-server 服务进行了两次请求，有可能存在多次工具调用的情况，即只要每次 llama-server 响应中
+                        包含 "tool_calls" 字段，就需要继续执行工具调用，如果只是正常的对话，则不需要继续执行工具调用。
+                        */
                         json final_request = request_body;
                         final_request["messages"] = messages;
-                        final_request.erase("tools");  // Remove tools for final call
-
+                        // 最后一次请求中不需要 tools 字段，这样可以减少 token 的消耗。
+                        final_request.erase("tools");
+                        // 向 llama-server 发送请求以获取完整的响应。
                         auto final_res = llama_client->Post("/v1/chat/completions",
                             final_request.dump(), "application/json");
-
+                        // 如果 llama-server 响应体不为空，则将其解析为 JSON 对象。
                         if (final_res) {
+                            // 解析 llama-server 的响应体。
                             response = json::parse(final_res->body);
+                            // 向解析后的响应体中添加工具调用的结果。
                             response["tool_results"] = tool_results;
                         }
                     }
                 }
-
+                // 将最终的响应体设置到 HTTP 响应中。
                 res.set_content(response.dump(), "application/json");
                 res.status = llama_res->status;
 

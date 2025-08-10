@@ -71,7 +71,6 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
 
     try {
         // Validate arguments if schema exists
-        // 原来：if (tool_definitions.contains(name)) {
         auto defIt = tool_definitions.find(name);
         if (defIt != tool_definitions.end()) {
             const json& definition = defIt->second;
