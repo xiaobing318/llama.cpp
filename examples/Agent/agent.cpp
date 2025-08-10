@@ -55,13 +55,14 @@ public:
         try {
             std::ifstream file(config_file);
             if (!file.is_open()) {
-                LOG_ERR("Failed to open config file: %s\n", config_file.c_str());
+                // TODO:使用 spdlog 日志库记录错误，可以使用 __FUNCTION__ 定位函数。
+                LOG_ERR("打开配置文件失败：%s \n", config_file.c_str());
                 return false;
             }
-
+            // 如果打开配置文件成功，则使用 nlohmann::json 库解析 JSON 格式的配置文件。
             json j;
             file >> j;
-
+            // 使用 nlohmann::json 库的 value 方法获取配置项的值，如果配置项不存在，则使用默认值。
             config.agent_host = j.value("agent_host", config.agent_host);
             config.agent_port = j.value("agent_port", config.agent_port);
             config.llama_server_host = j.value("llama_server_host", config.llama_server_host);
@@ -73,25 +74,27 @@ public:
             config.auto_start_server = j.value("auto_start_server", config.auto_start_server);
             config.tools = j.value("tools", json::array());
 
-            // Register tools
+            // 将配置文件中的配置的工具注册到 ToolExecutor 中
             for (const auto& tool : config.tools) {
                 tool_executor->registerTool(tool);
             }
 
-            LOG_INF("Configuration loaded successfully\n");
+            LOG_INF("配置加载成功！\n");
             return true;
         } catch (const std::exception& e) {
-            LOG_ERR("Failed to load config: %s\n", e.what());
+            // 
+            LOG_ERR("加载配置失败： %s\n", e.what());
             return false;
         }
     }
 
     bool startLlamaServer() {
+        // 如果自动启动 llama-server 服务器被禁用，则假设 llama-server 已经在运行。
         if (!config.auto_start_server) {
-            LOG_INF("Auto-start disabled, assuming llama-server is already running\n");
+            LOG_INF(" auto_start_server 已禁用，这里假设 llama-server 已在运行！\n");
             return true;
         }
-
+        // 拼接 llama-server 的命令行参数。
         std::string cmd = config.llama_server_path;
         cmd += " -m " + config.model_path;
         cmd += " --host " + config.llama_server_host;
@@ -102,12 +105,12 @@ public:
             cmd += " -ngl " + std::to_string(config.n_gpu_layers);
         }
 
-        LOG_INF("Starting llama-server: %s\n", cmd.c_str());
-
+        LOG_INF("正在启动 llama-server: %s\n", cmd.c_str());
+        // 在 Windows 上使用 CreateProcess 启动 llama-server 进程，在其他平台上使用 fork 和 system 调用。
 #ifdef _WIN32
         STARTUPINFOA si = {sizeof(si)};
         if (!CreateProcessA(NULL, const_cast<char*>(cmd.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &llama_process)) {
-            LOG_ERR("Failed to start llama-server\n");
+            LOG_ERR("启动 llama-server 失败\n");
             return false;
         }
 #else
@@ -117,47 +120,52 @@ public:
             system(cmd.c_str());
             exit(0);
         } else if (llama_pid < 0) {
-            LOG_ERR("Failed to fork process\n");
+            LOG_ERR("fork 进程失败，即启动 llama-server 失败\n");
             return false;
         }
 #endif
 
-        // Wait for server to start
+        // TODO：等待服务器启动，更好的实现是自动检测启动是否成功。
         std::this_thread::sleep_for(std::chrono::seconds(5));
 
-        // Check if server is running
+        // 创建一个 HTTP 客户端，可以理解成是一个 HTTP 请求的客户端，用于向 llama-server 发送请求。
         llama_client = std::make_unique<httplib::Client>(config.llama_server_host, config.llama_server_port);
+        // 向 llama-server 服务器 /health 端口发送 GET 请求，检查服务器是否启动成功。
         auto res = llama_client->Get("/health");
+        // 如果响应不为空且状态码为 200，则表示服务器启动成功。
         if (res && res->status == 200) {
-            LOG_INF("llama-server started successfully\n");
+            LOG_INF("llama-server 启动成功！\n");
             return true;
         }
-
-        LOG_ERR("llama-server failed to start\n");
+        
+        LOG_ERR("llama-server 启动失败！\n");
         return false;
     }
 
     void stopLlamaServer() {
+        // 如果自动启动 llama-server 服务器被禁用，则不需要停止服务器。
         if (!config.auto_start_server) {
             return;
         }
-
+        // 根据不同的平台，使用不同的方法停止 llama-server 进程。
 #ifdef _WIN32
+        // 如果 llama_process.hProcess 有效，则使用 TerminateProcess 终止进程，并关闭句柄。
         if (llama_process.hProcess) {
             TerminateProcess(llama_process.hProcess, 0);
             CloseHandle(llama_process.hProcess);
             CloseHandle(llama_process.hThread);
         }
 #else
+        // 如果 llama_pid 大于 0，则使用 kill 函数发送 SIGTERM 信号终止进程。
         if (llama_pid > 0) {
             kill(llama_pid, SIGTERM);
         }
 #endif
-        LOG_INF("llama-server stopped\n");
+        LOG_INF("llama-server 已停止。\n");
     }
 
     void setupRoutes() {
-        // Health check
+        // Health check（应该间接的检查 llama-server 的 /health 端口）
         server->Get("/health", [](const httplib::Request&, httplib::Response& res) {
             json response = {{"status", "ok"}};
             res.set_content(response.dump(), "application/json");
@@ -287,22 +295,22 @@ public:
     }
 
     bool start() {
-        // Initialize llama client
+        // 初始化一个指向 llama-server 服务的客户端。
         llama_client = std::make_unique<httplib::Client>(
             config.llama_server_host, config.llama_server_port);
 
-        // Start llama-server if needed
+        // 如果启动 llama-server 失败的话直接返回。
         if (!startLlamaServer()) {
             return false;
         }
 
-        // Setup routes
+        // 设置 llama-agent 服务的 endpoints 。
         setupRoutes();
 
-        // Start agent server
+        // 启动 llama-agent 服务。
         running = true;
         server_thread = std::thread([this]() {
-            LOG_INF("Agent server listening on http://%s:%d\n",
+            LOG_INF("代理服务器正在监听 http://%s:%d\n",
                 config.agent_host.c_str(), config.agent_port);
             server->listen(config.agent_host, config.agent_port);
         });
@@ -311,6 +319,7 @@ public:
     }
 
     void stop() {
+        // 如果 llama-agent 服务正在运行的话，则需要停止 llama-agent 服务。
         if (running) {
             running = false;
             server->stop();
@@ -335,40 +344,45 @@ void signal_handler(int) {
 }
 
 int main(int argc, char** argv) {
-    // Initialize
+    // 初始化程序环境，包括设置 UTF-8 区域和在 Windows 上启用 UTF-8 控制台输出。
     common_init();
 
-    // Parse arguments
+    // 解析命令行参数，获取配置文件的路径
     std::string config_file = "config.json";
     if (argc > 1) {
         config_file = argv[1];
     }
 
-    // Setup signal handler
+    // 设置信号处理器以捕获终止信号
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    // Create and start agent
+    // 创建 LlamaAgent 实例
     LlamaAgent agent;
 
+    // 如果代理实例加载配置文件失败，则输出错误信息并退出程序。
     if (!agent.loadConfig(config_file)) {
-        LOG_ERR("Failed to load configuration\n");
+        LOG_ERR("加载配置失败！\n");
         return 1;
     }
 
+    // 如果代理实例启动失败，则输出错误信息并退出程序。
     if (!agent.start()) {
-        LOG_ERR("Failed to start agent\n");
+        LOG_ERR("启动 Agent 失败！\n");
         return 1;
     }
 
-    LOG_INF("Agent is running. Press Ctrl+C to stop.\n");
+    // 输出代理正在运行的信息，并提示用户按 Ctrl+C 停止。
+    LOG_INF("Agent 正在运行，如果想要停止运行 Agent 请按下 Ctrl+C 。\n");
 
-    // Wait for shutdown
+    // 执行循环，直到收到终止信号。
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    LOG_INF("Shutting down...\n");
+    // 输出代理正在关闭的信息，并停止代理实例。
+    LOG_INF("正在停止运行 Agent 。\n");
+    // 停止运行 Agent 。
     agent.stop();
 
     return 0;

@@ -36,21 +36,26 @@ void ToolExecutor::registerBuiltinTools() {
 }
 
 void ToolExecutor::registerTool(const json& tool_definition) {
+    // 检查配置文件中的工具定义是否包含必需的字段
     if (!tool_definition.contains("function")) {
-        LOG_ERR("Tool definition missing 'function' field\n");
+        LOG_ERR("工具定义缺失 'function' 字段，每个工具定义中必须存在 'function' 字段，请检查配置文件中对工具定义是否正确。\n");
         return;
     }
-
+    // 获取工具定义中 'function' 字段的属性值并且将其保存在临时的 json 对象中。
     json function = tool_definition["function"];
+    // 获取 'function' 字段的属性值中的 "name" 字段值，如果没有设置则默认为空字符串。
     std::string name = function.value("name", "");
-
+    // 如果工具名称为空或者不符合命名规范，则记录错误日志并返回。
     if (name.empty() || !validate_tool_name(name)) {
-        LOG_ERR("Invalid tool name: %s\n", name.c_str());
+        LOG_ERR("不是有效的工具名称: %s\n", name.c_str());
         return;
     }
 
+    // TODO：检查是否已经注册了同名的工具
+
+    // 经过上述检查后说明配置文件中的当前工具定义是有效的，将其保存到内存中的工具定义映射中。
     tool_definitions[name] = tool_definition;
-    LOG_INF("Registered tool: %s\n", name.c_str());
+    LOG_INF("成功注册工具： %s\n", name.c_str());
 }
 
 // tool_executor.cpp
