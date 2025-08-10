@@ -1,0 +1,123 @@
+{
+  "agent_host": "127.0.0.1",
+  "agent_port": 8081,
+  "llama_server_host": "127.0.0.1",
+  "llama_server_port": 8080,
+  "llama_server_path": "./llama-server",
+  "model_path": "F:/llama.cpp-data/models/qwen2.5-1.5b-instruct-q8_0.gguf",
+  "n_ctx": 2048,
+  "n_gpu_layers": 99,
+  "auto_start_server": true,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_current_time",
+        "description": "Get the current date and time in various formats",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": ["ISO8601", "unix", "readable"],
+              "description": "The format for the time output"
+            },
+            "timezone": {
+              "type": "string",
+              "description": "The timezone (local or UTC)"
+            }
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "calculate",
+        "description": "Perform basic mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate (supports +, -, *, /)"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Read the contents of a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to the file to read"
+            },
+            "encoding": {
+              "type": "string",
+              "description": "File encoding (default: utf-8)"
+            }
+          },
+          "required": ["path"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "write_file",
+        "description": "Write content to a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to the file to write"
+            },
+            "content": {
+              "type": "string",
+              "description": "Content to write to the file"
+            },
+            "append": {
+              "type": "boolean",
+              "description": "Whether to append to existing file (default: false)"
+            }
+          },
+          "required": ["path", "content"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "list_files",
+        "description": "List files in a directory",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "directory": {
+              "type": "string",
+              "description": "Directory path to list (default: current directory)"
+            },
+            "pattern": {
+              "type": "string",
+              "description": "File pattern to filter (e.g., *.txt)"
+            },
+            "recursive": {
+              "type": "boolean",
+              "description": "Whether to list files recursively"
+            }
+          },
+          "required": []
+        }
+      }
+    }
+  ]
+}
