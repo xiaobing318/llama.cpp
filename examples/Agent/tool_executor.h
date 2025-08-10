@@ -39,4 +39,7 @@ private:
 
     // Register built-in tools
     void registerBuiltinTools();
+    
+    // Execute external tool
+    json executeExternalTool(const std::string& executable, const json& arguments);
 };

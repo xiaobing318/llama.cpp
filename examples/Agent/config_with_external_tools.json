@@ -1,0 +1,95 @@
+{
+  "agent_host": "127.0.0.1",
+  "agent_port": 8081,
+  "llama_server_host": "127.0.0.1",
+  "llama_server_port": 8080,
+  "llama_server_path": "./llama-server",
+  "model_path": "F:/llama.cpp-data/models/qwen2.5-1.5b-instruct-q8_0.gguf",
+  "n_ctx": 2048,
+  "n_gpu_layers": 99,
+  "auto_start_server": true,
+  "tools": [
+    {
+      "type": "function",
+      "executable": "./external_tools/weather_tool",
+      "function": {
+        "name": "get_weather",
+        "description": "获取指定城市的天气信息",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "城市名称"
+            },
+            "units": {
+              "type": "string",
+              "enum": ["metric", "imperial", "kelvin"],
+              "description": "温度单位，默认为metric"
+            }
+          },
+          "required": ["city"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "executable": "python3 ./external_tools/data_analysis.py",
+      "function": {
+        "name": "analyze_data",
+        "description": "分析数据文件并生成报告",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "要分析的数据文件路径"
+            },
+            "analysis_type": {
+              "type": "string",
+              "enum": ["basic", "advanced", "statistical"],
+              "description": "分析类型"
+            },
+            "output_format": {
+              "type": "string",
+              "enum": ["json", "csv", "html"],
+              "description": "输出格式"
+            }
+          },
+          "required": ["file_path"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "executable": "./external_tools/image_processor",
+      "function": {
+        "name": "process_image",
+        "description": "处理图片文件",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_path": {
+              "type": "string",
+              "description": "输入图片路径"
+            },
+            "output_path": {
+              "type": "string",
+              "description": "输出图片路径"
+            },
+            "operation": {
+              "type": "string",
+              "enum": ["resize", "crop", "rotate", "filter"],
+              "description": "图片操作类型"
+            },
+            "params": {
+              "type": "object",
+              "description": "操作参数，格式依操作类型而定"
+            }
+          },
+          "required": ["input_path", "output_path", "operation"]
+        }
+      }
+    }
+  ]
+}

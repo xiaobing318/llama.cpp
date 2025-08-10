@@ -1,0 +1,35 @@
+{
+  "agent_host": "127.0.0.1",
+  "agent_port": 8081,
+  "llama_server_host": "127.0.0.1",
+  "llama_server_port": 8080,
+  "llama_server_path": "./llama-server",
+  "model_path": "path/to/your/model.gguf",
+  "n_ctx": 2048,
+  "n_gpu_layers": -1,
+  "auto_start_server": false,
+  "tools": [
+    {
+      "type": "function",
+      "executable": "python3 ./external_tools/simple_tool.py",
+      "function": {
+        "name": "simple_external_tool",
+        "description": "一个简单的外部工具示例",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "名称参数"
+            },
+            "message": {
+              "type": "string",
+              "description": "消息参数"
+            }
+          },
+          "required": ["name"]
+        }
+      }
+    }
+  ]
+}

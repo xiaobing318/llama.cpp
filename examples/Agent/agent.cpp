@@ -251,14 +251,21 @@ public:
 
     void setupRoutes() {
         // Health check（应该间接的检查 llama-server 的 /health 端口）
-        server->Get("/health", [](const httplib::Request&, httplib::Response& res) {
-            json response = {{"status", "ok"}};
-            res.set_content(response.dump(), "application/json");
+        server->Get("/health", [this](const httplib::Request&, httplib::Response& res) {
+            auto llama_res = llama_client->Get("/health");
+            if (llama_res && llama_res->status == 200) {
+                res.set_content(llama_res->body, "application/json");
+                res.status = llama_res->status;
+            } else {
+                json error_response = {{"status", "error"}, {"message", "llama-server unavailable"}};
+                res.set_content(error_response.dump(), "application/json");
+                res.status = 503;
+            }
         });
 
         // List available tools
         server->Get("/tools", [this](const httplib::Request&, httplib::Response& res) {
-            json response = {{"tools", config.tools}};
+            json response = {{"tools", tool_executor->getTools()}};
             res.set_content(response.dump(), "application/json");
         });
 
@@ -269,8 +276,9 @@ public:
                 json request_body = json::parse(req.body);
 
                 // Add tools to request if not present
-                if (!request_body.contains("tools") && !config.tools.empty()) {
-                    request_body["tools"] = config.tools;
+                json all_tools = tool_executor->getTools();
+                if (!request_body.contains("tools") && !all_tools.empty()) {
+                    request_body["tools"] = all_tools;
                 }
 
                 // Forward to llama-server
@@ -367,24 +375,77 @@ public:
                             messages.push_back(result);
                         }
 
-                        /*
-                        1、TODO：到目前位置只是对 llama-server 服务进行了两次请求，有可能存在多次工具调用的情况，即只要每次 llama-server 响应中
-                        包含 "tool_calls" 字段，就需要继续执行工具调用，如果只是正常的对话，则不需要继续执行工具调用。
-                        */
-                        json final_request = request_body;
-                        final_request["messages"] = messages;
-                        // 最后一次请求中不需要 tools 字段，这样可以减少 token 的消耗。
-                        final_request.erase("tools");
-                        // 向 llama-server 发送请求以获取完整的响应。
-                        auto final_res = llama_client->Post("/v1/chat/completions",
-                            final_request.dump(), "application/json");
-                        // 如果 llama-server 响应体不为空，则将其解析为 JSON 对象。
-                        if (final_res) {
-                            // 解析 llama-server 的响应体。
-                            response = json::parse(final_res->body);
-                            // 向解析后的响应体中添加工具调用的结果。
-                            response["tool_results"] = tool_results;
+                        // 支持多次工具调用循环，只要响应中包含 tool_calls 就继续执行
+                        json all_tool_results = json::array();
+                        for (const auto& result : tool_results) {
+                            all_tool_results.push_back(result);
                         }
+
+                        int max_iterations = 10; // 防止无限循环
+                        int iteration = 0;
+                        
+                        while (iteration < max_iterations) {
+                            json continue_request = request_body;
+                            continue_request["messages"] = messages;
+                            // 第一轮之后的请求中不需要 tools 字段，减少 token 消耗
+                            if (iteration > 0) {
+                                continue_request.erase("tools");
+                            }
+
+                            auto continue_res = llama_client->Post("/v1/chat/completions",
+                                continue_request.dump(), "application/json");
+
+                            if (!continue_res) {
+                                break;
+                            }
+
+                            response = json::parse(continue_res->body);
+                            
+                            // 检查是否还有工具调用
+                            bool has_tool_calls = false;
+                            if (response.contains("choices") && !response["choices"].empty()) {
+                                auto& choice = response["choices"][0];
+                                if (choice.contains("message") && choice["message"].contains("tool_calls")) {
+                                    has_tool_calls = true;
+                                    
+                                    // 将当前助手响应添加到消息历史
+                                    messages.push_back(choice["message"]);
+                                    
+                                    // 执行新的工具调用
+                                    for (const auto& tool_call : choice["message"]["tool_calls"]) {
+                                        std::string function_name = tool_call["function"]["name"];
+                                        json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
+
+                                        LOG_INF("执行工具 (第%d轮): %s\n", iteration + 1, function_name.c_str());
+                                        json result = tool_executor->execute(function_name, arguments);
+
+                                        json tool_result = {
+                                            {"tool_call_id", tool_call["id"]},
+                                            {"role", "tool"},
+                                            {"name", function_name},
+                                            {"content", result.dump()}
+                                        };
+                                        
+                                        messages.push_back(tool_result);
+                                        all_tool_results.push_back(tool_result);
+                                    }
+                                }
+                            }
+                            
+                            // 如果没有更多工具调用，结束循环
+                            if (!has_tool_calls) {
+                                break;
+                            }
+                            
+                            iteration++;
+                        }
+                        
+                        if (iteration >= max_iterations) {
+                            LOG_WRN("工具调用循环达到最大次数限制 (%d)，强制结束\n", max_iterations);
+                        }
+                        
+                        // 向最终响应中添加所有工具调用的结果
+                        response["tool_results"] = all_tool_results;
                     }
                 }
                 // 将最终的响应体设置到 HTTP 响应中。
