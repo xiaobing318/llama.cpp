@@ -5,6 +5,7 @@
 #include <chrono>
 #include "json.hpp"
 
+// TODO：需要将部分函数接口使用 static 修饰，这样可以控制符号的链接可见性。
 using json = nlohmann::ordered_json;
 
 // Logging functions
