@@ -10,13 +10,14 @@
 #include <signal.h>
 #include <fstream>
 #include <memory>
+#include <cstring>
+#include <iostream>
 
 #ifdef _WIN32
     #include <windows.h>
 #else
     #include <sys/wait.h>
     #include <cerrno>
-    #include <cstring>
     #include <unistd.h>
 #endif
 
@@ -383,7 +384,7 @@ public:
 
                         int max_iterations = 10; // 防止无限循环
                         int iteration = 0;
-                        
+
                         while (iteration < max_iterations) {
                             json continue_request = request_body;
                             continue_request["messages"] = messages;
@@ -400,17 +401,17 @@ public:
                             }
 
                             response = json::parse(continue_res->body);
-                            
+
                             // 检查是否还有工具调用
                             bool has_tool_calls = false;
                             if (response.contains("choices") && !response["choices"].empty()) {
                                 auto& choice = response["choices"][0];
                                 if (choice.contains("message") && choice["message"].contains("tool_calls")) {
                                     has_tool_calls = true;
-                                    
+
                                     // 将当前助手响应添加到消息历史
                                     messages.push_back(choice["message"]);
-                                    
+
                                     // 执行新的工具调用
                                     for (const auto& tool_call : choice["message"]["tool_calls"]) {
                                         std::string function_name = tool_call["function"]["name"];
@@ -425,25 +426,25 @@ public:
                                             {"name", function_name},
                                             {"content", result.dump()}
                                         };
-                                        
+
                                         messages.push_back(tool_result);
                                         all_tool_results.push_back(tool_result);
                                     }
                                 }
                             }
-                            
+
                             // 如果没有更多工具调用，结束循环
                             if (!has_tool_calls) {
                                 break;
                             }
-                            
+
                             iteration++;
                         }
-                        
+
                         if (iteration >= max_iterations) {
                             LOG_WRN("工具调用循环达到最大次数限制 (%d)，强制结束\n", max_iterations);
                         }
-                        
+
                         // 向最终响应中添加所有工具调用的结果
                         response["tool_results"] = all_tool_results;
                     }
@@ -553,6 +554,62 @@ public:
 std::atomic<bool> g_running{true};
 LlamaAgent* g_agent_instance = nullptr;
 
+struct CommandLineArgs {
+    std::string config_file_path = "config.json";
+    bool show_help = false;
+    bool show_version = false;
+};
+
+void printHelp(const char* program_name) {
+    std::cout << "Usage: " << program_name << " [OPTIONS]\n"
+              << "\n"
+              << "Options:\n"
+              << "  --config-file-path PATH        配置文件路径 (默认: config.json)\n"
+              << "  --help                         显示帮助信息\n"
+              << "  --version                      显示版本信息\n"
+              << "\n"
+              << "Examples:\n"
+              << "  " << program_name << "\n"
+              << "  " << program_name << " --config-file-path /path/to/agent-config.json\n"
+              << "  " << program_name << " --config-file-path \"path/to/agent-config.json\"\n"
+              << std::endl;
+}
+
+void printVersion() {
+    std::cout << "LlamaAgent v1.0.0\n";
+}
+
+bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+
+        if (arg == "--help") {
+            args.show_help = true;
+            return true;
+        }
+        else if (arg == "--version") {
+            args.show_version = true;
+            return true;
+        }
+        else if (arg == "--config-file-path") {
+            if (i + 1 >= argc) {
+                std::cerr << "错误: " << arg << " 选项需要一个参数\n";
+                return false;
+            }
+            args.config_file_path = argv[++i];
+        }
+        else if (arg[0] == '-') {
+            std::cerr << "错误: 未知选项 '" << arg << "'\n";
+            std::cerr << "使用 --help 查看帮助信息\n";
+            return false;
+        }
+        else {
+            args.config_file_path = arg;
+        }
+    }
+    return true;
+}
+
 void signal_handler(int signal_num) {
     const char* signal_name = (signal_num == SIGINT) ? "SIGINT" :
                              (signal_num == SIGTERM) ? "SIGTERM" : "UNKNOWN";
@@ -570,12 +627,25 @@ int main(int argc, char** argv) {
     // 初始化程序环境，包括设置 UTF-8 区域和在 Windows 上启用 UTF-8 控制台输出。
     common_init();
 
-    // 解析命令行参数，获取配置文件的路径
-    //std::string config_file = "F:/llama.cpp-data/llama-b5215-bin-win-cuda-cu12.4-x64/config.json";
-    std::string config_file = "config.json";
-    if (argc > 1) {
-        config_file = argv[1];
+    // 解析命令行参数
+    CommandLineArgs args;
+    if (!parseCommandLine(argc, argv, args)) {
+        return 1;
     }
+
+    // 处理帮助和版本信息
+    if (args.show_help) {
+        printHelp(argv[0]);
+        return 0;
+    }
+
+    if (args.show_version) {
+        printVersion();
+        return 0;
+    }
+
+    // 获取配置文件路径
+    std::string config_file = args.config_file_path;
 
     // 设置信号处理器以捕获终止信号
     signal(SIGINT, signal_handler);
