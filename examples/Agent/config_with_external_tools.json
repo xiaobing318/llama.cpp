@@ -90,6 +90,370 @@
           "required": ["input_path", "output_path", "operation"]
         }
       }
+    },
+    {
+      "type": "function",
+      "executable": "ogr2ogr",
+      "executable_windows": "C:/OSGeo4W64/bin/ogr2ogr.exe",
+      "executable_linux": "/usr/bin/ogr2ogr",
+      "function": {
+        "name": "ogr_convert_format",
+        "description": "转换矢量数据格式（如SHP到GeoJSON），支持多种输入输出格式",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_file": {
+              "type": "string",
+              "description": "输入矢量文件路径，支持格式：Shapefile(.shp), GeoJSON(.geojson), KML(.kml), GPX(.gpx), GML(.gml), CSV(.csv)等",
+              "minLength": 1,
+              "pattern": ".*\\.(shp|geojson|json|kml|gpx|gml|csv|tab|dxf)$"
+            },
+            "output_file": {
+              "type": "string", 
+              "description": "输出文件路径，扩展名决定输出格式",
+              "minLength": 1
+            },
+            "output_format": {
+              "type": "string",
+              "description": "输出格式驱动名称",
+              "enum": ["GeoJSON", "ESRI Shapefile", "KML", "GPX", "GML", "CSV", "MapInfo File", "DXF", "GPKG"],
+              "default": "GeoJSON"
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "是否覆盖已存在的输出文件",
+              "default": false
+            },
+            "encoding": {
+              "type": "string",
+              "description": "字符编码",
+              "enum": ["UTF-8", "GBK", "GB2312", "ISO-8859-1"],
+              "default": "UTF-8"
+            }
+          },
+          "required": ["input_file", "output_file"],
+          "additionalProperties": false
+        }
+      },
+      "command_template": "ogr2ogr {overwrite:?-overwrite} -f \"{output_format}\" \"{output_file}\" \"{input_file}\" {encoding:?-lco ENCODING={encoding}}"
+    },
+    {
+      "type": "function", 
+      "executable": "ogr2ogr",
+      "executable_windows": "C:/OSGeo4W64/bin/ogr2ogr.exe",
+      "executable_linux": "/usr/bin/ogr2ogr",
+      "function": {
+        "name": "ogr_reproject",
+        "description": "矢量数据坐标系转换，支持各种坐标参考系统之间的转换",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_file": {
+              "type": "string",
+              "description": "输入矢量文件路径",
+              "minLength": 1
+            },
+            "output_file": {
+              "type": "string",
+              "description": "输出文件路径",
+              "minLength": 1
+            },
+            "source_crs": {
+              "type": "string",
+              "description": "源坐标系，支持EPSG代码(如EPSG:4326)、WKT格式或PROJ4字符串",
+              "pattern": "^(EPSG:\\d+|GEOGCS\\[.*\\]|PROJCS\\[.*\\]|\\+proj=.*)$"
+            },
+            "target_crs": {
+              "type": "string", 
+              "description": "目标坐标系，支持EPSG代码(如EPSG:3857)、WKT格式或PROJ4字符串",
+              "pattern": "^(EPSG:\\d+|GEOGCS\\[.*\\]|PROJCS\\[.*\\]|\\+proj=.*)$"
+            },
+            "output_format": {
+              "type": "string",
+              "description": "输出格式",
+              "enum": ["GeoJSON", "ESRI Shapefile", "GPKG", "KML"],
+              "default": "ESRI Shapefile"
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "是否覆盖已存在的输出文件",
+              "default": false
+            },
+            "transform_method": {
+              "type": "string",
+              "description": "坐标转换方法",
+              "enum": ["AUTO", "TOWGS84", "NADGRIDS"],
+              "default": "AUTO"
+            }
+          },
+          "required": ["input_file", "output_file", "target_crs"],
+          "additionalProperties": false
+        }
+      },
+      "command_template": "ogr2ogr {overwrite:?-overwrite} -f \"{output_format}\" {source_crs:?-s_srs \"{source_crs}\"} -t_srs \"{target_crs}\" \"{output_file}\" \"{input_file}\""
+    },
+    {
+      "type": "function",
+      "executable": "ogr2ogr",
+      "executable_windows": "C:/OSGeo4W64/bin/ogr2ogr.exe",
+      "executable_linux": "/usr/bin/ogr2ogr", 
+      "function": {
+        "name": "ogr_clip_by_extent",
+        "description": "按地理范围（矩形边界框）裁剪矢量数据",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_file": {
+              "type": "string",
+              "description": "输入矢量文件路径",
+              "minLength": 1
+            },
+            "output_file": {
+              "type": "string",
+              "description": "输出文件路径",
+              "minLength": 1
+            },
+            "xmin": {
+              "type": "number",
+              "description": "最小X坐标（西边界）",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "ymin": {
+              "type": "number", 
+              "description": "最小Y坐标（南边界）",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "xmax": {
+              "type": "number",
+              "description": "最大X坐标（东边界）",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "ymax": {
+              "type": "number",
+              "description": "最大Y坐标（北边界）",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "output_format": {
+              "type": "string",
+              "description": "输出格式",
+              "enum": ["GeoJSON", "ESRI Shapefile", "GPKG", "KML"],
+              "default": "ESRI Shapefile"
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "是否覆盖已存在的输出文件",
+              "default": false
+            },
+            "clip_method": {
+              "type": "string",
+              "description": "裁剪方法：spat使用空间范围，clipsrc使用几何裁剪",
+              "enum": ["spat", "clipsrc"],
+              "default": "spat"
+            }
+          },
+          "required": ["input_file", "output_file", "xmin", "ymin", "xmax", "ymax"],
+          "additionalProperties": false
+        }
+      },
+      "command_template": "ogr2ogr {overwrite:?-overwrite} -f \"{output_format}\" -spat {xmin} {ymin} {xmax} {ymax} \"{output_file}\" \"{input_file}\""
+    },
+    {
+      "type": "function",
+      "executable": "gdalinfo",
+      "executable_windows": "C:/OSGeo4W64/bin/gdalinfo.exe",
+      "executable_linux": "/usr/bin/gdalinfo",
+      "function": {
+        "name": "gdal_get_raster_info",
+        "description": "获取栅格数据详细信息，包括尺寸、坐标系、数据类型、统计信息等",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_file": {
+              "type": "string",
+              "description": "输入栅格文件路径",
+              "minLength": 1
+            },
+            "checksum": {
+              "type": "boolean", 
+              "description": "是否计算每个波段的校验和",
+              "default": false
+            },
+            "statistics": {
+              "type": "boolean",
+              "description": "是否计算并显示统计信息（最小值、最大值、均值、标准差）", 
+              "default": false
+            },
+            "histogram": {
+              "type": "boolean",
+              "description": "是否显示直方图信息",
+              "default": false
+            },
+            "metadata": {
+              "type": "boolean",
+              "description": "是否显示元数据信息",
+              "default": true
+            },
+            "overview": {
+              "type": "boolean",
+              "description": "是否显示概览信息",
+              "default": false
+            },
+            "corner_coords": {
+              "type": "boolean",
+              "description": "是否显示四个角点坐标",
+              "default": true
+            },
+            "format_info": {
+              "type": "boolean",
+              "description": "是否显示格式相关信息",
+              "default": true
+            }
+          },
+          "required": ["input_file"],
+          "additionalProperties": false
+        }
+      },
+      "command_template": "gdalinfo {checksum:?-checksum} {statistics:?-stats} {histogram:?-hist} {metadata:!true?-nomd} {corner_coords:?-nogcp} \"{input_file}\""
+    },
+    {
+      "type": "function",
+      "executable": "gdal_translate",
+      "executable_windows": "C:/OSGeo4W64/bin/gdal_translate.exe",
+      "executable_linux": "/usr/bin/gdal_translate",
+      "function": {
+        "name": "gdal_convert_raster",
+        "description": "转换栅格数据格式，支持格式转换、数据类型转换、压缩等选项",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_file": {
+              "type": "string", 
+              "description": "输入栅格文件路径，支持GeoTIFF、PNG、JPEG、HDF、NetCDF等格式",
+              "minLength": 1
+            },
+            "output_file": {
+              "type": "string",
+              "description": "输出栅格文件路径",
+              "minLength": 1
+            },
+            "output_format": {
+              "type": "string",
+              "description": "输出格式驱动名称",
+              "enum": ["GTiff", "PNG", "JPEG", "HFA", "ENVI", "AAIGrid", "NetCDF", "JP2ECW"],
+              "default": "GTiff"
+            },
+            "data_type": {
+              "type": "string",
+              "description": "输出数据类型",
+              "enum": ["Byte", "Int16", "UInt16", "Int32", "UInt32", "Float32", "Float64"],
+              "default": "keep_original"
+            },
+            "compress": {
+              "type": "string",
+              "description": "压缩算法（仅适用于GTiff格式）",
+              "enum": ["NONE", "LZW", "DEFLATE", "JPEG", "PACKBITS"],
+              "default": "NONE"
+            },
+            "jpeg_quality": {
+              "type": "integer",
+              "description": "JPEG压缩质量（1-100），仅当压缩方式为JPEG时有效",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 75
+            },
+            "nodata_value": {
+              "type": "number",
+              "description": "无数据值，用于标识无效像素"
+            },
+            "scale_factor": {
+              "type": "number",
+              "description": "缩放因子，用于数据值转换",
+              "minimum": 0.000001,
+              "maximum": 1000000,
+              "default": 1.0
+            },
+            "offset": {
+              "type": "number",
+              "description": "偏移量，用于数据值转换",
+              "default": 0.0
+            }
+          },
+          "required": ["input_file", "output_file"],
+          "additionalProperties": false
+        }
+      },
+      "command_template": "gdal_translate -of {output_format} {data_type:!keep_original?-ot {data_type}} {compress:!NONE?-co COMPRESS={compress}} {jpeg_quality:!75?-co JPEG_QUALITY={jpeg_quality}} {nodata_value:?-a_nodata {nodata_value}} {scale_factor:!1?-scale} {offset:!0?-a_offset {offset}} \"{input_file}\" \"{output_file}\""
+    },
+    {
+      "type": "function",
+      "executable": "gdaldem",
+      "executable_windows": "C:/OSGeo4W64/bin/gdaldem.exe",
+      "executable_linux": "/usr/bin/gdaldem",
+      "function": {
+        "name": "gdal_hillshade",
+        "description": "从DEM生成山体阴影图，用于地形可视化",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input_dem": {
+              "type": "string",
+              "description": "输入DEM文件路径",
+              "minLength": 1
+            },
+            "output_file": {
+              "type": "string",
+              "description": "输出山体阴影文件路径",
+              "minLength": 1
+            },
+            "azimuth": {
+              "type": "number",
+              "description": "光源方位角（0-360度），0表示北方",
+              "minimum": 0,
+              "maximum": 360,
+              "default": 315
+            },
+            "altitude": {
+              "type": "number",
+              "description": "光源高度角（0-90度）",
+              "minimum": 0,
+              "maximum": 90,
+              "default": 45
+            },
+            "z_factor": {
+              "type": "number",
+              "description": "高程夸张系数，用于增强地形起伏效果",
+              "minimum": 0.1,
+              "maximum": 10,
+              "default": 1
+            },
+            "scale": {
+              "type": "number",
+              "description": "像素大小比例因子（当DEM单位与水平单位不同时使用）",
+              "minimum": 0.001,
+              "maximum": 1000,
+              "default": 1
+            },
+            "output_format": {
+              "type": "string",
+              "description": "输出格式",
+              "enum": ["GTiff", "PNG", "JPEG"],
+              "default": "GTiff"
+            },
+            "compute_edges": {
+              "type": "boolean",
+              "description": "是否计算边缘像素",
+              "default": false
+            }
+          },
+          "required": ["input_dem", "output_file"],
+          "additionalProperties": false
+        }
+      },
+      "command_template": "gdaldem hillshade -of {output_format} -az {azimuth} -alt {altitude} -z {z_factor} -s {scale} {compute_edges:?-compute_edges} \"{input_dem}\" \"{output_file}\""
     }
   ]
 }

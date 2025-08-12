@@ -184,6 +184,23 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
         if (definition.contains("executable")) {
             std::string executable = definition["executable"];
             
+            // 根据平台选择可执行文件路径
+#ifdef _WIN32
+            if (definition.contains("executable_windows")) {
+                executable = definition["executable_windows"];
+            }
+#else
+            if (definition.contains("executable_linux")) {
+                executable = definition["executable_linux"];
+            }
+#endif
+            
+            std::string command_template;
+            // 检查是否有命令模板
+            if (definition.contains("command_template")) {
+                command_template = definition["command_template"];
+            }
+            
             try {
                 // Validate arguments if schema exists
                 if (definition.contains("function") &&
@@ -196,8 +213,8 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
                     }
                 }
                 
-                // Execute external tool
-                return executeExternalTool(executable, arguments);
+                // Execute external tool with command template
+                return executeExternalTool(executable, arguments, command_template);
                 
             } catch (const std::exception& e) {
                 LOG_ERR("External tool execution failed: %s\n", e.what());
@@ -420,9 +437,20 @@ json ToolExecutor::executeListFiles(const json& args) {
 
 // ExternalTools
 json ToolExecutor::executeExternalTool(const std::string& executable, const json& arguments) {
+    return executeExternalTool(executable, arguments, "");
+}
+
+json ToolExecutor::executeExternalTool(const std::string& executable, const json& arguments, const std::string& command_template) {
     try {
-        // 构建命令行，将 JSON 参数作为标准输入传递给外部程序
-        std::string cmd = executable;
+        // 构建命令行
+        std::string cmd;
+        if (!command_template.empty()) {
+            // 使用命令模板构建命令
+            cmd = buildCommandFromTemplate(command_template, arguments);
+        } else {
+            // 默认方式：仅使用可执行文件名，参数通过标准输入传递
+            cmd = executable;
+        }
         
         LOG_INF("执行外部工具: %s\n", cmd.c_str());
         
@@ -480,10 +508,12 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
         CloseHandle(hChildStd_OUT_Wr);
         CloseHandle(hChildStd_IN_Rd);
 
-        // 向子进程发送 JSON 参数
-        std::string json_input = arguments.dump();
-        DWORD dwWritten;
-        WriteFile(hChildStd_IN_Wr, json_input.c_str(), json_input.length(), &dwWritten, NULL);
+        // 向子进程发送 JSON 参数（仅在没有使用命令模板时）
+        if (command_template.empty()) {
+            std::string json_input = arguments.dump();
+            DWORD dwWritten;
+            WriteFile(hChildStd_IN_Wr, json_input.c_str(), json_input.length(), &dwWritten, NULL);
+        }
         CloseHandle(hChildStd_IN_Wr);
 
         // 读取子进程输出
@@ -569,9 +599,11 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             close(stdin_pipe[0]);   // 关闭读端
             close(stdout_pipe[1]);  // 关闭写端
             
-            // 向子进程发送 JSON 参数
-            std::string json_input = arguments.dump();
-            write(stdin_pipe[1], json_input.c_str(), json_input.length());
+            // 向子进程发送 JSON 参数（仅在没有使用命令模板时）
+            if (command_template.empty()) {
+                std::string json_input = arguments.dump();
+                write(stdin_pipe[1], json_input.c_str(), json_input.length());
+            }
             close(stdin_pipe[1]);
             
             // 读取子进程输出
@@ -618,4 +650,123 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             {"success", false}
         };
     }
+}
+
+// 辅助函数：安全地转义命令行参数
+std::string escapeShellArgument(const std::string& arg) {
+    // 如果参数包含空格或特殊字符，需要用引号包围
+    if (arg.find(' ') != std::string::npos || 
+        arg.find('\t') != std::string::npos ||
+        arg.find('\"') != std::string::npos ||
+        arg.find('\'') != std::string::npos ||
+        arg.find('$') != std::string::npos ||
+        arg.find('`') != std::string::npos ||
+        arg.find(';') != std::string::npos ||
+        arg.find('&') != std::string::npos ||
+        arg.find('|') != std::string::npos) {
+        
+        std::string escaped = arg;
+        // 转义双引号
+        size_t pos = 0;
+        while ((pos = escaped.find('\"', pos)) != std::string::npos) {
+            escaped.replace(pos, 1, "\\\"");
+            pos += 2;
+        }
+        return "\"" + escaped + "\"";
+    }
+    return arg;
+}
+
+std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_template, const json& arguments) {
+    std::string result = command_template;
+    
+    // 替换模板中的参数占位符
+    // 支持的语法：
+    // {param_name} - 直接替换参数值
+    // {param_name:?text} - 如果参数存在则替换为text，否则为空
+    // {param_name:!default_value?text} - 如果参数值不等于默认值则替换为text
+    // {param_name:join:separator} - 数组参数用分隔符连接
+    
+    size_t pos = 0;
+    while ((pos = result.find('{', pos)) != std::string::npos) {
+        size_t end_pos = result.find('}', pos);
+        if (end_pos == std::string::npos) break;
+        
+        std::string placeholder = result.substr(pos + 1, end_pos - pos - 1);
+        std::string replacement;
+        
+        // 解析占位符
+        size_t colon_pos = placeholder.find(':');
+        std::string param_name = placeholder;
+        std::string modifier;
+        
+        if (colon_pos != std::string::npos) {
+            param_name = placeholder.substr(0, colon_pos);
+            modifier = placeholder.substr(colon_pos + 1);
+        }
+        
+        // 检查参数是否存在
+        bool param_exists = arguments.contains(param_name);
+        auto param_value = param_exists ? arguments[param_name] : json();
+        
+        if (modifier.empty()) {
+            // 简单替换：{param_name}
+            if (param_exists && !param_value.is_null()) {
+                if (param_value.is_string()) {
+                    replacement = param_value.get<std::string>();
+                } else {
+                    replacement = param_value.dump();
+                }
+            }
+        } else if (modifier[0] == '?') {
+            // 条件替换：{param_name:?text}
+            if (param_exists && !param_value.is_null()) {
+                replacement = modifier.substr(1);
+            }
+        } else if (modifier[0] == '!') {
+            // 默认值比较：{param_name:!default_value?text}
+            size_t question_pos = modifier.find('?');
+            if (question_pos != std::string::npos) {
+                std::string default_value = modifier.substr(1, question_pos - 1);
+                std::string text = modifier.substr(question_pos + 1);
+                
+                if (param_exists && !param_value.is_null()) {
+                    std::string current_value;
+                    if (param_value.is_string()) {
+                        current_value = param_value.get<std::string>();
+                    } else {
+                        current_value = param_value.dump();
+                    }
+                    
+                    if (current_value != default_value) {
+                        replacement = text;
+                    }
+                }
+            }
+        } else if (modifier.find("join:") == 0) {
+            // 数组连接：{param_name:join:separator}
+            std::string separator = modifier.substr(5); // 移除"join:"
+            if (param_exists && param_value.is_array()) {
+                std::vector<std::string> items;
+                for (const auto& item : param_value) {
+                    if (item.is_string()) {
+                        items.push_back("\"" + item.get<std::string>() + "\"");
+                    } else {
+                        items.push_back(item.dump());
+                    }
+                }
+                // 连接数组元素
+                for (size_t i = 0; i < items.size(); ++i) {
+                    if (i > 0) replacement += separator;
+                    replacement += items[i];
+                }
+            }
+        }
+        
+        // 替换占位符
+        result.replace(pos, end_pos - pos + 1, replacement);
+        pos += replacement.length();
+    }
+    
+    return result;
 }
