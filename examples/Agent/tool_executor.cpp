@@ -143,8 +143,6 @@ void ToolExecutor::registerTool(const json& tool_definition) {
     LOG_INF("成功注册工具： %s\n", name.c_str());
 }
 
-// tool_executor.cpp
-
 json ToolExecutor::execute(const std::string& name, const json& arguments) {
     // 首先检查是否为内置工具
     auto it = tools.find(name);
@@ -218,7 +216,6 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
     };
 }
 
-
 bool ToolExecutor::hasTool(const std::string& name) const {
     return tools.find(name) != tools.end() || tool_definitions.find(name) != tool_definitions.end();
 }
@@ -230,6 +227,8 @@ json ToolExecutor::getTools() const {
     }
     return result;
 }
+
+// BuiltinTools
 
 json ToolExecutor::executeGetCurrentTime(const json& args) {
     std::string format = args.value("format", "ISO8601");
@@ -418,6 +417,8 @@ json ToolExecutor::executeListFiles(const json& args) {
     };
 }
 
+
+// ExternalTools
 json ToolExecutor::executeExternalTool(const std::string& executable, const json& arguments) {
     try {
         // 构建命令行，将 JSON 参数作为标准输入传递给外部程序

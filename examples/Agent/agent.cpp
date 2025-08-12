@@ -273,11 +273,12 @@ public:
         // Chat completion with tool support
         server->Post("/v1/chat/completions", [this](const httplib::Request& req, httplib::Response& res) {
             try {
-                // 解析请求体中的 JSON 数据
+                // 将请求体中的 body 信息解析成 JSON 数据
                 json request_body = json::parse(req.body);
 
                 /*
                 1、如果请求体中不存在 "tools" 字段，则需要将工具执行器中的工具（包含内置工具定义、配置中的外部工具定义）添加到请求体中。
+                2、获取得到内置工具的定义 + 配置文件中外部工具的定义。
                 2、TODO：应该不考虑请求体中的工具定义，因为没有具体的实现。
                 */
                 json all_tools = tool_executor->getTools();
@@ -289,7 +290,7 @@ public:
                 auto llama_res = llama_client->Post("/v1/chat/completions",
                     request_body.dump(), "application/json");
 
-                // 如果 llama-server 的响应体为空，则设置 llama-agent 的响应体。
+                // 如果 llama-server 的响应体为空，则设置 llama-agent 的响应体，向客户端返回错误信息。
                 if (!llama_res) {
                     json error = {{"error", "Failed to connect to llama-server"}};
                     res.set_content(error.dump(), "application/json");
@@ -298,7 +299,7 @@ public:
                 }
 
                 /*
-                1、解析 llama-server 的响应
+                1、代码执行到这里说明 llama-server 的响应体不是空的，这里需要解析 llama-server 的响应体中的信息。
                 2、下列是 llama-server 响应的一个 JSON 格式的例子。
                 {
                     "choices": [
@@ -359,7 +360,8 @@ public:
                             std::string function_name = tool_call["function"]["name"];
                             json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                            LOG_INF("执行工具: %s\n", function_name.c_str());
+                            LOG_INF("执行工具 (第%d轮): %s\n", 1, function_name.c_str());
+
                             // 调用 ToolExecutor 执行工具，并获取结果。
                             json result = tool_executor->execute(function_name, arguments);
                             // 将调用工具结果以及一些额外信息包装成 JSON 保存到 tool_results 数组中，这里假设会执行多个工具调用。
@@ -375,12 +377,12 @@ public:
                         auto messages = request_body["messages"];
                         // 将 llama-server 响应体中的 choice 的 message 添加到 messages 中，相当于将模型的响应添加到消息列表中。
                         messages.push_back(choice["message"]);
-                        // 循环将工具调用的结果添加到消息列表中。
+                        // 循环将工具调用的结果添加到消息列表中，这里采用循环的方式是为了以后的扩展，但是一般来说一次只会调用一次工具。
                         for (const auto& result : tool_results) {
                             messages.push_back(result);
                         }
 
-                        // 支持多次工具调用循环，只要响应中包含 tool_calls 就继续执行
+                        // 支持多次工具调用循环，只要响应中包含 tool_calls 就继续执行。
                         json all_tool_results = json::array();
                         for (const auto& result : tool_results) {
                             all_tool_results.push_back(result);
@@ -391,12 +393,17 @@ public:
                         int iteration = 0;
 
                         while (iteration < max_iterations) {
+                            // 经过上述对请求体的处理，现在请求体中包含了模型的工具调用响应和工具调用的结果。
                             json continue_request = request_body;
                             continue_request["messages"] = messages;
-                            // 第一轮之后的请求中不需要 tools 字段，减少 token 消耗
+
+                            /*
+                            1、需要将工具定义继续给到 LLM 使其进行工具调用，这里的 tokens 消耗是不可避免的，即不能使用下列代码。
+
                             if (iteration > 0) {
                                 continue_request.erase("tools");
                             }
+                            */
 
                             auto continue_res = llama_client->Post("/v1/chat/completions",
                                 continue_request.dump(), "application/json");
@@ -422,7 +429,7 @@ public:
                                         std::string function_name = tool_call["function"]["name"];
                                         json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                                        LOG_INF("执行工具 (第%d轮): %s\n", iteration + 1, function_name.c_str());
+                                        LOG_INF("执行工具 (第%d轮): %s\n", iteration + 2, function_name.c_str());
                                         json result = tool_executor->execute(function_name, arguments);
 
                                         json tool_result = {
@@ -562,16 +569,19 @@ void printVersion() {
 
 bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
     for (int i = 1; i < argc; ++i) {
+        // 获取当前命令行参数
         std::string arg = argv[i];
-
+        // 如果当前命令行参数为 --help 的话则需要修改命令行结构体状态。
         if (arg == "--help") {
             args.show_help = true;
             return true;
         }
+        // 如果当前命令行参数为 --version 的话则需要修改命令行结构体状态。
         else if (arg == "--version") {
             args.show_version = true;
             return true;
         }
+        // 如果当前命令行参数为 --config-file-path 的话则需要修改命令行结构体状态。
         else if (arg == "--config-file-path") {
             if (i + 1 >= argc) {
                 std::cerr << "错误: " << arg << " 选项需要一个参数\n";
@@ -579,6 +589,7 @@ bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
             }
             args.config_file_path = argv[++i];
         }
+        // 如果当前命令行参数为 - 的话则需要修改命令行结构体状态。
         else if (arg[0] == '-') {
             std::cerr << "错误: 未知选项 '" << arg << "'\n";
             std::cerr << "使用 --help 查看帮助信息\n";
