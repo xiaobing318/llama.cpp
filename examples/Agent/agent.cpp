@@ -69,7 +69,7 @@ public:
                 LOG_ERR("打开配置文件失败：%s \n", config_file.c_str());
                 return false;
             }
-            // 如果打开配置文件成功，则使用 nlohmann::json 库解析 JSON 格式的配置文件。
+            // 如果打开配置文件成功，则使用 nlohmann::json 库解析 JSON 格式的配置文件，解析的过程中出现问题将会抛出异常。
             json j;
             file >> j;
             // 使用 nlohmann::json 库的 value 方法获取配置项的值，如果配置项不存在，则使用默认值。
@@ -92,7 +92,7 @@ public:
             LOG_INF("配置加载成功！\n");
             return true;
         } catch (const std::exception& e) {
-            LOG_ERR("加载配置失败： %s\n", e.what());
+            LOG_ERR("加载配置失败：%s\n", e.what());
             return false;
         }
     }
@@ -360,7 +360,7 @@ public:
                             std::string function_name = tool_call["function"]["name"];
                             json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                            LOG_INF("执行工具 (第%d轮): %s\n", 1, function_name.c_str());
+                            LOG_INF("执行工具 (第 %d 轮): %s\n", 1, function_name.c_str());
 
                             // 调用 ToolExecutor 执行工具，并获取结果。
                             json result = tool_executor->execute(function_name, arguments);
@@ -429,7 +429,7 @@ public:
                                         std::string function_name = tool_call["function"]["name"];
                                         json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                                        LOG_INF("执行工具 (第%d轮): %s\n", iteration + 2, function_name.c_str());
+                                        LOG_INF("执行工具 (第 %d 轮): %s\n", iteration + 2, function_name.c_str());
                                         json result = tool_executor->execute(function_name, arguments);
 
                                         json tool_result = {
