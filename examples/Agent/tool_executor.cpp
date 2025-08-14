@@ -692,39 +692,37 @@ std::string escapeShellArgument(const std::string& arg) {
     return arg;
 }
 
-/**
- * 根据命令模板和参数构建完整的命令行字符串
- *
- * 支持的模板语法：
- *
- * 1. 基本参数替换：{param_name}
- *    - 直接将参数值替换到占位符位置
- *    - 示例：模板 "tool -f {input_file}"，参数 {"input_file": "data.txt"}
- *    - 结果："tool -f data.txt"
- *
- * 2. 条件替换：{param_name:?text}
- *    - 如果参数存在且非空，则替换为指定的text，否则为空字符串
- *    - text中可以再次引用同一参数：{param_name:?-option {param_name}}
- *    - 示例：模板 "tool {verbose:?-v} {output:?-o {output}} input.txt"
- *      参数 {"verbose": true, "output": "result.txt"}
- *    - 结果："tool -v -o result.txt input.txt"
- *
- * 3. 默认值比较：{param_name:!default_value?text}
- *    - 如果参数值不等于默认值，则替换为text，否则为空
- *    - 示例：模板 "tool {format:!auto?-f {format}} input.txt"
- *      参数 {"format": "json"}
- *    - 结果："tool -f json input.txt" (因为"json" != "auto")
- *
- * 4. 数组连接：{param_name:join:separator}
- *    - 将数组参数用指定分隔符连接
- *    - 示例：模板 "tool {files:join: } {options:join:,}"
- *      参数 {"files": ["a.txt", "b.txt"], "options": ["opt1", "opt2"]}
- *    - 结果："tool "a.txt" "b.txt" "opt1","opt2""
- *
- * @param command_template 命令模板字符串
- * @param arguments JSON格式的参数对象
- * @param executable 可执行文件路径，用于替换模板开头的硬编码可执行文件名
- * @return 构建好的完整命令行字符串
+/*
+一、根据命令模板和参数构建完整的命令行字符串
+    @param command_template 命令模板字符串
+    @param arguments JSON格式的参数对象
+    @param executable 可执行文件路径，用于替换模板开头的硬编码可执行文件名
+    @return 构建好的完整命令行字符串
+
+二、支持的模板语法：
+    1. 基本参数替换：{param_name}
+       - 直接将参数值替换到占位符位置
+       - 示例：模板 "tool -f {input_file}"，参数 {"input_file": "data.txt"}
+       - 结果："tool -f data.txt"
+    
+    2. 条件替换：{param_name:?text}
+       - 如果参数存在且非空，则替换为指定的text，否则为空字符串
+       - text中可以再次引用同一参数：{param_name:?-option {param_name}}
+       - 示例：模板 "tool {verbose:?-v} {output:?-o {output}} input.txt"
+         参数 {"verbose": true, "output": "result.txt"}
+       - 结果："tool -v -o result.txt input.txt"
+    
+    3. 默认值比较：{param_name:!default_value?text}
+       - 如果参数值不等于默认值，则替换为text，否则为空
+       - 示例：模板 "tool {format:!auto?-f {format}} input.txt"
+         参数 {"format": "json"}
+       - 结果："tool -f json input.txt" (因为"json" != "auto")
+    
+    4. 数组连接：{param_name:join:separator}
+       - 将数组参数用指定分隔符连接
+       - 示例：模板 "tool {files:join: } {options:join:,}"
+         参数 {"files": ["a.txt", "b.txt"], "options": ["opt1", "opt2"]}
+       - 结果："tool "a.txt" "b.txt" "opt1","opt2""
  */
 std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_template, const json& arguments, const std::string& executable) {
     std::string result = command_template;
