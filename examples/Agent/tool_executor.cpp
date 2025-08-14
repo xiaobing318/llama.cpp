@@ -222,7 +222,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
                     definition["function"].contains("parameters")) {
                     if (!validate_arguments(arguments, definition["function"]["parameters"])) {
                         return json{
-                            {"error", "Invalid arguments"},
+                            {"error", "The tool calling's parameters requested by the model to the agent are invalid"},
                             {"success", false}
                         };
                     }
