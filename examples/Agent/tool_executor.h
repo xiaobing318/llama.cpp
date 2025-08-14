@@ -49,7 +49,7 @@ private:
     json executeExternalTool(const std::string& executable, const json& arguments, const std::string& command_template);
     
     // Build command line from template and arguments
-    std::string buildCommandFromTemplate(const std::string& command_template, const json& arguments);
+    std::string buildCommandFromTemplate(const std::string& command_template, const json& arguments, const std::string& executable = "");
     
     // Validate tool definition JSON schema
     bool validateToolDefinition(const json& tool_definition, std::string& error_message) const;

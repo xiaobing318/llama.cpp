@@ -460,8 +460,8 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
         // 构建命令行
         std::string cmd;
         if (!command_template.empty()) {
-            // 使用命令模板构建命令
-            cmd = buildCommandFromTemplate(command_template, arguments);
+            // 使用命令模板构建命令，传入可执行文件路径用于替换模板中的占位符
+            cmd = buildCommandFromTemplate(command_template, arguments, executable);
         } else {
             // 默认方式：仅使用可执行文件名，参数通过标准输入传递
             cmd = executable;
@@ -692,16 +692,62 @@ std::string escapeShellArgument(const std::string& arg) {
     return arg;
 }
 
-std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_template, const json& arguments) {
+/**
+ * 根据命令模板和参数构建完整的命令行字符串
+ *
+ * 支持的模板语法：
+ *
+ * 1. 基本参数替换：{param_name}
+ *    - 直接将参数值替换到占位符位置
+ *    - 示例：模板 "tool -f {input_file}"，参数 {"input_file": "data.txt"}
+ *    - 结果："tool -f data.txt"
+ *
+ * 2. 条件替换：{param_name:?text}
+ *    - 如果参数存在且非空，则替换为指定的text，否则为空字符串
+ *    - text中可以再次引用同一参数：{param_name:?-option {param_name}}
+ *    - 示例：模板 "tool {verbose:?-v} {output:?-o {output}} input.txt"
+ *      参数 {"verbose": true, "output": "result.txt"}
+ *    - 结果："tool -v -o result.txt input.txt"
+ *
+ * 3. 默认值比较：{param_name:!default_value?text}
+ *    - 如果参数值不等于默认值，则替换为text，否则为空
+ *    - 示例：模板 "tool {format:!auto?-f {format}} input.txt"
+ *      参数 {"format": "json"}
+ *    - 结果："tool -f json input.txt" (因为"json" != "auto")
+ *
+ * 4. 数组连接：{param_name:join:separator}
+ *    - 将数组参数用指定分隔符连接
+ *    - 示例：模板 "tool {files:join: } {options:join:,}"
+ *      参数 {"files": ["a.txt", "b.txt"], "options": ["opt1", "opt2"]}
+ *    - 结果："tool "a.txt" "b.txt" "opt1","opt2""
+ *
+ * @param command_template 命令模板字符串
+ * @param arguments JSON格式的参数对象
+ * @param executable 可执行文件路径，用于替换模板开头的硬编码可执行文件名
+ * @return 构建好的完整命令行字符串
+ */
+std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_template, const json& arguments, const std::string& executable) {
     std::string result = command_template;
 
-    // 替换模板中的参数占位符
-    // 支持的语法：
-    // {param_name} - 直接替换参数值
-    // {param_name:?text} - 如果参数存在则替换为text，否则为空
-    // {param_name:!default_value?text} - 如果参数值不等于默认值则替换为text
-    // {param_name:join:separator} - 数组参数用分隔符连接
+    // 首先替换可执行文件占位符（将模板开头的硬编码可执行文件名替换为平台特定的路径）
+    if (!executable.empty()) {
+        // 查找模板开头的可执行文件名并替换
+        size_t space_pos = result.find(' ');
+        if (space_pos != std::string::npos) {
+            std::string template_executable = result.substr(0, space_pos);
+            // 检查是否为可执行文件名（不含路径分隔符）
+            if (template_executable.find('/') == std::string::npos && template_executable.find('\\') == std::string::npos) {
+                result = escapeShellArgument(executable) + result.substr(space_pos);
+            }
+        } else {
+            // 整个模板就是可执行文件名
+            if (result.find('/') == std::string::npos && result.find('\\') == std::string::npos) {
+                result = escapeShellArgument(executable);
+            }
+        }
+    }
 
+    // 开始处理模板中的参数占位符
     size_t pos = 0;
     while ((pos = result.find('{', pos)) != std::string::npos) {
         size_t end_pos = result.find('}', pos);
@@ -736,7 +782,20 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
         } else if (modifier[0] == '?') {
             // 条件替换：{param_name:?text}
             if (param_exists && !param_value.is_null()) {
-                replacement = modifier.substr(1);
+                std::string text = modifier.substr(1);
+                // 支持在条件文本中再次引用参数值，如 {encoding:?-lco ENCODING={encoding}}
+                size_t param_ref_pos = 0;
+                while ((param_ref_pos = text.find('{' + param_name + '}', param_ref_pos)) != std::string::npos) {
+                    std::string param_str;
+                    if (param_value.is_string()) {
+                        param_str = param_value.get<std::string>();
+                    } else {
+                        param_str = param_value.dump();
+                    }
+                    text.replace(param_ref_pos, param_name.length() + 2, param_str);
+                    param_ref_pos += param_str.length();
+                }
+                replacement = text;
             }
         } else if (modifier[0] == '!') {
             // 默认值比较：{param_name:!default_value?text}
@@ -798,7 +857,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
         error_message = "工具定义缺失必需的'type'字段";
         return false;
     }
-    
+
     if (!tool_definition["type"].is_string() || tool_definition["type"].get<std::string>() != "function") {
         error_message = "工具定义的'type'字段必须字符串类型且只能为'function'";
         return false;
@@ -817,7 +876,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
     }
 
     // 4. 检查function中的必需字段
-    
+
     // 4.1 检查'name'字段
     if (!function.contains("name")) {
         error_message = "function定义缺失必需的'name'字段";
@@ -839,7 +898,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
         error_message = "function定义缺失必需的'description'字段";
         return false;
     }
-    
+
     if (!function["description"].is_string()) {
         error_message = "function的'description'字段必须是字符串";
         return false;
@@ -888,7 +947,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
         if (!parameters["required"].is_array()) {
             error_message = "parameters的'required'字段必须是一个数组";
             return false;
-        }   
+        }
         // 检查required数组中的每个元素都是字符串
         for (const auto& req : parameters["required"]) {
             if (!req.is_string()) {
@@ -904,7 +963,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
             error_message = "'executable'字段必须是字符串";
             return false;
         }
-        
+
         std::string executable = tool_definition["executable"].get<std::string>();
         if (executable.empty()) {
             error_message = "'executable'字段不能为空";
