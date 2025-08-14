@@ -84,11 +84,17 @@ public:
             AgentConfig.auto_start_server = j.value("auto_start_server", AgentConfig.auto_start_server);
             AgentConfig.tools = j.value("tools", json::array());
 
-            // 将配置文件中的配置的工具注册到 ToolExecutor 中
+            // 将配置文件中的配置的工具注册到 ToolExecutor 中，设置一个标志用来判断配置中的工具定义是否有效。
+            bool areToolsDefinitionValid = true;
             for (const auto& tool : AgentConfig.tools) {
-                tool_executor->registerExternalTools(tool);
+                if (!(tool_executor->registerExternalTools(tool))) {
+                    areToolsDefinitionValid = false;
+                }
             }
-
+            if (!areToolsDefinitionValid) {
+                LOG_ERR("配置文件中的工具定义无效，请检查 tools 字段。\n");
+                return false;
+            }
             LOG_INF("配置加载成功！\n");
             return true;
         } catch (const std::exception& e) {

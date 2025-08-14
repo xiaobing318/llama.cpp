@@ -15,7 +15,7 @@ public:
     ~ToolExecutor() = default;
 
     // Register a tool with its implementation
-    void registerExternalTools(const json& tool_definition);
+    bool registerExternalTools(const json& tool_definition);
 
     // Execute a tool by name with arguments
     json execute(const std::string& name, const json& arguments);
@@ -27,7 +27,9 @@ public:
     json getTools() const;
 
 private:
-    std::unordered_map<std::string, ToolFunction> tools;
+    // 仅包含内置工具的名称和实现映射
+    std::unordered_map<std::string, ToolFunction> builtinTools;
+    // 包含内置工具和外部工具定义的映射
     std::unordered_map<std::string, json> tool_definitions;
 
     // Built-in tool implementations

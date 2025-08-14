@@ -21,7 +21,7 @@ ToolExecutor::ToolExecutor() {
 
 void ToolExecutor::registerBuiltinTools() {
     // Register get_current_time
-    tools["get_current_time"] = [this](const json& args) {
+    builtinTools["get_current_time"] = [this](const json& args) {
         return executeGetCurrentTime(args);
     };
     tool_definitions["get_current_time"] = {
@@ -38,10 +38,12 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
-    LOG_INF("成功注册内置工具： %s\n", "get_current_time");
+    LOG_INF("成功注册内置工具： %s - %s\n",
+        "get_current_time",
+        tool_definitions["get_current_time"]["function"]["description"].get<std::string>().c_str());
 
     // Register calculate
-    tools["calculate"] = [this](const json& args) {
+    builtinTools["calculate"] = [this](const json& args) {
         return executeCalculate(args);
     };
     tool_definitions["calculate"] = {
@@ -58,10 +60,12 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
-    LOG_INF("成功注册内置工具： %s\n", "calculate");
+    LOG_INF("成功注册内置工具： %s - %s\n",
+        "calculate",
+        tool_definitions["calculate"]["function"]["description"].get<std::string>().c_str());
 
     // Register read_file
-    tools["read_file"] = [this](const json& args) {
+    builtinTools["read_file"] = [this](const json& args) {
         return executeReadFile(args);
     };
     tool_definitions["read_file"] = {
@@ -79,10 +83,12 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
-    LOG_INF("成功注册内置工具： %s\n", "read_file");
+    LOG_INF("成功注册内置工具： %s - %s\n",
+        "read_file",
+        tool_definitions["read_file"]["function"]["description"].get<std::string>().c_str());
 
     // Register write_file
-    tools["write_file"] = [this](const json& args) {
+    builtinTools["write_file"] = [this](const json& args) {
         return executeWriteFile(args);
     };
     tool_definitions["write_file"] = {
@@ -101,10 +107,12 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
-    LOG_INF("成功注册内置工具： %s\n", "write_file");
+    LOG_INF("成功注册内置工具： %s - %s\n",
+        "write_file",
+        tool_definitions["write_file"]["function"]["description"].get<std::string>().c_str());
 
     // Register list_files
-    tools["list_files"] = [this](const json& args) {
+    builtinTools["list_files"] = [this](const json& args) {
         return executeListFiles(args);
     };
     tool_definitions["list_files"] = {
@@ -122,36 +130,38 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
-    LOG_INF("成功注册内置工具： %s\n", "list_files");
+    LOG_INF("成功注册内置工具： %s - %s\n",
+        "list_files",
+        tool_definitions["list_files"]["function"]["description"].get<std::string>().c_str());
 }
 
-void ToolExecutor::registerExternalTools(const json& tool_definition) {
+bool ToolExecutor::registerExternalTools(const json& tool_definition) {
     // 使用增强的验证函数进行全面的工具定义检查
     std::string error_message;
     if (!validateToolDefinition(tool_definition, error_message)) {
         LOG_ERR("工具定义验证失败: %s\n", error_message.c_str());
-        return;
+        return false;
     }
 
     // 获取工具名称（经过验证，我们知道这些字段是存在且有效的）
     const json& function = tool_definition["function"];
     std::string name = function["name"].get<std::string>();
 
-    // 检查是否已经注册了同名的工具
+    // 检查是否已经注册了同名的工具，如果已经存在，则直接返回不需要进行注册。
     if (hasTool(name)){
-        LOG_ERR("工具注册表中已经存在名称为 %s 的工具，请检查配置表中工具定义是否重复。\n", name.c_str());
-        return;
+        LOG_WRN("工具注册表中已经存在名称为 %s 的工具，请检查配置表中工具定义是否重复。\n", name.c_str());
+        return true;
     }
 
     // 经过上述检查后说明配置文件中的当前工具定义是有效的，将其保存到内存中的工具定义映射中。
     tool_definitions[name] = tool_definition;
-    LOG_INF("成功注册外部工具: %s - %s\n", name.c_str(), function["description"].get<std::string>().c_str());
+    LOG_INF("成功注册外部工具： %s - %s\n", name.c_str(), function["description"].get<std::string>().c_str());
 }
 
 json ToolExecutor::execute(const std::string& name, const json& arguments) {
     // 首先检查是否为内置工具
-    auto it = tools.find(name);
-    if (it != tools.end()) {
+    auto it = builtinTools.find(name);
+    if (it != builtinTools.end()) {
         try {
             // Validate arguments if schema exists
             auto defIt = tool_definitions.find(name);
@@ -239,7 +249,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
 }
 
 bool ToolExecutor::hasTool(const std::string& name) const {
-    return tools.find(name) != tools.end() || tool_definitions.find(name) != tool_definitions.end();
+    return builtinTools.find(name) != builtinTools.end() || tool_definitions.find(name) != tool_definitions.end();
 }
 
 json ToolExecutor::getTools() const {
@@ -790,7 +800,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
     }
     
     if (!tool_definition["type"].is_string() || tool_definition["type"].get<std::string>() != "function") {
-        error_message = "工具定义的'type'字段必须为'function'";
+        error_message = "工具定义的'type'字段必须字符串类型且只能为'function'";
         return false;
     }
 
@@ -807,25 +817,20 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
     }
 
     // 4. 检查function中的必需字段
+    
     // 4.1 检查'name'字段
     if (!function.contains("name")) {
         error_message = "function定义缺失必需的'name'字段";
         return false;
     }
-    
-    if (!function["name"].is_string()) {
-        error_message = "function的'name'字段必须是字符串";
+    // 检查'name'字段是否为字符串且非空
+    if (!function["name"].is_string() || function["name"].get<std::string>().empty()) {
+        error_message = "function的'name'字段必须是字符串且非空";
         return false;
     }
-
-    std::string name = function["name"].get<std::string>();
-    if (name.empty()) {
-        error_message = "function的'name'字段不能为空";
-        return false;
-    }
-
-    if (!validate_tool_name(name)) {
-        error_message = "工具名称格式无效: '" + name + "' (必须以字母开头，只能包含字母、数字和下划线)";
+    // 检查'name'字段格式是否有效
+    if (!validate_tool_name(function["name"].get<std::string>())) {
+        error_message = "工具名称格式无效: '" + function["name"].get<std::string>() + "' (必须以字母开头，只能包含字母、数字和下划线)";
         return false;
     }
 
@@ -845,43 +850,50 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
         return false;
     }
 
-    // 4.3 检查'parameters'字段（如果存在）
+    // 4.3 检查'parameters'字段
     if (function.contains("parameters")) {
         const json& parameters = function["parameters"];
+        // 检查parameters是否存在且是一个对象
         if (!parameters.is_object()) {
             error_message = "function的'parameters'字段必须是一个JSON对象";
             return false;
         }
-
-        // 检查parameters的结构
-        if (parameters.contains("type")) {
-            if (!parameters["type"].is_string()) {
-                error_message = "parameters的'type'字段必须是字符串";
-                return false;
-            }
+        // 检查parameters是否包含必需的'type'字段
+        if (!parameters.contains("type")) {
+            error_message = "function的'parameters'字段缺失必需的'type'字段";
+            return false;
         }
-
-        // 检查properties字段（如果存在）
-        if (parameters.contains("properties")) {
-            if (!parameters["properties"].is_object()) {
-                error_message = "parameters的'properties'字段必须是一个JSON对象";
-                return false;
-            }
+        // 检查'type'字段是否为字符串且值为'object'
+        if (!parameters["type"].is_string() || parameters["type"].get<std::string>() != "object") {
+            error_message = "工具定义的'type'字段必须为'function'";
+            return false;
         }
-
-        // 检查required字段（如果存在）
-        if (parameters.contains("required")) {
-            if (!parameters["required"].is_array()) {
-                error_message = "parameters的'required'字段必须是一个数组";
+        // 检查properties字段是否存在
+        if (!parameters.contains("properties"))
+        {
+            error_message = "'parameters'字段缺失必需的'properties'字段";
+            return false;
+        }
+        // 检查properties字段是否为一个对象
+        if (!parameters["properties"].is_object()) {
+            error_message = "parameters的'properties'字段必须是一个JSON对象";
+            return false;
+        }
+        // 检查parameters是否包含'required'字段
+        if (!parameters.contains("required")) {
+            error_message = "'parameters'字段缺失必须的'required'字段";
+            return false;
+        }
+        // 检查required字段
+        if (!parameters["required"].is_array()) {
+            error_message = "parameters的'required'字段必须是一个数组";
+            return false;
+        }   
+        // 检查required数组中的每个元素都是字符串
+        for (const auto& req : parameters["required"]) {
+            if (!req.is_string()) {
+                error_message = "parameters的'required'数组中的元素必须是字符串";
                 return false;
-            }
-            
-            // 检查required数组中的每个元素都是字符串
-            for (const auto& req : parameters["required"]) {
-                if (!req.is_string()) {
-                    error_message = "parameters的'required'数组中的元素必须是字符串";
-                    return false;
-                }
             }
         }
     }
@@ -915,7 +927,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
         }
     }
 
-    // 7. 检查command_template字段（如果存在）
+    // 7. 检查command_template字段
     if (tool_definition.contains("command_template")) {
         if (!tool_definition["command_template"].is_string()) {
             error_message = "'command_template'字段必须是字符串";
