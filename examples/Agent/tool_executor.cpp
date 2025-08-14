@@ -126,21 +126,16 @@ void ToolExecutor::registerBuiltinTools() {
 }
 
 void ToolExecutor::registerExternalTools(const json& tool_definition) {
-    // TODO:检查配置文件中的工具定义是否包含必需的字段，后续根据需求可能会添加更多的检查。
-    if (!tool_definition.contains("function")) {
-        LOG_ERR("工具定义缺失 'function' 字段，每个工具定义中必须存在 'function' 字段，请检查配置文件中对工具定义是否正确。\n");
+    // 使用增强的验证函数进行全面的工具定义检查
+    std::string error_message;
+    if (!validateToolDefinition(tool_definition, error_message)) {
+        LOG_ERR("工具定义验证失败: %s\n", error_message.c_str());
         return;
     }
 
-    // 获取 'function' 字段的属性值中的 "name" 字段值，如果没有设置则默认为空字符串。
-    json function = tool_definition["function"];
-    std::string name = function.value("name", "");
-    // 如果工具名称为空或者不符合命名规范，则记录错误日志并返回。
-    if (name.empty() || !validate_tool_name(name)) {
-        // TODO:需要添加详细、易懂日志。
-        LOG_ERR("不是有效的工具名称: %s\n", name.c_str());
-        return;
-    }
+    // 获取工具名称（经过验证，我们知道这些字段是存在且有效的）
+    const json& function = tool_definition["function"];
+    std::string name = function["name"].get<std::string>();
 
     // 检查是否已经注册了同名的工具
     if (hasTool(name)){
@@ -150,7 +145,7 @@ void ToolExecutor::registerExternalTools(const json& tool_definition) {
 
     // 经过上述检查后说明配置文件中的当前工具定义是有效的，将其保存到内存中的工具定义映射中。
     tool_definitions[name] = tool_definition;
-    LOG_INF("成功注册工具： %s\n", name.c_str());
+    LOG_INF("成功注册外部工具: %s - %s\n", name.c_str(), function["description"].get<std::string>().c_str());
 }
 
 json ToolExecutor::execute(const std::string& name, const json& arguments) {
@@ -184,16 +179,16 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
             };
         }
     }
-    
+
     // 检查是否为外部工具（在 tool_definitions 中有定义但没有内置实现）
     auto defIt = tool_definitions.find(name);
     if (defIt != tool_definitions.end()) {
         const json& definition = defIt->second;
-        
+
         // 检查是否为外部工具（包含 executable 字段）
         if (definition.contains("executable")) {
             std::string executable = definition["executable"];
-            
+
             // 根据平台选择可执行文件路径
 #ifdef _WIN32
             if (definition.contains("executable_windows")) {
@@ -204,13 +199,13 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
                 executable = definition["executable_linux"];
             }
 #endif
-            
+
             std::string command_template;
             // 检查是否有命令模板
             if (definition.contains("command_template")) {
                 command_template = definition["command_template"];
             }
-            
+
             try {
                 // Validate arguments if schema exists
                 if (definition.contains("function") &&
@@ -222,10 +217,10 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
                         };
                     }
                 }
-                
+
                 // Execute external tool with command template
                 return executeExternalTool(executable, arguments, command_template);
-                
+
             } catch (const std::exception& e) {
                 LOG_ERR("External tool execution failed: %s\n", e.what());
                 return json{
@@ -235,7 +230,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
             }
         }
     }
-    
+
     // 工具不存在
     return json{
         {"error", "Tool not found: " + name},
@@ -444,8 +439,8 @@ json ToolExecutor::executeListFiles(const json& args) {
     };
 }
 
-
 // ExternalTools
+
 json ToolExecutor::executeExternalTool(const std::string& executable, const json& arguments) {
     return executeExternalTool(executable, arguments, "");
 }
@@ -461,9 +456,9 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             // 默认方式：仅使用可执行文件名，参数通过标准输入传递
             cmd = executable;
         }
-        
+
         LOG_INF("执行外部工具: %s\n", cmd.c_str());
-        
+
         // 使用跨平台的方式执行外部命令并捕获输出
 #ifdef _WIN32
         // Windows implementation
@@ -568,7 +563,7 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
         // Linux/Unix implementation using fork and pipes
         int stdin_pipe[2];
         int stdout_pipe[2];
-        
+
         if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1) {
             return json{
                 {"error", "Failed to create pipes"},
@@ -592,15 +587,15 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             // 子进程
             close(stdin_pipe[1]);   // 关闭写端
             close(stdout_pipe[0]);  // 关闭读端
-            
+
             // 重定向标准输入和输出
             dup2(stdin_pipe[0], STDIN_FILENO);
             dup2(stdout_pipe[1], STDOUT_FILENO);
             dup2(stdout_pipe[1], STDERR_FILENO);
-            
+
             close(stdin_pipe[0]);
             close(stdout_pipe[1]);
-            
+
             // 执行外部命令
             execlp("/bin/sh", "sh", "-c", cmd.c_str(), (char*)NULL);
             exit(127); // 如果 exec 失败
@@ -608,14 +603,14 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             // 父进程
             close(stdin_pipe[0]);   // 关闭读端
             close(stdout_pipe[1]);  // 关闭写端
-            
+
             // 向子进程发送 JSON 参数（仅在没有使用命令模板时）
             if (command_template.empty()) {
                 std::string json_input = arguments.dump();
                 write(stdin_pipe[1], json_input.c_str(), json_input.length());
             }
             close(stdin_pipe[1]);
-            
+
             // 读取子进程输出
             std::string output;
             char buffer[4096];
@@ -625,12 +620,12 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
                 output += buffer;
             }
             close(stdout_pipe[0]);
-            
+
             // 等待子进程结束
             int status;
             waitpid(pid, &status, 0);
             int exit_code = WEXITSTATUS(status);
-            
+
             if (exit_code != 0) {
                 return json{
                     {"error", "External tool exited with code " + std::to_string(exit_code)},
@@ -638,7 +633,7 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
                     {"success", false}
                 };
             }
-            
+
             // 尝试解析输出为 JSON，如果失败则作为文本返回
             try {
                 json result = json::parse(output);
@@ -665,7 +660,7 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
 // 辅助函数：安全地转义命令行参数
 std::string escapeShellArgument(const std::string& arg) {
     // 如果参数包含空格或特殊字符，需要用引号包围
-    if (arg.find(' ') != std::string::npos || 
+    if (arg.find(' ') != std::string::npos ||
         arg.find('\t') != std::string::npos ||
         arg.find('\"') != std::string::npos ||
         arg.find('\'') != std::string::npos ||
@@ -674,7 +669,7 @@ std::string escapeShellArgument(const std::string& arg) {
         arg.find(';') != std::string::npos ||
         arg.find('&') != std::string::npos ||
         arg.find('|') != std::string::npos) {
-        
+
         std::string escaped = arg;
         // 转义双引号
         size_t pos = 0;
@@ -689,36 +684,36 @@ std::string escapeShellArgument(const std::string& arg) {
 
 std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_template, const json& arguments) {
     std::string result = command_template;
-    
+
     // 替换模板中的参数占位符
     // 支持的语法：
     // {param_name} - 直接替换参数值
     // {param_name:?text} - 如果参数存在则替换为text，否则为空
     // {param_name:!default_value?text} - 如果参数值不等于默认值则替换为text
     // {param_name:join:separator} - 数组参数用分隔符连接
-    
+
     size_t pos = 0;
     while ((pos = result.find('{', pos)) != std::string::npos) {
         size_t end_pos = result.find('}', pos);
         if (end_pos == std::string::npos) break;
-        
+
         std::string placeholder = result.substr(pos + 1, end_pos - pos - 1);
         std::string replacement;
-        
+
         // 解析占位符
         size_t colon_pos = placeholder.find(':');
         std::string param_name = placeholder;
         std::string modifier;
-        
+
         if (colon_pos != std::string::npos) {
             param_name = placeholder.substr(0, colon_pos);
             modifier = placeholder.substr(colon_pos + 1);
         }
-        
+
         // 检查参数是否存在
         bool param_exists = arguments.contains(param_name);
         auto param_value = param_exists ? arguments[param_name] : json();
-        
+
         if (modifier.empty()) {
             // 简单替换：{param_name}
             if (param_exists && !param_value.is_null()) {
@@ -739,7 +734,7 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
             if (question_pos != std::string::npos) {
                 std::string default_value = modifier.substr(1, question_pos - 1);
                 std::string text = modifier.substr(question_pos + 1);
-                
+
                 if (param_exists && !param_value.is_null()) {
                     std::string current_value;
                     if (param_value.is_string()) {
@@ -747,7 +742,7 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
                     } else {
                         current_value = param_value.dump();
                     }
-                    
+
                     if (current_value != default_value) {
                         replacement = text;
                     }
@@ -772,11 +767,161 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
                 }
             }
         }
-        
+
         // 替换占位符
         result.replace(pos, end_pos - pos + 1, replacement);
         pos += replacement.length();
     }
-    
+
     return result;
+}
+
+bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::string& error_message) const {
+    // 1. 检查顶层结构
+    if (!tool_definition.is_object()) {
+        error_message = "工具定义必须是一个JSON对象";
+        return false;
+    }
+
+    // 2. 检查必需的'type'字段
+    if (!tool_definition.contains("type")) {
+        error_message = "工具定义缺失必需的'type'字段";
+        return false;
+    }
+    
+    if (!tool_definition["type"].is_string() || tool_definition["type"].get<std::string>() != "function") {
+        error_message = "工具定义的'type'字段必须为'function'";
+        return false;
+    }
+
+    // 3. 检查必需的'function'字段
+    if (!tool_definition.contains("function")) {
+        error_message = "工具定义缺失必需的'function'字段";
+        return false;
+    }
+
+    const json& function = tool_definition["function"];
+    if (!function.is_object()) {
+        error_message = "'function'字段必须是一个JSON对象";
+        return false;
+    }
+
+    // 4. 检查function中的必需字段
+    // 4.1 检查'name'字段
+    if (!function.contains("name")) {
+        error_message = "function定义缺失必需的'name'字段";
+        return false;
+    }
+    
+    if (!function["name"].is_string()) {
+        error_message = "function的'name'字段必须是字符串";
+        return false;
+    }
+
+    std::string name = function["name"].get<std::string>();
+    if (name.empty()) {
+        error_message = "function的'name'字段不能为空";
+        return false;
+    }
+
+    if (!validate_tool_name(name)) {
+        error_message = "工具名称格式无效: '" + name + "' (必须以字母开头，只能包含字母、数字和下划线)";
+        return false;
+    }
+
+    // 4.2 检查'description'字段
+    if (!function.contains("description")) {
+        error_message = "function定义缺失必需的'description'字段";
+        return false;
+    }
+    
+    if (!function["description"].is_string()) {
+        error_message = "function的'description'字段必须是字符串";
+        return false;
+    }
+
+    if (function["description"].get<std::string>().empty()) {
+        error_message = "function的'description'字段不能为空";
+        return false;
+    }
+
+    // 4.3 检查'parameters'字段（如果存在）
+    if (function.contains("parameters")) {
+        const json& parameters = function["parameters"];
+        if (!parameters.is_object()) {
+            error_message = "function的'parameters'字段必须是一个JSON对象";
+            return false;
+        }
+
+        // 检查parameters的结构
+        if (parameters.contains("type")) {
+            if (!parameters["type"].is_string()) {
+                error_message = "parameters的'type'字段必须是字符串";
+                return false;
+            }
+        }
+
+        // 检查properties字段（如果存在）
+        if (parameters.contains("properties")) {
+            if (!parameters["properties"].is_object()) {
+                error_message = "parameters的'properties'字段必须是一个JSON对象";
+                return false;
+            }
+        }
+
+        // 检查required字段（如果存在）
+        if (parameters.contains("required")) {
+            if (!parameters["required"].is_array()) {
+                error_message = "parameters的'required'字段必须是一个数组";
+                return false;
+            }
+            
+            // 检查required数组中的每个元素都是字符串
+            for (const auto& req : parameters["required"]) {
+                if (!req.is_string()) {
+                    error_message = "parameters的'required'数组中的元素必须是字符串";
+                    return false;
+                }
+            }
+        }
+    }
+
+    // 5. 对于外部工具，检查executable字段
+    if (tool_definition.contains("executable")) {
+        if (!tool_definition["executable"].is_string()) {
+            error_message = "'executable'字段必须是字符串";
+            return false;
+        }
+        
+        std::string executable = tool_definition["executable"].get<std::string>();
+        if (executable.empty()) {
+            error_message = "'executable'字段不能为空";
+            return false;
+        }
+    }
+
+    // 6. 检查平台特定的executable字段
+    if (tool_definition.contains("executable_windows")) {
+        if (!tool_definition["executable_windows"].is_string()) {
+            error_message = "'executable_windows'字段必须是字符串";
+            return false;
+        }
+    }
+
+    if (tool_definition.contains("executable_linux")) {
+        if (!tool_definition["executable_linux"].is_string()) {
+            error_message = "'executable_linux'字段必须是字符串";
+            return false;
+        }
+    }
+
+    // 7. 检查command_template字段（如果存在）
+    if (tool_definition.contains("command_template")) {
+        if (!tool_definition["command_template"].is_string()) {
+            error_message = "'command_template'字段必须是字符串";
+            return false;
+        }
+    }
+
+    return true;
 }

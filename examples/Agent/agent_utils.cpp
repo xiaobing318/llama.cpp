@@ -198,9 +198,15 @@ std::string format_json(const json& j) {
 bool validate_tool_name(const std::string& name) {
     if (name.empty()) return false;
 
-    // Check if name contains only alphanumeric characters and underscores
+    // Tool name must start with a letter (uppercase or lowercase)
+    if (!std::isalpha(name[0])) {
+        return false;
+    }
+
+    // Check if name contains only valid characters: letters, digits, underscores
+    // No spaces, hyphens, or other special characters allowed
     return std::all_of(name.begin(), name.end(), [](char c) {
-        return std::isalnum(c) || c == '_';
+        return std::isalpha(c) || std::isdigit(c) || c == '_';
     });
 }
 
