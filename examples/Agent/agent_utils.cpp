@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <filesystem>
 #include <cstdlib>
+#include <regex>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -210,19 +211,223 @@ bool validate_tool_name(const std::string& name) {
     });
 }
 
-bool validate_arguments(const json& args, const json& schema) {
-    // Simple validation - check required fields
-    if (!schema.contains("required")) {
-        return true;
+// JSON Schema validation helper functions
+
+// 基本类型验证
+static bool validate_type(const json& value, const std::string& expected_type) {
+    if (expected_type == "string") {
+        return value.is_string();
+    } else if (expected_type == "number") {
+        return value.is_number();
+    } else if (expected_type == "boolean") {
+        return value.is_boolean();
+    } else if (expected_type == "object") {
+        return value.is_object();
+    } else if (expected_type == "array") {
+        return value.is_array();
+    } else if (expected_type == "null") {
+        return value.is_null();
+    }
+    return false;
+}
+// 枚举值验证
+static bool validate_enum(const json& value, const json& enum_values) {
+    for (const auto& enum_val : enum_values) {
+        if (value == enum_val) {
+            return true;
+        }
+    }
+    return false;
+}
+// 字符串约束检查
+static bool validate_string_constraints(const json& value, const json& schema) {
+    if (!value.is_string()) {
+        return false;
     }
 
-    for (const auto& required : schema["required"]) {
-        std::string field = required.get<std::string>();
-        if (!args.contains(field)) {
-            LOG_ERR("Missing required field: %s\n", field.c_str());
+    std::string str_value = value.get<std::string>();
+
+    // Check minLength
+    if (schema.contains("minLength")) {
+        int min_length = schema["minLength"].get<int>();
+        if (static_cast<int>(str_value.length()) < min_length) {
+            LOG_ERR("String length %zu is less than minimum %d\n", str_value.length(), min_length);
+            return false;
+        }
+    }
+
+    // Check maxLength
+    if (schema.contains("maxLength")) {
+        int max_length = schema["maxLength"].get<int>();
+        if (static_cast<int>(str_value.length()) > max_length) {
+            LOG_ERR("String length %zu is greater than maximum %d\n", str_value.length(), max_length);
+            return false;
+        }
+    }
+
+    // Check pattern
+    if (schema.contains("pattern")) {
+        try {
+            std::string pattern = schema["pattern"].get<std::string>();
+            std::regex regex_pattern(pattern);
+            if (!std::regex_match(str_value, regex_pattern)) {
+                LOG_ERR("String '%s' does not match pattern '%s'\n", str_value.c_str(), pattern.c_str());
+                return false;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERR("Invalid regex pattern: %s\n", e.what());
             return false;
         }
     }
 
     return true;
+}
+// 数值约束检查
+static bool validate_number_constraints(const json& value, const json& schema) {
+    if (!value.is_number()) {
+        return false;
+    }
+
+    double num_value = value.get<double>();
+
+    // Check minimum
+    if (schema.contains("minimum")) {
+        double minimum = schema["minimum"].get<double>();
+        if (num_value < minimum) {
+            LOG_ERR("Number %f is less than minimum %f\n", num_value, minimum);
+            return false;
+        }
+    }
+
+    // Check maximum
+    if (schema.contains("maximum")) {
+        double maximum = schema["maximum"].get<double>();
+        if (num_value > maximum) {
+            LOG_ERR("Number %f is greater than maximum %f\n", num_value, maximum);
+            return false;
+        }
+    }
+
+    // Check exclusiveMinimum
+    if (schema.contains("exclusiveMinimum")) {
+        double exclusive_min = schema["exclusiveMinimum"].get<double>();
+        if (num_value <= exclusive_min) {
+            LOG_ERR("Number %f is not greater than exclusive minimum %f\n", num_value, exclusive_min);
+            return false;
+        }
+    }
+
+    // Check exclusiveMaximum
+    if (schema.contains("exclusiveMaximum")) {
+        double exclusive_max = schema["exclusiveMaximum"].get<double>();
+        if (num_value >= exclusive_max) {
+            LOG_ERR("Number %f is not less than exclusive maximum %f\n", num_value, exclusive_max);
+            return false;
+        }
+    }
+
+    return true;
+}
+// 对象属性验证
+static bool validate_object_properties(const json& value, const json& schema) {
+    if (!value.is_object()) {
+        return false;
+    }
+
+    // Validate each property according to its schema
+    if (schema.contains("properties")) {
+        const json& properties = schema["properties"];
+        for (auto& [key, prop_value] : value.items()) {
+            if (properties.contains(key)) {
+                // Recursively validate property
+                if (!validate_arguments(prop_value, properties[key])) {
+                    LOG_ERR("Property '%s' failed validation\n", key.c_str());
+                    return false;
+                }
+            }
+        }
+    }
+
+    // Check additionalProperties
+    if (schema.contains("additionalProperties") && schema.contains("properties")) {
+        bool allow_additional = schema["additionalProperties"].get<bool>();
+        if (!allow_additional) {
+            const json& properties = schema["properties"];
+            for (auto& [key, prop_value] : value.items()) {
+                if (!properties.contains(key)) {
+                    LOG_ERR("Additional property '%s' is not allowed\n", key.c_str());
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+// 必需属性检查
+static bool validate_required_properties(const json& value, const json& schema) {
+    if (!value.is_object() || !schema.contains("required")) {
+        return true;
+    }
+
+    const json& required = schema["required"];
+    for (const auto& req_field : required) {
+        std::string field_name = req_field.get<std::string>();
+        if (!value.contains(field_name)) {
+            LOG_ERR("Missing required field: %s\n", field_name.c_str());
+            return false;
+        }
+    }
+
+    return true;
+}
+// 主验证逻辑
+static bool validate_json_schema(const json& value, const json& schema) {
+    // Check type
+    if (schema.contains("type")) {
+        std::string expected_type = schema["type"].get<std::string>();
+        if (!validate_type(value, expected_type)) {
+            LOG_ERR("Type mismatch: expected %s\n", expected_type.c_str());
+            return false;
+        }
+
+        // Type-specific validations
+        if (expected_type == "string") {
+            if (!validate_string_constraints(value, schema)) {
+                return false;
+            }
+        } else if (expected_type == "number") {
+            if (!validate_number_constraints(value, schema)) {
+                return false;
+            }
+        } else if (expected_type == "object") {
+            if (!validate_object_properties(value, schema)) {
+                return false;
+            }
+        }
+    }
+
+    // Check enum
+    if (schema.contains("enum")) {
+        if (!validate_enum(value, schema["enum"])) {
+            LOG_ERR("Value is not in allowed enum values\n");
+            return false;
+        }
+    }
+
+    // Check required properties (for objects)
+    if (!validate_required_properties(value, schema)) {
+        return false;
+    }
+
+    return true;
+}
+// 工具调用参数验证
+bool validate_arguments(const json& args, const json& schema) {
+    if (schema.empty()) {
+        LOG_WRN("Empty schema provided for validation\n");
+        return true;
+    }
+
+    return validate_json_schema(args, schema);
 }
