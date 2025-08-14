@@ -38,7 +38,7 @@ struct AgentConfig {
 
 class LlamaAgent {
 private:
-    AgentConfig config;
+    AgentConfig AgentConfig;
     std::unique_ptr<httplib::Server> server;
     std::unique_ptr<httplib::Client> llama_client;
     std::unique_ptr<ToolExecutor> tool_executor;
@@ -73,20 +73,20 @@ public:
             json j;
             file >> j;
             // 使用 nlohmann::json 库的 value 方法获取配置项的值，如果配置项不存在，则使用默认值。
-            config.agent_host = j.value("agent_host", config.agent_host);
-            config.agent_port = j.value("agent_port", config.agent_port);
-            config.llama_server_host = j.value("llama_server_host", config.llama_server_host);
-            config.llama_server_port = j.value("llama_server_port", config.llama_server_port);
-            config.llama_server_path = j.value("llama_server_path", config.llama_server_path);
-            config.model_path = j.value("model_path", config.model_path);
-            config.n_ctx = j.value("n_ctx", config.n_ctx);
-            config.n_gpu_layers = j.value("n_gpu_layers", config.n_gpu_layers);
-            config.auto_start_server = j.value("auto_start_server", config.auto_start_server);
-            config.tools = j.value("tools", json::array());
+            AgentConfig.agent_host = j.value("agent_host", AgentConfig.agent_host);
+            AgentConfig.agent_port = j.value("agent_port", AgentConfig.agent_port);
+            AgentConfig.llama_server_host = j.value("llama_server_host", AgentConfig.llama_server_host);
+            AgentConfig.llama_server_port = j.value("llama_server_port", AgentConfig.llama_server_port);
+            AgentConfig.llama_server_path = j.value("llama_server_path", AgentConfig.llama_server_path);
+            AgentConfig.model_path = j.value("model_path", AgentConfig.model_path);
+            AgentConfig.n_ctx = j.value("n_ctx", AgentConfig.n_ctx);
+            AgentConfig.n_gpu_layers = j.value("n_gpu_layers", AgentConfig.n_gpu_layers);
+            AgentConfig.auto_start_server = j.value("auto_start_server", AgentConfig.auto_start_server);
+            AgentConfig.tools = j.value("tools", json::array());
 
             // 将配置文件中的配置的工具注册到 ToolExecutor 中
-            for (const auto& tool : config.tools) {
-                tool_executor->registerTool(tool);
+            for (const auto& tool : AgentConfig.tools) {
+                tool_executor->registerExternalTools(tool);
             }
 
             LOG_INF("配置加载成功！\n");
@@ -156,19 +156,19 @@ public:
 
     bool startLlamaServer() {
         // 如果自动启动 llama-server 服务器被禁用，则假设 llama-server 已经在运行。
-        if (!config.auto_start_server) {
+        if (!AgentConfig.auto_start_server) {
             LOG_INF(" auto_start_server 已禁用，这里假设 llama-server 已在运行！\n");
             return true;
         }
         // 拼接 llama-server 的命令行参数。
-        std::string cmd = config.llama_server_path;
-        cmd += " -m " + config.model_path;
-        cmd += " --host " + config.llama_server_host;
-        cmd += " --port " + std::to_string(config.llama_server_port);
-        cmd += " -c " + std::to_string(config.n_ctx);
+        std::string cmd = AgentConfig.llama_server_path;
+        cmd += " -m " + AgentConfig.model_path;
+        cmd += " --host " + AgentConfig.llama_server_host;
+        cmd += " --port " + std::to_string(AgentConfig.llama_server_port);
+        cmd += " -c " + std::to_string(AgentConfig.n_ctx);
         cmd += " --jinja";
-        if (config.n_gpu_layers >= 0) {
-            cmd += " -ngl " + std::to_string(config.n_gpu_layers);
+        if (AgentConfig.n_gpu_layers >= 0) {
+            cmd += " -ngl " + std::to_string(AgentConfig.n_gpu_layers);
         }
 
         LOG_INF("正在启动 llama-server: %s\n", cmd.c_str());
@@ -192,7 +192,7 @@ public:
 #endif
 
         // 创建 HTTP 客户端用于健康检查
-        llama_client = std::make_unique<httplib::Client>(config.llama_server_host, config.llama_server_port);
+        llama_client = std::make_unique<httplib::Client>(AgentConfig.llama_server_host, AgentConfig.llama_server_port);
 
         // 等待并检测 llama-server 启动状态
         return waitForServerStartup();
@@ -200,7 +200,7 @@ public:
 
     void stopLlamaServer() {
         // 如果自动启动 llama-server 服务器被禁用，则不需要停止服务器。
-        if (!config.auto_start_server) {
+        if (!AgentConfig.auto_start_server) {
             return;
         }
 
@@ -292,7 +292,8 @@ public:
 
                 // 如果 llama-server 的响应体为空，则设置 llama-agent 的响应体，向客户端返回错误信息。
                 if (!llama_res) {
-                    json error = {{"error", "Failed to connect to llama-server"}};
+                    // TODO:后续可能通过 error code 来返回。
+                    json error = {{"error", "连接 llama-server 失败。"}};
                     res.set_content(error.dump(), "application/json");
                     res.status = 500;
                     return;
@@ -350,7 +351,7 @@ public:
                 if (response.contains("choices") && !response["choices"].empty()) {
                     // 获取得到 llama-server 响应体中的第一个 choice 的内容。
                     auto& choice = response["choices"][0];
-                    // 如果 choice 中包含 "message" 字段，并且该字段中包含 "tool_calls" 字段，则执行工具调用。
+                    // 判断响应体中是否存在工具调用，如果 choice 中包含 "message" 字段，并且该字段中包含 "tool_calls" 字段，则执行工具调用。
                     if (choice.contains("message") && choice["message"].contains("tool_calls")) {
                         // 创建一个 JSON 数组来存储工具调用的结果。
                         json tool_results = json::array();
@@ -360,7 +361,8 @@ public:
                             std::string function_name = tool_call["function"]["name"];
                             json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                            LOG_INF("执行工具 (第 %d 轮): %s\n", 1, function_name.c_str());
+                            LOG_INF(" Agent 需要调用工具 : %s\n", function_name.c_str());
+                            LOG_INF(" Agent 执行工具 (第 %d 轮): %s\n", 1, function_name.c_str());
 
                             // 调用 ToolExecutor 执行工具，并获取结果。
                             json result = tool_executor->execute(function_name, arguments);
@@ -382,13 +384,13 @@ public:
                             messages.push_back(result);
                         }
 
-                        // 支持多次工具调用循环，只要响应中包含 tool_calls 就继续执行。
+                        // 支持多次工具调用循环，只要响应体中包含 tool_calls 就继续执行。
                         json all_tool_results = json::array();
                         for (const auto& result : tool_results) {
                             all_tool_results.push_back(result);
                         }
 
-                        // 防止无限循环
+                        // 防止无限循环，最多进行 10 次工具调用迭代。
                         int max_iterations = 10;
                         int iteration = 0;
 
@@ -429,7 +431,7 @@ public:
                                         std::string function_name = tool_call["function"]["name"];
                                         json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
-                                        LOG_INF("执行工具 (第 %d 轮): %s\n", iteration + 2, function_name.c_str());
+                                        LOG_INF(" Agent 执行工具 (第 %d 轮): %s\n", iteration + 2, function_name.c_str());
                                         json result = tool_executor->execute(function_name, arguments);
 
                                         json tool_result = {
@@ -493,15 +495,15 @@ public:
     bool start() {
         // 初始化一个指向 llama-server 服务的客户端。
         llama_client = std::make_unique<httplib::Client>(
-            config.llama_server_host, config.llama_server_port);
+            AgentConfig.llama_server_host, AgentConfig.llama_server_port);
 
         // 如果启动 llama-server 失败的话直接返回。
         if (!startLlamaServer()) {
             LOG_ERR("无法启动 llama-server，Agent 启动失败\n");
             LOG_ERR("请检查：\n");
-            LOG_ERR("  1. llama-server 路径是否正确: %s\n", config.llama_server_path.c_str());
-            LOG_ERR("  2. 模型文件路径是否正确: %s\n", config.model_path.c_str());
-            LOG_ERR("  3. 端口 %d 是否被占用\n", config.llama_server_port);
+            LOG_ERR("  1. llama-server 路径是否正确: %s\n", AgentConfig.llama_server_path.c_str());
+            LOG_ERR("  2. 模型文件路径是否正确: %s\n", AgentConfig.model_path.c_str());
+            LOG_ERR("  3. 端口 %d 是否被占用\n", AgentConfig.llama_server_port);
             LOG_ERR("  4. 系统资源是否充足（内存、GPU等）\n");
             return false;
         }
@@ -512,9 +514,8 @@ public:
         // 启动 llama-agent 服务。
         running = true;
         server_thread = std::thread([this]() {
-            LOG_INF("代理服务器正在监听 http://%s:%d\n",
-                config.agent_host.c_str(), config.agent_port);
-            server->listen(config.agent_host, config.agent_port);
+            LOG_INF("代理服务器正在监听 http://%s:%d\n", AgentConfig.agent_host.c_str(), AgentConfig.agent_port);
+            server->listen(AgentConfig.agent_host, AgentConfig.agent_port);
         });
 
         return true;

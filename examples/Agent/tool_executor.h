@@ -15,7 +15,7 @@ public:
     ~ToolExecutor() = default;
 
     // Register a tool with its implementation
-    void registerTool(const json& tool_definition);
+    void registerExternalTools(const json& tool_definition);
 
     // Execute a tool by name with arguments
     json execute(const std::string& name, const json& arguments);

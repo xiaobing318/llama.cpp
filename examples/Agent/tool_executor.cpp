@@ -38,6 +38,7 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
+    LOG_INF("成功注册内置工具： %s\n", "get_current_time");
 
     // Register calculate
     tools["calculate"] = [this](const json& args) {
@@ -57,6 +58,7 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
+    LOG_INF("成功注册内置工具： %s\n", "calculate");
 
     // Register read_file
     tools["read_file"] = [this](const json& args) {
@@ -77,6 +79,7 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
+    LOG_INF("成功注册内置工具： %s\n", "read_file");
 
     // Register write_file
     tools["write_file"] = [this](const json& args) {
@@ -98,6 +101,7 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
+    LOG_INF("成功注册内置工具： %s\n", "write_file");
 
     // Register list_files
     tools["list_files"] = [this](const json& args) {
@@ -118,9 +122,10 @@ void ToolExecutor::registerBuiltinTools() {
             }}
         }}
     };
+    LOG_INF("成功注册内置工具： %s\n", "list_files");
 }
 
-void ToolExecutor::registerTool(const json& tool_definition) {
+void ToolExecutor::registerExternalTools(const json& tool_definition) {
     // TODO:检查配置文件中的工具定义是否包含必需的字段，后续根据需求可能会添加更多的检查。
     if (!tool_definition.contains("function")) {
         LOG_ERR("工具定义缺失 'function' 字段，每个工具定义中必须存在 'function' 字段，请检查配置文件中对工具定义是否正确。\n");
