@@ -190,7 +190,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
         }
     }
 
-    // 检查是否为外部工具（在 tool_definitions 中有定义但没有内置实现）
+    // 不是内置工具的情况下检查是否为外部工具
     auto defIt = tool_definitions.find(name);
     if (defIt != tool_definitions.end()) {
         const json& definition = defIt->second;
