@@ -16,6 +16,7 @@
 #include <cstring>
 #include <iostream>
 #include <sstream>
+#include <ctime>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -532,6 +533,24 @@ public:
                 }
 
                 /*
+                【重要问题说明】
+                当前代码存在一个关键问题：Agent将llama-server的SSE流式响应转换为了完整的JSON响应，
+                但WebUI期望接收SSE格式的流式数据（data: {...}\n\ndata: {...}\n\n），
+                这导致WebUI无法正确解析响应，用户看不到实时的响应内容。
+                
+                问题根源：
+                - llama-server → Agent：正常的SSE流式响应 ✅
+                - Agent内部：SSEParser正确解析并合并流式数据 ✅ 
+                - Agent → WebUI：返回完整JSON而非SSE流 ❌
+                
+                解决方案：检查请求参数中的stream字段，如果为true则直接透传SSE流式响应给WebUI。
+                
+                【优化后的流式处理策略】
+                基于llama-server最新实现，我们采用简化的流式处理策略：
+                1. 流式请求：直接透传llama-server的SSE响应，因为llama-server本身已支持工具调用的流式处理
+                2. 非流式请求：保持原有的工具调用处理逻辑，确保功能完整性
+                3. 这样既解决了WebUI显示问题，又保持了与llama-server的一致性，减少了理解负担
+                
                 1、代码执行到这里说明 llama-server 的响应体不是空的，这里需要解析 llama-server 的响应体中的信息。
                 2、下列是 llama-server 响应的一个 JSON 格式的例子。
                 {
@@ -576,6 +595,65 @@ public:
                         "predicted_per_second": 48.851110696616836
                     }
                 }
+                */
+                // 检查客户端是否请求流式响应
+                bool client_wants_stream = request_body.value("stream", false);
+                
+                // 如果客户端请求流式响应，则直接透传llama-server的流式响应
+                if (client_wants_stream) {
+                    LOG_INF("客户端请求流式响应，启用流式透传模式\n");
+                    
+                    // 设置SSE响应头
+                    res.set_header("Content-Type", "text/event-stream");
+                    res.set_header("Cache-Control", "no-cache");
+                    res.set_header("Connection", "keep-alive");
+                    res.set_header("Access-Control-Allow-Origin", "*");
+                    
+                    // 检测llama-server响应是否为SSE格式
+                    bool is_llama_sse = false;
+                    if (!llama_res->body.empty()) {
+                        if (llama_res->body.substr(0, 5) == "data:" || 
+                            llama_res->body.find("\ndata:") != std::string::npos) {
+                            is_llama_sse = true;
+                        }
+                    }
+                    
+                    if (is_llama_sse) {
+                        // llama-server返回SSE格式，直接透传
+                        LOG_INF("直接透传llama-server的SSE流式响应\n");
+                        res.set_content(llama_res->body, "text/event-stream");
+                        res.status = llama_res->status;
+                        return;
+                    } else {
+                        // llama-server返回非SSE格式，转换为SSE
+                        LOG_INF("llama-server返回非SSE格式，转换为SSE流\n");
+                        try {
+                            json llama_response = json::parse(llama_res->body);
+                            
+                            // 构建SSE格式的响应
+                            std::string sse_response = "data: " + llama_response.dump() + "\n\ndata: [DONE]\n\n";
+                            res.set_content(sse_response, "text/event-stream");
+                            res.status = 200;
+                            return;
+                            
+                        } catch (const json::parse_error& e) {
+                            LOG_ERR("转换为SSE格式失败: %s\n", e.what());
+                            json error = {{"error", "响应格式转换失败: " + std::string(e.what())}};
+                            std::string error_sse = "data: " + error.dump() + "\n\n";
+                            res.set_content(error_sse, "text/event-stream");
+                            res.status = 500;
+                            return;
+                        }
+                    }
+                }
+                
+                /*
+                非流式处理逻辑（保持原有逻辑用于非流式请求）
+                
+                注意：对于非流式请求，我们仍然需要以下工具调用处理逻辑，因为：
+                1. 客户端可能不请求流式响应（stream=false），但仍需要工具调用功能
+                2. 需要解析llama-server的响应，执行工具，然后返回最终结果
+                3. 这确保了Agent无论在流式还是非流式模式下都能正确处理工具调用
                 */
                 json response;
                 
