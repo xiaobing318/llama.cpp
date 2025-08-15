@@ -4,6 +4,9 @@
 #include "agent_utils.h"
 #include "tool_executor.h"
 
+#include "index.html.gz.hpp"
+#include "loading.html.hpp"
+
 #include <atomic>
 #include <thread>
 #include <chrono>
@@ -495,6 +498,23 @@ public:
                 res.set_content(error.dump(), "application/json");
                 res.status = 400;
             }
+        });
+
+        // WebUI routes - Static files
+        server->Get("/", [](const httplib::Request& req, httplib::Response& res) {
+            if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
+                res.set_content("Error: gzip is not supported by this browser", "text/plain");
+            } else {
+                res.set_header("Content-Encoding", "gzip");
+                res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
+                res.set_header("Cross-Origin-Opener-Policy", "same-origin");
+                res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
+            }
+        });
+
+        // Loading page for when server is starting up
+        server->Get("/loading", [](const httplib::Request&, httplib::Response& res) {
+            res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
         });
     }
 

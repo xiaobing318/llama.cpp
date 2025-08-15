@@ -15,10 +15,41 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common
     )
 #[[
-1、该目标包含了 agent.cpp、agent_utils.cpp 和 tool_executor.cpp 这三个编译单元。
+1、定义目标的源文件列表和公共资源文件列表。
+2、PUBLIC_ASSETS 包含需要嵌入到可执行文件中的前端资源文件。
+]]
+set(TARGET_SRCS
+    agent.cpp
+    agent_utils.cpp
+    tool_executor.cpp
+)
+set(PUBLIC_ASSETS
+    index.html.gz
+    loading.html
+)
+
+#[[
+1、为每个公共资源文件生成对应的 C++ 头文件。
+2、使用 xxd.cmake 脚本将二进制文件转换为 C++ 数组，这样可以将前端资源嵌入到可执行文件中。
+3、生成的头文件会被自动添加到编译单元列表中。
+]]
+foreach(asset ${PUBLIC_ASSETS})
+    set(input "${CMAKE_CURRENT_SOURCE_DIR}/public/${asset}")
+    set(output "${CMAKE_CURRENT_BINARY_DIR}/${asset}.hpp")
+    list(APPEND TARGET_SRCS ${output})
+    add_custom_command(
+        DEPENDS "${input}"
+        OUTPUT "${output}"
+        COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
+    )
+    set_source_files_properties(${output} PROPERTIES GENERATED TRUE)
+endforeach()
+
+#[[
+1、该目标包含了 agent.cpp、agent_utils.cpp、tool_executor.cpp 和生成的前端资源头文件这些编译单元。
 2、编译单元指的是源代码中的一个独立的文件，它可以被单独编译并生成一个目标文件，可以包含头文件、源文件和其他资源。
 ]]
-add_executable(${TARGET} agent.cpp agent_utils.cpp tool_executor.cpp)
+add_executable(${TARGET} ${TARGET_SRCS})
 
 #[[
 1、该目标使用到了 common、llama 和 ${CMAKE_THREAD_LIBS_INIT} 这几个库，因此需要通过链接的方式将其包含进来。
