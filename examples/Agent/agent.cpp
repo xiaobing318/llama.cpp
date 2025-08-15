@@ -15,6 +15,7 @@
 #include <memory>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -25,6 +26,128 @@
 #endif
 
 using json = nlohmann::ordered_json;
+
+// SSE 流解析工具函数
+class SSEParser {
+public:
+    static std::vector<json> parseSSEResponse(const std::string& sse_data) {
+        std::vector<json> result;
+        std::istringstream stream(sse_data);
+        std::string line;
+        
+        while (std::getline(stream, line)) {
+            // 移除行尾的回车符
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
+            }
+            
+            // 跳过空行和注释行
+            if (line.empty() || line[0] == ':') {
+                continue;
+            }
+            
+            // 解析 data: 行
+            if (line.substr(0, 5) == "data:") {
+                std::string json_data = line.substr(5);
+                
+                // 移除前导空格
+                size_t start = json_data.find_first_not_of(" \t");
+                if (start != std::string::npos) {
+                    json_data = json_data.substr(start);
+                }
+                
+                // 检查是否是结束标记
+                if (json_data == "[DONE]") {
+                    break;
+                }
+                
+                // 尝试解析JSON
+                try {
+                    if (!json_data.empty()) {
+                        json parsed = json::parse(json_data);
+                        result.push_back(parsed);
+                    }
+                } catch (const json::parse_error& e) {
+                    LOG_WRN("SSE JSON 解析错误: %s, 数据: %s\n", e.what(), json_data.c_str());
+                    continue;
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    static json combineStreamingResponse(const std::vector<json>& chunks) {
+        if (chunks.empty()) {
+            return json{};
+        }
+        
+        // 使用第一个chunk作为基础
+        json combined = chunks[0];
+        
+        // 如果只有一个chunk，直接返回
+        if (chunks.size() == 1) {
+            return combined;
+        }
+        
+        // 合并流式响应的内容
+        std::string combined_content = "";
+        json combined_tool_calls = json::array();
+        
+        for (const auto& chunk : chunks) {
+            if (chunk.contains("choices") && !chunk["choices"].empty()) {
+                const auto& choice = chunk["choices"][0];
+                
+                if (choice.contains("delta")) {
+                    const auto& delta = choice["delta"];
+                    
+                    // 合并content
+                    if (delta.contains("content") && !delta["content"].is_null()) {
+                        combined_content += delta["content"].get<std::string>();
+                    }
+                    
+                    // 合并tool_calls
+                    if (delta.contains("tool_calls")) {
+                        for (const auto& tool_call : delta["tool_calls"]) {
+                            combined_tool_calls.push_back(tool_call);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 构造最终响应
+        if (combined.contains("choices") && !combined["choices"].empty()) {
+            auto& choice = combined["choices"][0];
+            
+            // 创建完整的message而不是delta
+            choice["message"] = json{};
+            choice["message"]["role"] = "assistant";
+            
+            if (!combined_content.empty()) {
+                choice["message"]["content"] = combined_content;
+            } else {
+                choice["message"]["content"] = nullptr;
+            }
+            
+            if (!combined_tool_calls.empty()) {
+                choice["message"]["tool_calls"] = combined_tool_calls;
+            }
+            
+            // 移除delta字段
+            choice.erase("delta");
+            
+            // 设置finish_reason
+            if (!combined_tool_calls.empty()) {
+                choice["finish_reason"] = "tool_calls";
+            } else {
+                choice["finish_reason"] = "stop";
+            }
+        }
+        
+        return combined;
+    }
+};
 
 struct AgentConfig {
     std::string agent_host = "127.0.0.1";
@@ -282,8 +405,25 @@ public:
         // Chat completion with tool support
         server->Post("/v1/chat/completions", [this](const httplib::Request& req, httplib::Response& res) {
             try {
+                // 验证请求体是否为空
+                if (req.body.empty()) {
+                    json error = {{"error", "请求体为空"}};
+                    res.set_content(error.dump(), "application/json");
+                    res.status = 400;
+                    return;
+                }
+                
                 // 将请求体中的 body 信息解析成 JSON 数据
-                json request_body = json::parse(req.body);
+                json request_body;
+                try {
+                    request_body = json::parse(req.body);
+                } catch (const json::parse_error& e) {
+                    LOG_ERR("请求体JSON解析失败: %s\n", e.what());
+                    json error = {{"error", "请求体格式错误: " + std::string(e.what())}};
+                    res.set_content(error.dump(), "application/json");
+                    res.status = 400;
+                    return;
+                }
 
                 /*
                 1、如果请求体中不存在 "tools" 字段，则需要将工具执行器中的工具（包含内置工具定义、配置中的外部工具定义）添加到请求体中。
@@ -295,16 +435,46 @@ public:
                     request_body["tools"] = all_tools;
                 }
 
+                // 设置超时时间
+                llama_client->set_read_timeout(60); // 60秒超时
+                llama_client->set_write_timeout(60);
+                
                 // Forward to llama-server
                 auto llama_res = llama_client->Post("/v1/chat/completions",
                     request_body.dump(), "application/json");
 
                 // 如果 llama-server 的响应体为空，则设置 llama-agent 的响应体，向客户端返回错误信息。
                 if (!llama_res) {
-                    // TODO:后续可能通过 error code 来返回。
-                    json error = {{"error", "连接 llama-server 失败。"}};
+                    LOG_ERR("连接 llama-server 失败，可能原因：网络连接问题、服务器未启动或超时\n");
+                    json error = {
+                        {"error", "连接 llama-server 失败"},
+                        {"details", "请检查llama-server是否正常运行，网络连接是否正常"}
+                    };
                     res.set_content(error.dump(), "application/json");
-                    res.status = 500;
+                    res.status = 503; // Service Unavailable
+                    return;
+                }
+                
+                // 检查HTTP状态码
+                if (llama_res->status != 200) {
+                    LOG_ERR("llama-server 返回错误状态码: %d\n", llama_res->status);
+                    LOG_ERR("错误内容: %s\n", llama_res->body.c_str());
+                    json error = {
+                        {"error", "llama-server 请求失败"},
+                        {"status_code", llama_res->status},
+                        {"details", llama_res->body}
+                    };
+                    res.set_content(error.dump(), "application/json");
+                    res.status = llama_res->status;
+                    return;
+                }
+                
+                // 验证响应体不为空
+                if (llama_res->body.empty()) {
+                    LOG_ERR("llama-server 返回空响应体\n");
+                    json error = {{"error", "服务器返回空响应"}};
+                    res.set_content(error.dump(), "application/json");
+                    res.status = 502; // Bad Gateway
                     return;
                 }
 
@@ -354,7 +524,50 @@ public:
                     }
                 }
                 */
-                json response = json::parse(llama_res->body);
+                json response;
+                
+                // 检测响应是否为SSE流格式
+                bool is_sse_format = false;
+                if (!llama_res->body.empty()) {
+                    // 检查是否以 "data:" 开头或包含 "data:" 行
+                    if (llama_res->body.substr(0, 5) == "data:" || 
+                        llama_res->body.find("\ndata:") != std::string::npos) {
+                        is_sse_format = true;
+                    }
+                }
+                
+                if (is_sse_format) {
+                    LOG_INF("检测到SSE流式响应，正在解析...\n");
+                    
+                    // 解析SSE格式响应
+                    auto sse_chunks = SSEParser::parseSSEResponse(llama_res->body);
+                    if (!sse_chunks.empty()) {
+                        response = SSEParser::combineStreamingResponse(sse_chunks);
+                    } else {
+                        LOG_WRN("SSE解析结果为空，尝试传统JSON解析\n");
+                        try {
+                            response = json::parse(llama_res->body);
+                        } catch (const json::parse_error& e) {
+                            LOG_ERR("JSON解析失败: %s\n", e.what());
+                            json error = {{"error", "响应解析失败: " + std::string(e.what())}};
+                            res.set_content(error.dump(), "application/json");
+                            res.status = 500;
+                            return;
+                        }
+                    }
+                } else {
+                    // 传统JSON格式解析
+                    try {
+                        response = json::parse(llama_res->body);
+                    } catch (const json::parse_error& e) {
+                        LOG_ERR("JSON解析失败: %s\n", e.what());
+                        LOG_ERR("响应内容（前200字符）: %.200s\n", llama_res->body.c_str());
+                        json error = {{"error", "响应解析失败: " + std::string(e.what())}};
+                        res.set_content(error.dump(), "application/json");
+                        res.status = 500;
+                        return;
+                    }
+                }
 
                 // 如果 llama-server 响应体中包含 "choices" 字段，并且该字段不为空，则执行代码块中的内容。
                 if (response.contains("choices") && !response["choices"].empty()) {
@@ -374,7 +587,17 @@ public:
                             LOG_INF(" Agent 执行工具 (第 %d 轮): %s\n", 1, function_name.c_str());
 
                             // 调用 ToolExecutor 执行工具，并获取结果。
-                            json result = tool_executor->execute(function_name, arguments);
+                            json result;
+                            try {
+                                result = tool_executor->execute(function_name, arguments);
+                            } catch (const std::exception& e) {
+                                LOG_ERR("工具执行失败 %s: %s\n", function_name.c_str(), e.what());
+                                result = json{
+                                    {"error", "工具执行失败"},
+                                    {"details", e.what()},
+                                    {"tool_name", function_name}
+                                };
+                            }
                             // 将调用工具结果以及一些额外信息包装成 JSON 保存到 tool_results 数组中，这里假设会执行多个工具调用。
                             tool_results.push_back({
                                 {"tool_call_id", tool_call["id"]},
@@ -420,10 +643,49 @@ public:
                                 continue_request.dump(), "application/json");
 
                             if (!continue_res) {
+                                LOG_ERR("工具调用后连接 llama-server 失败，中断工具调用循环\n");
+                                break;
+                            }
+                            
+                            if (continue_res->status != 200) {
+                                LOG_ERR("工具调用后 llama-server 返回错误状态码: %d，中断工具调用循环\n", continue_res->status);
+                                break;
+                            }
+                            
+                            if (continue_res->body.empty()) {
+                                LOG_ERR("工具调用后 llama-server 返回空响应体，中断工具调用循环\n");
                                 break;
                             }
 
-                            response = json::parse(continue_res->body);
+                            // 使用相同的SSE解析逻辑处理工具调用后的响应
+                            bool continue_is_sse = false;
+                            if (!continue_res->body.empty()) {
+                                if (continue_res->body.substr(0, 5) == "data:" || 
+                                    continue_res->body.find("\ndata:") != std::string::npos) {
+                                    continue_is_sse = true;
+                                }
+                            }
+                            
+                            if (continue_is_sse) {
+                                auto continue_sse_chunks = SSEParser::parseSSEResponse(continue_res->body);
+                                if (!continue_sse_chunks.empty()) {
+                                    response = SSEParser::combineStreamingResponse(continue_sse_chunks);
+                                } else {
+                                    try {
+                                        response = json::parse(continue_res->body);
+                                    } catch (const json::parse_error& e) {
+                                        LOG_ERR("工具调用后JSON解析失败: %s\n", e.what());
+                                        break;
+                                    }
+                                }
+                            } else {
+                                try {
+                                    response = json::parse(continue_res->body);
+                                } catch (const json::parse_error& e) {
+                                    LOG_ERR("工具调用后JSON解析失败: %s\n", e.what());
+                                    break;
+                                }
+                            }
 
                             // 检查是否还有工具调用
                             bool has_tool_calls = false;
@@ -441,7 +703,18 @@ public:
                                         json arguments = json::parse(tool_call["function"]["arguments"].get<std::string>());
 
                                         LOG_INF(" Agent 执行工具 (第 %d 轮): %s\n", iteration + 2, function_name.c_str());
-                                        json result = tool_executor->execute(function_name, arguments);
+                                        json result;
+                                        try {
+                                            result = tool_executor->execute(function_name, arguments);
+                                        } catch (const std::exception& e) {
+                                            LOG_ERR("工具执行失败 %s (第 %d 轮): %s\n", function_name.c_str(), iteration + 2, e.what());
+                                            result = json{
+                                                {"error", "工具执行失败"},
+                                                {"details", e.what()},
+                                                {"tool_name", function_name},
+                                                {"iteration", iteration + 2}
+                                            };
+                                        }
 
                                         json tool_result = {
                                             {"tool_call_id", tool_call["id"]},
