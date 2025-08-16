@@ -28,11 +28,26 @@
 
 using json = nlohmann::ordered_json;
 
-// SSE 流解析工具函数
+// 改进的SSE解析器
 class SSEParser {
 public:
-    static std::vector<json> parseSSEResponse(const std::string& sse_data) {
-        std::vector<json> result;
+    // 解析单个SSE数据块
+    static json parseSSEChunk(const std::string& chunk) {
+        if (chunk.empty() || chunk == "[DONE]") {
+            return json{};
+        }
+        
+        try {
+            return json::parse(chunk);
+        } catch (const json::parse_error& e) {
+            LOG_WRN("SSE chunk解析失败: %s\n", e.what());
+            return json{};
+        }
+    }
+    
+    // 从SSE流中提取所有数据块
+    static std::vector<std::string> extractSSEChunks(const std::string& sse_data) {
+        std::vector<std::string> chunks;
         std::istringstream stream(sse_data);
         std::string line;
         
@@ -47,161 +62,194 @@ public:
                 continue;
             }
             
-            // 解析 data: 行
+            // 解析data:行
             if (line.substr(0, 5) == "data:") {
-                std::string json_data = line.substr(5);
+                std::string data = line.substr(5);
                 
                 // 移除前导空格
-                size_t start = json_data.find_first_not_of(" \t");
+                size_t start = data.find_first_not_of(" \t");
                 if (start != std::string::npos) {
-                    json_data = json_data.substr(start);
+                    data = data.substr(start);
                 }
                 
-                // 检查是否是结束标记
-                if (json_data == "[DONE]") {
-                    break;
-                }
-                
-                // 尝试解析JSON
-                try {
-                    if (!json_data.empty()) {
-                        json parsed = json::parse(json_data);
-                        result.push_back(parsed);
-                    }
-                } catch (const json::parse_error& e) {
-                    LOG_WRN("SSE JSON 解析错误: %s, 数据: %s\n", e.what(), json_data.c_str());
-                    continue;
+                if (!data.empty()) {
+                    chunks.push_back(data);
                 }
             }
         }
         
-        return result;
+        return chunks;
     }
     
-    static json combineStreamingResponse(const std::vector<json>& chunks) {
-        if (chunks.empty()) {
-            LOG_WRN("SSE chunks 为空\n");
-            return json{};
-        }
+    // 合并流式tool calling响应
+    static json mergeToolCallChunks(const std::vector<json>& json_chunks) {
+        std::map<int, json> tool_calls_map;
+        json result;
         
-        LOG_INF("开始合并 %zu 个SSE chunks\n", chunks.size());
-        
-        // 找到有效的基础chunk（包含choices的chunk）
-        json combined;
-        bool found_base = false;
-        
-        for (const auto& chunk : chunks) {
-            if (chunk.contains("choices") && !chunk["choices"].empty()) {
-                combined = chunk;
-                found_base = true;
-                break;
+        for (const auto& chunk : json_chunks) {
+            if (!chunk.contains("choices") || chunk["choices"].empty()) {
+                continue;
             }
-        }
-        
-        if (!found_base) {
-            LOG_ERR("在SSE chunks中未找到有效的choices数据\n");
-            return json{};
-        }
-        
-        // 如果只有一个chunk，特殊处理
-        if (chunks.size() == 1) {
-            LOG_INF("单个SSE chunk，直接处理\n");
-            if (combined.contains("choices") && !combined["choices"].empty()) {
-                auto& choice = combined["choices"][0];
-                
-                // 如果已经是完整message格式，直接返回
-                if (choice.contains("message")) {
-                    return combined;
-                }
-                
-                // 如果是delta格式，转换为message格式
-                if (choice.contains("delta")) {
-                    const auto& delta = choice["delta"];
-                    choice["message"] = json{};
-                    choice["message"]["role"] = "assistant";
-                    
-                    if (delta.contains("content") && !delta["content"].is_null()) {
-                        choice["message"]["content"] = delta["content"];
-                    } else {
-                        choice["message"]["content"] = nullptr;
-                    }
-                    
-                    if (delta.contains("tool_calls")) {
-                        choice["message"]["tool_calls"] = delta["tool_calls"];
-                        choice["finish_reason"] = "tool_calls";
-                    } else {
-                        choice["finish_reason"] = "stop";
-                    }
-                    
-                    choice.erase("delta");
-                }
+            
+            // 保存第一个chunk的基础信息
+            if (result.empty()) {
+                result = chunk;
+                result["choices"][0].erase("delta");
+                result["choices"][0]["message"] = json{
+                    {"role", "assistant"},
+                    {"content", nullptr},
+                    {"tool_calls", json::array()}
+                };
             }
-            return combined;
-        }
-        
-        // 多个chunks，需要合并
-        std::string combined_content = "";
-        json combined_tool_calls = json::array();
-        std::string last_finish_reason = "stop";
-        
-        for (const auto& chunk : chunks) {
-            if (chunk.contains("choices") && !chunk["choices"].empty()) {
-                const auto& choice = chunk["choices"][0];
-                
-                // 处理finish_reason
-                if (choice.contains("finish_reason") && !choice["finish_reason"].is_null()) {
-                    last_finish_reason = choice["finish_reason"].get<std::string>();
-                }
-                
-                if (choice.contains("delta")) {
-                    const auto& delta = choice["delta"];
+            
+            const auto& choice = chunk["choices"][0];
+            
+            // 更新finish_reason
+            if (choice.contains("finish_reason") && !choice["finish_reason"].is_null()) {
+                result["choices"][0]["finish_reason"] = choice["finish_reason"];
+            }
+            
+            // 处理delta中的tool_calls
+            if (choice.contains("delta") && choice["delta"].contains("tool_calls")) {
+                for (const auto& delta_tool : choice["delta"]["tool_calls"]) {
+                    if (!delta_tool.contains("index")) continue;
                     
-                    // 合并content
-                    if (delta.contains("content") && !delta["content"].is_null()) {
-                        combined_content += delta["content"].get<std::string>();
+                    int idx = delta_tool["index"];
+                    
+                    // 初始化tool call
+                    if (tool_calls_map.find(idx) == tool_calls_map.end()) {
+                        tool_calls_map[idx] = json{
+                            {"type", "function"},
+                            {"id", ""},
+                            {"function", json{
+                                {"name", ""},
+                                {"arguments", ""}
+                            }}
+                        };
                     }
                     
-                    // 合并tool_calls
-                    if (delta.contains("tool_calls")) {
-                        for (const auto& tool_call : delta["tool_calls"]) {
-                            combined_tool_calls.push_back(tool_call);
+                    auto& tool_call = tool_calls_map[idx];
+                    
+                    // 更新id
+                    if (delta_tool.contains("id")) {
+                        tool_call["id"] = delta_tool["id"];
+                    }
+                    
+                    // 更新type
+                    if (delta_tool.contains("type")) {
+                        tool_call["type"] = delta_tool["type"];
+                    }
+                    
+                    // 更新function信息
+                    if (delta_tool.contains("function")) {
+                        const auto& func = delta_tool["function"];
+                        if (func.contains("name") && !func["name"].get<std::string>().empty()) {
+                            tool_call["function"]["name"] = func["name"];
+                        }
+                        if (func.contains("arguments")) {
+                            std::string current_args = tool_call["function"]["arguments"];
+                            tool_call["function"]["arguments"] = current_args + func["arguments"].get<std::string>();
                         }
                     }
                 }
             }
         }
         
-        LOG_INF("合并完成：content长度=%zu, tool_calls数量=%zu\n", 
-               combined_content.length(), combined_tool_calls.size());
-        
-        // 构造最终响应
-        if (combined.contains("choices") && !combined["choices"].empty()) {
-            auto& choice = combined["choices"][0];
-            
-            // 创建完整的message而不是delta
-            choice["message"] = json{};
-            choice["message"]["role"] = "assistant";
-            
-            if (!combined_content.empty()) {
-                choice["message"]["content"] = combined_content;
-            } else {
-                choice["message"]["content"] = nullptr;
-            }
-            
-            if (!combined_tool_calls.empty()) {
-                choice["message"]["tool_calls"] = combined_tool_calls;
-                choice["finish_reason"] = "tool_calls";
-            } else {
-                choice["finish_reason"] = last_finish_reason;
-            }
-            
-            // 移除delta字段
-            choice.erase("delta");
+        // 将map转换为数组
+        for (const auto& [idx, tool_call] : tool_calls_map) {
+            result["choices"][0]["message"]["tool_calls"].push_back(tool_call);
         }
         
-        return combined;
+        return result;
+    }
+    
+    // 合并流式content响应
+    static json mergeContentChunks(const std::vector<json>& json_chunks) {
+        json result;
+        std::string combined_content;
+        
+        for (const auto& chunk : json_chunks) {
+            if (!chunk.contains("choices") || chunk["choices"].empty()) {
+                continue;
+            }
+            
+            // 保存第一个chunk的基础信息
+            if (result.empty()) {
+                result = chunk;
+                result["choices"][0].erase("delta");
+                result["choices"][0]["message"] = json{
+                    {"role", "assistant"},
+                    {"content", ""}
+                };
+            }
+            
+            const auto& choice = chunk["choices"][0];
+            
+            // 更新finish_reason
+            if (choice.contains("finish_reason") && !choice["finish_reason"].is_null()) {
+                result["choices"][0]["finish_reason"] = choice["finish_reason"];
+            }
+            
+            // 累积content
+            if (choice.contains("delta") && choice["delta"].contains("content") && 
+                !choice["delta"]["content"].is_null()) {
+                combined_content += choice["delta"]["content"].get<std::string>();
+            }
+        }
+        
+        if (!result.empty()) {
+            result["choices"][0]["message"]["content"] = combined_content;
+        }
+        
+        return result;
     }
 };
+
+// 工具执行辅助函数（优化版）
+json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
+    for (const auto& tool_call : tool_calls) {
+        // 提取工具调用信息
+        std::string tool_id = tool_call.value("id", "");
+        std::string tool_name = tool_call["function"]["name"];
+        std::string args_str = tool_call["function"]["arguments"];
+        
+        LOG_INF("执行工具: %s (id: %s)\n", tool_name.c_str(), tool_id.c_str());
+        
+        // 解析参数
+        json arguments;
+        try {
+            arguments = json::parse(args_str);
+        } catch (const json::parse_error& e) {
+            LOG_ERR("解析工具参数失败: %s\n", e.what());
+            arguments = json::object();
+        }
+        
+        // 执行工具
+        json result;
+        try {
+            result = tool_executor->execute(tool_name, arguments);
+            LOG_INF("工具执行成功: %s\n", tool_name.c_str());
+        } catch (const std::exception& e) {
+            LOG_ERR("工具执行失败: %s: %s\n", tool_name.c_str(), e.what());
+            result = json{
+                {"error", "Tool execution failed"},
+                {"details", e.what()}
+            };
+        }
+        
+        // 添加工具结果消息
+        json tool_message = {
+            {"role", "tool"},
+            {"tool_call_id", tool_id},
+            {"name", tool_name},
+            {"content", result.dump()}
+        };
+        
+        messages.push_back(tool_message);
+    }
+    
+    return messages;
+}
 
 struct AgentConfig {
     std::string agent_host = "127.0.0.1";
@@ -456,221 +504,214 @@ public:
             res.set_content(response.dump(), "application/json");
         });
 
-        // Chat completion with tool support - 简化透传版本
+        // 主要的/v1/chat/completions端点实现
         server->Post("/v1/chat/completions", [this](const httplib::Request& req, httplib::Response& res) {
             try {
-                // 验证请求体
+                // 1. 验证请求
                 if (req.body.empty()) {
-                    json error = {{"error", "请求体为空"}};
+                    json error = {{"error", {{"message", "Empty request body"}}}};
                     res.set_content(error.dump(), "application/json");
                     res.status = 400;
                     return;
                 }
         
-                // 解析请求体
+                // 2. 解析请求
                 json request_body;
                 try {
                     request_body = json::parse(req.body);
                 } catch (const json::parse_error& e) {
-                    LOG_ERR("请求体JSON解析失败: %s\n", e.what());
-                    json error = {{"error", "请求体格式错误: " + std::string(e.what())}};
+                    json error = {{"error", {{"message", "Invalid JSON: " + std::string(e.what())}}}};
                     res.set_content(error.dump(), "application/json");
                     res.status = 400;
                     return;
                 }
-
-                // 添加工具定义
+        
+                // 3. 获取配置
+                bool stream_mode = request_body.value("stream", false);
+                json messages = request_body["messages"];
+        
+                // 4. 添加工具定义（如果需要）
                 json all_tools = tool_executor->getTools();
                 if (!request_body.contains("tools") && !all_tools.empty()) {
                     request_body["tools"] = all_tools;
                 }
-
-                // 检查是否需要流式响应
-                bool stream_mode = request_body.value("stream", false);
         
-                // 设置超时
-                llama_client->set_read_timeout(60);
+                // 5. 设置HTTP客户端
+                llama_client->set_read_timeout(120);
                 llama_client->set_write_timeout(60);
-
-                // 第一次请求：发送到llama-server
-                auto llama_res = llama_client->Post("/v1/chat/completions",
-                    request_body.dump(), "application/json");
-
-                if (!llama_res || llama_res->status != 200 || llama_res->body.empty()) {
-                    LOG_ERR("连接 llama-server 失败\n");
-                    json error = {{"error", "连接 llama-server 失败"}};
-                    res.set_content(error.dump(), "application/json");
-                    res.status = 503;
-                    return;
-                }
-
-                // 检查响应中是否有工具调用
-                bool has_tool_calls = false;
-                json parsed_response;
-                json tool_messages;
         
-                // 检查是否为SSE格式
-                bool is_sse = llama_res->body.find("data:") != std::string::npos;
+                // 6. 多轮对话循环（支持连续的tool calling）
+                bool continue_conversation = true;
+                std::string accumulated_sse_response;  // 累积的SSE响应（用于流模式）
+                json final_response;                   // 最终响应（用于非流模式）
         
-                if (is_sse) {
-                    // 解析SSE检查工具调用
-                    auto chunks = SSEParser::parseSSEResponse(llama_res->body);
-                    if (!chunks.empty()) {
-                        parsed_response = SSEParser::combineStreamingResponse(chunks);
-                    }
-                } else {
-                    // 解析JSON检查工具调用
-                    try {
-                        parsed_response = json::parse(llama_res->body);
-                    } catch (const json::parse_error& e) {
-                        // 如果解析失败，直接透传
-                        if (stream_mode) {
-                            res.set_header("Content-Type", "text/event-stream");
-                            res.set_header("Cache-Control", "no-cache");
-                            res.set_header("Connection", "keep-alive");
-                        }
-                        res.set_content(llama_res->body, llama_res->get_header_value("Content-Type"));
-                        res.status = llama_res->status;
+                while (continue_conversation) {
+                    // 准备当前请求
+                    json current_request = request_body;
+                    current_request["messages"] = messages;
+            
+                    // 发送请求到llama-server
+                    LOG_INF("发送请求到llama-server...\n");
+                    auto llama_res = llama_client->Post(
+                        "/v1/chat/completions",
+                        current_request.dump(),
+                        "application/json"
+                    );
+            
+                    // 检查响应
+                    if (!llama_res || llama_res->status != 200) {
+                        LOG_ERR("llama-server响应错误: status=%d\n", 
+                                llama_res ? llama_res->status : 0);
+                        json error = {{"error", {{"message", "Failed to connect to llama-server"}}}};
+                        res.set_content(error.dump(), "application/json");
+                        res.status = 503;
                         return;
                     }
-                }
-        
-                // 检查是否有工具调用
-                if (parsed_response.contains("choices") && !parsed_response["choices"].empty()) {
-                    const auto& choice = parsed_response["choices"][0];
-                    if (choice.contains("message") && choice["message"].contains("tool_calls")) {
-                        has_tool_calls = true;
-                        LOG_INF("检测到工具调用\n");
+            
+                    // 判断响应类型
+                    bool is_sse_response = llama_res->body.find("data:") != std::string::npos;
+            
+                    if (is_sse_response) {
+                        // 处理SSE流式响应
+                        LOG_INF("处理SSE流式响应\n");
                 
-                        // 保存工具调用消息
-                        tool_messages = request_body["messages"];
-                        tool_messages.push_back(choice["message"]);
+                        // 提取所有SSE chunks
+                        auto chunks = SSEParser::extractSSEChunks(llama_res->body);
+                        std::vector<json> json_chunks;
+                        bool has_tool_calls = false;
                 
-                        // 执行所有工具调用
-                        for (const auto& tool_call : choice["message"]["tool_calls"]) {
-                            std::string function_name = tool_call["function"]["name"];
-                            std::string args_str = tool_call["function"]["arguments"].get<std::string>();
+                        // 解析每个chunk
+                        for (const auto& chunk_str : chunks) {
+                            if (chunk_str == "[DONE]") break;
                     
-                            LOG_INF("执行工具: %s\n", function_name.c_str());
+                            auto chunk_json = SSEParser::parseSSEChunk(chunk_str);
+                            if (!chunk_json.empty()) {
+                                json_chunks.push_back(chunk_json);
+                        
+                                // 检测tool calls
+                                if (chunk_json.contains("choices") && !chunk_json["choices"].empty()) {
+                                    const auto& choice = chunk_json["choices"][0];
+                                    if (choice.contains("delta") && choice["delta"].contains("tool_calls")) {
+                                        has_tool_calls = true;
+                                    }
+                                    if (choice.contains("finish_reason") && 
+                                        choice["finish_reason"] == "tool_calls") {
+                                        has_tool_calls = true;
+                                    }
+                                }
+                            }
+                        }
+                
+                        if (has_tool_calls) {
+                            // 合并tool calling chunks
+                            json merged = SSEParser::mergeToolCallChunks(json_chunks);
                     
-                            json arguments;
-                            try {
-                                arguments = json::parse(args_str);
-                            } catch (const json::parse_error& e) {
-                                LOG_ERR("解析工具参数失败: %s\n", e.what());
-                                arguments = json::object();
+                            if (merged.contains("choices") && !merged["choices"].empty() &&
+                                merged["choices"][0].contains("message")) {
+                                const auto& message = merged["choices"][0]["message"];
+                        
+                                // 添加assistant消息到历史
+                                messages.push_back(message);
+                        
+                                // 执行工具调用
+                                if (message.contains("tool_calls") && !message["tool_calls"].empty()) {
+                                    LOG_INF("执行%zu个工具调用\n", message["tool_calls"].size());
+                                    executeToolCalls(tool_executor.get(), message["tool_calls"], messages);
+                            
+                                    // 如果是流模式，累积响应（移除最后的[DONE]）
+                                    if (stream_mode) {
+                                        size_t done_pos = llama_res->body.rfind("data: [DONE]");
+                                        if (done_pos != std::string::npos) {
+                                            accumulated_sse_response += llama_res->body.substr(0, done_pos);
+                                        } else {
+                                            accumulated_sse_response += llama_res->body;
+                                        }
+                                    }
+                            
+                                    continue; // 继续下一轮对话
+                                }
+                            }
+                        } else {
+                            // 普通content响应
+                            if (stream_mode) {
+                                // 流模式：累积SSE响应
+                                accumulated_sse_response += llama_res->body;
+                            } else {
+                                // 非流模式：合并为完整响应
+                                final_response = SSEParser::mergeContentChunks(json_chunks);
+                            }
+                            continue_conversation = false;
+                        }
+                
+                    } else {
+                        // 处理JSON响应
+                        LOG_INF("处理JSON响应\n");
+                
+                        try {
+                            json response = json::parse(llama_res->body);
+                    
+                            // 检查是否有tool calls
+                            bool has_tool_calls = false;
+                            if (response.contains("choices") && !response["choices"].empty()) {
+                                const auto& choice = response["choices"][0];
+                                if (choice.contains("message") && choice["message"].contains("tool_calls") &&
+                                    choice.value("finish_reason", "") == "tool_calls") {
+                                    has_tool_calls = true;
+                                }
                             }
                     
-                            // 执行工具
-                            json result;
-                            try {
-                                result = tool_executor->execute(function_name, arguments);
-                            } catch (const std::exception& e) {
-                                LOG_ERR("工具执行失败 %s: %s\n", function_name.c_str(), e.what());
-                                result = json{
-                                    {"error", "工具执行失败"},
-                                    {"details", e.what()}
-                                };
+                            if (has_tool_calls) {
+                                const auto& message = response["choices"][0]["message"];
+                        
+                                // 添加assistant消息到历史
+                                messages.push_back(message);
+                        
+                                // 执行工具调用
+                                LOG_INF("执行工具调用\n");
+                                executeToolCalls(tool_executor.get(), message["tool_calls"], messages);
+                        
+                                continue; // 继续下一轮对话
+                            } else {
+                                // 普通响应，结束对话
+                                final_response = response;
+                                continue_conversation = false;
                             }
                     
-                            // 添加工具结果到消息
-                            tool_messages.push_back({
-                                {"tool_call_id", tool_call["id"]},
-                                {"role", "tool"},
-                                {"name", function_name},
-                                {"content", result.dump()}
-                            });
+                        } catch (const json::parse_error& e) {
+                            LOG_ERR("解析llama-server响应失败: %s\n", e.what());
+                            // 直接转发原始响应
+                            res.set_content(llama_res->body, llama_res->get_header_value("Content-Type"));
+                            res.status = llama_res->status;
+                            return;
                         }
                     }
                 }
         
-                // 如果没有工具调用，直接透传响应
-                if (!has_tool_calls) {
-                    LOG_INF("无工具调用，直接透传响应\n");
-            
-                    // 设置响应头
-                    if (stream_mode) {
-                        res.set_header("Content-Type", "text/event-stream");
-                        res.set_header("Cache-Control", "no-cache");
-                        res.set_header("Connection", "keep-alive");
-                        res.set_header("Access-Control-Allow-Origin", "*");
-                    } else {
-                        res.set_header("Content-Type", "application/json");
-                    }
-            
-                    // 直接返回llama-server的响应
-                    res.set_content(llama_res->body, res.get_header_value("Content-Type"));
-                    res.status = llama_res->status;
-                    return;
-                }
-        
-                // 有工具调用，需要继续对话
-                LOG_INF("工具调用执行完成，继续对话\n");
-        
-                // 准备包含工具结果的新请求
-                json continue_request = request_body;
-                continue_request["messages"] = tool_messages;
-        
-                // 发送继续请求
-                auto continue_res = llama_client->Post("/v1/chat/completions",
-                    continue_request.dump(), "application/json");
-        
-                if (!continue_res || continue_res->status != 200) {
-                    LOG_ERR("工具调用后续请求失败\n");
-                    json error = {{"error", "工具调用后续请求失败"}};
-                    res.set_content(error.dump(), "application/json");
-                    res.status = 503;
-                    return;
-                }
-        
-                // 合并响应：如果是流式，需要合并两个SSE流
+                // 7. 返回最终响应
                 if (stream_mode) {
+                    // 流模式响应
                     res.set_header("Content-Type", "text/event-stream");
                     res.set_header("Cache-Control", "no-cache");
                     res.set_header("Connection", "keep-alive");
                     res.set_header("Access-Control-Allow-Origin", "*");
             
-                    std::string combined_response;
-            
-                    // 添加第一个响应（工具调用）
-                    if (is_sse) {
-                        // 移除第一个响应的 [DONE] 标记
-                        std::string first_response = llama_res->body;
-                        size_t done_pos = first_response.find("data: [DONE]");
-                        if (done_pos != std::string::npos) {
-                            first_response = first_response.substr(0, done_pos);
-                        }
-                        combined_response += first_response;
-                    } else {
-                        // 转换为SSE格式
-                        json sse_chunk = {
-                            {"id", parsed_response.value("id", "chatcmpl-" + std::to_string(std::time(nullptr)))},
-                            {"object", "chat.completion.chunk"},
-                            {"created", parsed_response.value("created", std::time(nullptr))},
-                            {"model", parsed_response.value("model", "unknown")},
-                            {"choices", json::array({{
-                                {"index", 0},
-                                {"delta", parsed_response["choices"][0]["message"]},
-                                {"finish_reason", "tool_calls"}
-                            }})}
-                        };
-                        combined_response += "data: " + sse_chunk.dump() + "\n\n";
+                    // 确保响应以data: [DONE]结尾
+                    if (accumulated_sse_response.find("data: [DONE]") == std::string::npos) {
+                        accumulated_sse_response += "data: [DONE]\n\n";
                     }
             
-                    // 添加第二个响应（工具执行后的回复）
-                    combined_response += continue_res->body;
-            
-                    res.set_content(combined_response, "text/event-stream");
+                    res.set_content(accumulated_sse_response, "text/event-stream");
                 } else {
-                    // 非流式模式，返回最终响应
-                    res.set_content(continue_res->body, "application/json");
+                    // 非流模式响应
+                    res.set_header("Content-Type", "application/json");
+                    res.set_content(final_response.dump(), "application/json");
                 }
         
                 res.status = 200;
         
             } catch (const std::exception& e) {
-                LOG_ERR("处理请求时发生异常: %s\n", e.what());
-                json error = {{"error", e.what()}};
+                LOG_ERR("处理请求异常: %s\n", e.what());
+                json error = {{"error", {{"message", e.what()}}}};
                 res.set_content(error.dump(), "application/json");
                 res.status = 500;
             }
