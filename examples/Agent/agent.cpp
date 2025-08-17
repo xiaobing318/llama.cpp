@@ -29,7 +29,60 @@
 
 using json = nlohmann::ordered_json;
 
-// 改进的SSE解析器
+struct SSEBridge {
+    // SSEBridge（阻塞队列）
+    
+    std::mutex m;
+    std::condition_variable cv;
+    std::deque<std::string> q;
+    bool closed = false;
+    
+    void push(std::string s) {
+        {
+          std::lock_guard<std::mutex> lk(m);
+          q.emplace_back(std::move(s));
+        }
+        cv.notify_one();
+    }
+    
+    // pop 一条；若 closed 且队空，则返回 false
+    bool pop(std::string &out) {
+        std::unique_lock<std::mutex> lk(m);
+        cv.wait(lk, [&]{ return !q.empty() || closed; });
+        if (q.empty()) return false;
+        out = std::move(q.front());
+        q.pop_front();
+        return true;
+    }
+    
+    void close() {
+        {
+          std::lock_guard<std::mutex> lk(m);
+          closed = true;
+        }
+        cv.notify_all();
+    }
+};
+
+struct AgentConfig {
+    std::string agent_host = "127.0.0.1";
+    int agent_port = 8081;
+    std::string llama_server_host = "127.0.0.1";
+    int llama_server_port = 8080;
+    std::string llama_server_path = "./llama-server";
+    std::string model_path = "";
+    int n_ctx = 2048;
+    int n_gpu_layers = -1;
+    bool auto_start_server = true;
+    json tools;
+};
+
+struct CommandLineArgs {
+    std::string config_file_path = "config.json";
+    bool show_help = false;
+    bool show_version = false;
+};
+
 class SSEParser {
 public:
     // 解析单个SSE数据块
@@ -206,8 +259,7 @@ public:
     }
 };
 
-// 工具执行辅助函数（优化版）
-json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
+static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
     for (const auto& tool_call : tool_calls) {
         // 提取工具调用信息
         std::string tool_id = tool_call.value("id", "");
@@ -252,39 +304,42 @@ json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json&
     return messages;
 }
 
-// ======== 辅助：SSEBridge（阻塞队列）========
-struct SSEBridge {
-  std::mutex m;
-  std::condition_variable cv;
-  std::deque<std::string> q;
-  bool closed = false;
+// no streaming mode merge：补上 reasoning_content
+static nlohmann::ordered_json merge_with_reasoning(const std::vector<nlohmann::ordered_json> &chunks){
+    json result;
+    std::string content, reasoning;
 
-  void push(std::string s) {
-    {
-      std::lock_guard<std::mutex> lk(m);
-      q.emplace_back(std::move(s));
+    for (const auto &chunk : chunks) {
+      if (!chunk.contains("choices") || chunk["choices"].empty()) continue;
+      if (result.empty()) {
+        result = chunk;
+        result["choices"][0].erase("delta");
+        result["choices"][0]["message"] = json{
+          {"role","assistant"},
+          {"content",""},
+          {"reasoning_content",""}
+        };
+      }
+      const auto &choice = chunk["choices"][0];
+      if (choice.contains("finish_reason") && !choice["finish_reason"].is_null()) {
+        result["choices"][0]["finish_reason"] = choice["finish_reason"];
+      }
+      if (choice.contains("delta")) {
+        const auto &d = choice["delta"];
+        if (d.contains("content") && !d["content"].is_null()) {
+          content += d["content"].get<std::string>();
+        }
+        if (d.contains("reasoning_content") && !d["reasoning_content"].is_null()) {
+          reasoning += d["reasoning_content"].get<std::string>();
+        }
+      }
     }
-    cv.notify_one();
-  }
-
-  // pop 一条；若 closed 且队空，则返回 false
-  bool pop(std::string &out) {
-    std::unique_lock<std::mutex> lk(m);
-    cv.wait(lk, [&]{ return !q.empty() || closed; });
-    if (q.empty()) return false;
-    out = std::move(q.front());
-    q.pop_front();
-    return true;
-  }
-
-  void close() {
-    {
-      std::lock_guard<std::mutex> lk(m);
-      closed = true;
+    if (!result.empty()) {
+      result["choices"][0]["message"]["content"] = content;
+      result["choices"][0]["message"]["reasoning_content"] = reasoning;
     }
-    cv.notify_all();
-  }
-};
+    return result;
+}
 
 // 把 POST + 回调 改走 send(Request&, Response&, Error&) 通道
 static bool post_stream(
@@ -297,20 +352,19 @@ static bool post_stream(
     httplib::Response &out_resp,
     httplib::Error &out_err) {
 
-  httplib::Request req;
-  req.method = "POST";
-  req.path   = path;
-  req.headers.emplace("Content-Type", "application/json");
-  // 接受 SSE 或 JSON
-  req.headers.emplace("Accept", "text/event-stream, application/json");
-  req.body = json_body;
+    httplib::Request req;
+    req.method = "POST";
+    req.path   = path;
+    req.headers.emplace("Content-Type", "application/json");
+    // 接受 SSE 或 JSON
+    req.headers.emplace("Accept", "text/event-stream, application/json");
+    req.body = json_body;
 
-  req.response_handler = on_response;
-  req.content_receiver = on_chunk;
+    req.response_handler = on_response;
+    req.content_receiver = on_chunk;
 
-  return cli.send(req, out_resp, out_err);
+    return cli.send(req, out_resp, out_err);
 }
-
 
 static bool forward_llama_sse_once(
     httplib::Client &cli,
@@ -318,128 +372,75 @@ static bool forward_llama_sse_once(
     SSEBridge &bridge,
     nlohmann::ordered_json &out_merged_tool_message,
     bool &out_saw_done_marker) {
-
-  std::atomic<bool> saw_tool_calls{false};
-  out_saw_done_marker = false;
-  out_merged_tool_message = nlohmann::ordered_json();
-
-  std::string linebuf; // 按行拆
-  std::vector<nlohmann::ordered_json> json_chunks;
-
-  httplib::Response resp;
-  httplib::Error err;
-
-  bool ok = post_stream(
-      cli,
-      "/v1/chat/completions",
-      request_body.dump(),
-      // ResponseHandler：200 就继续
-      [&](const httplib::Response &r) {
-        return r.status == 200;
-      },
-      // ContentReceiverWithProgress：四参
-      [&](const char *data, size_t len, uint64_t /*off*/, uint64_t /*total*/) {
-        linebuf.append(data, len);
-        size_t pos;
-        while ((pos = linebuf.find('\n')) != std::string::npos) {
-          std::string line = linebuf.substr(0, pos);
-          linebuf.erase(0, pos + 1);
-
-          // 原样透传（一行一写）
-          bridge.push(line + "\n");
-
-          if (line.rfind("data:", 0) == 0) {
-            std::string payload = line.substr(5);
-            size_t st = payload.find_first_not_of(" \t");
-            if (st != std::string::npos) payload = payload.substr(st);
-
-            if (payload == "[DONE]") {
-              out_saw_done_marker = true;
-            } else {
-              auto j = nlohmann::ordered_json::parse(payload, nullptr, false);
-              if (!j.is_discarded()) {
-                json_chunks.push_back(j);
-                if (j.contains("choices") && !j["choices"].empty()) {
-                  const auto &choice = j["choices"][0];
-                  if ((choice.contains("delta") && choice["delta"].contains("tool_calls")) ||
-                      (choice.contains("finish_reason") && choice["finish_reason"] == "tool_calls")) {
-                    saw_tool_calls = true;
+    std::atomic<bool> saw_tool_calls{false};
+    out_saw_done_marker = false;
+    out_merged_tool_message = nlohmann::ordered_json();
+    
+    std::string linebuf; // 按行拆
+    std::vector<nlohmann::ordered_json> json_chunks;
+    
+    httplib::Response resp;
+    httplib::Error err;
+    
+    bool ok = post_stream(
+        cli,
+        "/v1/chat/completions",
+        request_body.dump(),
+        // ResponseHandler：200 就继续
+        [&](const httplib::Response &r) {
+          return r.status == 200;
+        },
+        // ContentReceiverWithProgress：四参
+        [&](const char *data, size_t len, uint64_t /*off*/, uint64_t /*total*/) {
+          linebuf.append(data, len);
+          size_t pos;
+          while ((pos = linebuf.find('\n')) != std::string::npos) {
+            std::string line = linebuf.substr(0, pos);
+            linebuf.erase(0, pos + 1);
+    
+            // 原样透传（一行一写）
+            bridge.push(line + "\n");
+    
+            if (line.rfind("data:", 0) == 0) {
+              std::string payload = line.substr(5);
+              size_t st = payload.find_first_not_of(" \t");
+              if (st != std::string::npos) payload = payload.substr(st);
+    
+              if (payload == "[DONE]") {
+                out_saw_done_marker = true;
+              } else {
+                auto j = nlohmann::ordered_json::parse(payload, nullptr, false);
+                if (!j.is_discarded()) {
+                  json_chunks.push_back(j);
+                  if (j.contains("choices") && !j["choices"].empty()) {
+                    const auto &choice = j["choices"][0];
+                    if ((choice.contains("delta") && choice["delta"].contains("tool_calls")) ||
+                        (choice.contains("finish_reason") && choice["finish_reason"] == "tool_calls")) {
+                      saw_tool_calls = true;
+                    }
                   }
                 }
               }
             }
           }
-        }
-        return true; // 继续接收
-      },
-      resp, err);
-
-  // 把尾巴里的残留也透出去
-  if (!linebuf.empty()) { bridge.push(linebuf); linebuf.clear(); }
-
-  if (!ok || resp.status != 200) {
-    // 这里按你自己的错误处理约定来（可返回 false 或抛异常）
-    return false;
-  }
-
-  if (saw_tool_calls) {
-    out_merged_tool_message = SSEParser::mergeToolCallChunks(json_chunks);
-  }
-  return saw_tool_calls;
+          return true; // 继续接收
+        },
+        resp, err);
+    
+    // 把尾巴里的残留也透出去
+    if (!linebuf.empty()) { bridge.push(linebuf); linebuf.clear(); }
+    
+    if (!ok || resp.status != 200) {
+      // 这里按你自己的错误处理约定来（可返回 false 或抛异常）
+      return false;
+    }
+    
+    if (saw_tool_calls) {
+      out_merged_tool_message = SSEParser::mergeToolCallChunks(json_chunks);
+    }
+    return saw_tool_calls;
 }
 
-// ======== 辅助：非流模式合并（补上 reasoning_content）========
-static nlohmann::ordered_json merge_with_reasoning(
-    const std::vector<nlohmann::ordered_json> &chunks) {
-
-  using json = nlohmann::ordered_json;
-  json result;
-  std::string content, reasoning;
-
-  for (const auto &chunk : chunks) {
-    if (!chunk.contains("choices") || chunk["choices"].empty()) continue;
-    if (result.empty()) {
-      result = chunk;
-      result["choices"][0].erase("delta");
-      result["choices"][0]["message"] = json{
-        {"role","assistant"},
-        {"content",""},
-        {"reasoning_content",""}
-      };
-    }
-    const auto &choice = chunk["choices"][0];
-    if (choice.contains("finish_reason") && !choice["finish_reason"].is_null()) {
-      result["choices"][0]["finish_reason"] = choice["finish_reason"];
-    }
-    if (choice.contains("delta")) {
-      const auto &d = choice["delta"];
-      if (d.contains("content") && !d["content"].is_null()) {
-        content += d["content"].get<std::string>();
-      }
-      if (d.contains("reasoning_content") && !d["reasoning_content"].is_null()) {
-        reasoning += d["reasoning_content"].get<std::string>();
-      }
-    }
-  }
-  if (!result.empty()) {
-    result["choices"][0]["message"]["content"] = content;
-    result["choices"][0]["message"]["reasoning_content"] = reasoning;
-  }
-  return result;
-}
-
-struct AgentConfig {
-    std::string agent_host = "127.0.0.1";
-    int agent_port = 8081;
-    std::string llama_server_host = "127.0.0.1";
-    int llama_server_port = 8080;
-    std::string llama_server_path = "./llama-server";
-    std::string model_path = "";
-    int n_ctx = 2048;
-    int n_gpu_layers = -1;
-    bool auto_start_server = true;
-    json tools;
-};
 
 class LlamaAgent {
 private:
@@ -662,7 +663,7 @@ public:
     }
 
     void setupRoutes() {
-        // Health check（应该间接的检查 llama-server 的 /health 端口）
+        // Health check endpoint
         server->Get("/health", [this](const httplib::Request&, httplib::Response& res) {
             auto llama_res = llama_client->Get("/health");
             if (llama_res && llama_res->status == 200) {
@@ -675,36 +676,42 @@ public:
             }
         });
 
-        // List available tools
+        // List available tools endpoint
         server->Get("/tools", [this](const httplib::Request&, httplib::Response& res) {
             json response = {{"tools", tool_executor->getTools()}};
             res.set_content(response.dump(), "application/json");
         });
 
-        // ======== 仅替换 /v1/chat/completions 的实现 ========
+        // chat completion/tool calling endpoint
         server->Post("/v1/chat/completions", [this](const httplib::Request& req, httplib::Response& res) {
-          using json = nlohmann::ordered_json;
           try {
+            // 检查向该 endpoint 发起请求的请求体是否为空。
             if (req.body.empty()) {
               json err = {{"error", {{"message", "Empty request body"}}}};
-              res.set_content(err.dump(), "application/json"); res.status = 400; return;
+              res.set_content(err.dump(), "application/json");
+              res.status = 400;
+              return;
             }
-
+            // 反序列化过程即将 JSON 数据从网络读取到 main memory 中待使用。
             json request = json::parse(req.body);
             bool stream = request.value("stream", false);
             json messages = request["messages"];
 
-            // 自动补 tools
+            /*
+            1、不论向该 endpoint 发送请求的请求体中是否存在 tools 字段，都需要将配置工具添加到 tools 字段中。
+            2、在这里只能保证配置工具是符合规范的，对于请求体中的 tools 字段则是没有办法保证的，可能需要进行一些检查工作。
+            3、如果向该 endpoint 发送请求的请求体中不存在 tools 字段，则将会在请求体中添加一个名为 tools 的字段，将配置工具添加到这个
+            字段中；如果该 endpoint 发送请求的请求体中存在 tools 字段，则将会使用配置工具将该 tools 字段内容覆盖掉。
+            4、TODO：后续会对该部分进行逻辑优化。
+            */
             json all_tools = tool_executor->getTools();
-            if (!request.contains("tools") && !all_tools.empty()) {
-              request["tools"] = all_tools;
-            }
+            request["tools"] = all_tools;
 
             llama_client->set_read_timeout(300);
             llama_client->set_write_timeout(120);
 
+            // no streaming mode：跑多轮，最后合并（含 reasoning）后一次性返回
             if (!stream) {
-              // —— 非流模式：跑多轮，最后合并（含 reasoning）后一次性返回 ——
               bool go = true;
               json final_resp;
               while (go) {
@@ -775,63 +782,64 @@ public:
               res.status = 200;
               return;
             }
+            // streaming mode：一路打通 llama-server ←→ WebUI 的 SSE
+            else
+            {
+                res.set_header("Content-Type", "text/event-stream");
+                res.set_header("Cache-Control", "no-cache");
+                res.set_header("Connection", "keep-alive");
+                res.set_header("Access-Control-Allow-Origin", "*");
 
-            // —— 流模式：一路打通 llama-server ←→ WebUI 的 SSE ——
-            res.set_header("Content-Type", "text/event-stream");
-            res.set_header("Cache-Control", "no-cache");
-            res.set_header("Connection", "keep-alive");
-            res.set_header("Access-Control-Allow-Origin", "*");
+                auto bridge = std::make_shared<SSEBridge>();
 
-            auto bridge = std::make_shared<SSEBridge>();
+                // 生产者线程：跑多轮推理 + 工具调用，每轮把 llama-server 的 SSE 原样 push 到 bridge
+                std::thread producer([this, bridge, request, messages]() mutable {
+                  try {
+                    bool go = true;
+                    json msgs = messages;
+                    while (go) {
+                      json one = request; one["messages"] = msgs;
+                      nlohmann::ordered_json merged_tool_msg;
+                      bool saw_done = false;
 
-            // 生产者线程：跑多轮推理 + 工具调用，每轮把 llama-server 的 SSE 原样 push 到 bridge
-            std::thread producer([this, bridge, request, messages]() mutable {
-              try {
-                bool go = true;
-                json msgs = messages;
-                while (go) {
-                  json one = request; one["messages"] = msgs;
-                  nlohmann::ordered_json merged_tool_msg;
-                  bool saw_done = false;
-
-                  bool has_tool = forward_llama_sse_once(*llama_client, one, *bridge, merged_tool_msg, saw_done);
-                  if (has_tool) {
-                    if (merged_tool_msg.contains("choices") && !merged_tool_msg["choices"].empty()
-                        && merged_tool_msg["choices"][0].contains("message")) {
-                      const auto &msg = merged_tool_msg["choices"][0]["message"];
-                      msgs.push_back(msg);
-                      if (msg.contains("tool_calls") && !msg["tool_calls"].empty()) {
-                        executeToolCalls(tool_executor.get(), msg["tool_calls"], msgs);
+                      bool has_tool = forward_llama_sse_once(*llama_client, one, *bridge, merged_tool_msg, saw_done);
+                      if (has_tool) {
+                        if (merged_tool_msg.contains("choices") && !merged_tool_msg["choices"].empty()
+                            && merged_tool_msg["choices"][0].contains("message")) {
+                          const auto &msg = merged_tool_msg["choices"][0]["message"];
+                          msgs.push_back(msg);
+                          if (msg.contains("tool_calls") && !msg["tool_calls"].empty()) {
+                            executeToolCalls(tool_executor.get(), msg["tool_calls"], msgs);
+                          }
+                        }
+                        // 继续 while(go)
+                      } else {
+                        // 最后一轮：把 [DONE] 发给前端结束
+                        bridge->push("data: [DONE]\n\n");
+                        go = false;
                       }
                     }
-                    // 继续 while(go)
-                  } else {
-                    // 最后一轮：把 [DONE] 发给前端结束
-                    bridge->push("data: [DONE]\n\n");
-                    go = false;
+                  } catch (...) {
+                    // 异常情况下，确保关闭
                   }
-                }
-              } catch (...) {
-                // 异常情况下，确保关闭
-              }
-              bridge->close();
-            });
+                  bridge->close();
+                });
 
-            // 消费者：chunked provider 从 bridge 读并写到客户端
-            res.set_chunked_content_provider("text/event-stream",
-              [bridge](size_t, httplib::DataSink &sink) {
-                std::string chunk;
-                while (bridge->pop(chunk)) {
-                  sink.write(chunk.data(), chunk.size());
-                }
-                sink.done();
-                return true;
-              });
+                // 消费者：chunked provider 从 bridge 读并写到客户端
+                res.set_chunked_content_provider("text/event-stream",
+                  [bridge](size_t, httplib::DataSink &sink) {
+                    std::string chunk;
+                    while (bridge->pop(chunk)) {
+                      sink.write(chunk.data(), chunk.size());
+                    }
+                    sink.done();
+                    return true;
+                  });
 
-            // 注意：不要在这里 join，交给 httplib 的写线程生命周期
-            producer.detach();
-            res.status = 200;
-
+                // 注意：不要在这里 join，交给 httplib 的写线程生命周期
+                producer.detach();
+                res.status = 200;
+            }
           } catch (const std::exception &e) {
             nlohmann::ordered_json error = {{"error", {{"message", e.what()}}}};
             res.set_content(error.dump(), "application/json"); res.status = 500;
@@ -921,16 +929,11 @@ public:
     }
 };
 
-std::atomic<bool> g_running{true};
-LlamaAgent* g_agent_instance = nullptr;
+static std::atomic<bool> g_running{true};
 
-struct CommandLineArgs {
-    std::string config_file_path = "config.json";
-    bool show_help = false;
-    bool show_version = false;
-};
+static LlamaAgent* g_agent_instance = nullptr;
 
-void printHelp(const char* program_name) {
+static void printHelp(const char* program_name) {
     std::cout << "Usage: " << program_name << " [OPTIONS]\n"
               << "\n"
               << "Options:\n"
@@ -945,11 +948,11 @@ void printHelp(const char* program_name) {
               << std::endl;
 }
 
-void printVersion() {
+static void printVersion() {
     std::cout << "LlamaAgent v1.0.0\n";
 }
 
-bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
+static bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
     for (int i = 1; i < argc; ++i) {
         // 获取当前命令行参数
         std::string arg = argv[i];
@@ -984,7 +987,7 @@ bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
     return true;
 }
 
-void signal_handler(int signal_num) {
+static void signal_handler(int signal_num) {
     const char* signal_name = (signal_num == SIGINT) ? "SIGINT" :
                              (signal_num == SIGTERM) ? "SIGTERM" : "UNKNOWN";
     LOG_INF("收到信号 %s，正在关闭服务...\n", signal_name);
