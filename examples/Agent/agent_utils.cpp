@@ -10,13 +10,13 @@
 #include <regex>
 
 #ifdef _WIN32
-#include <windows.h>
-#include <tlhelp32.h>
+    #include <windows.h>
+    #include <tlhelp32.h>
 #else
-#include <unistd.h>
-#include <signal.h>
-#include <dirent.h>
-#include <sys/stat.h>
+    #include <unistd.h>
+    #include <signal.h>
+    #include <dirent.h>
+    #include <sys/stat.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -34,7 +34,7 @@ void common_init() {
 #endif
 
     // Log initialization
-    LOG_INF("Agent utilities initialized\n");
+    LOG_INF(" Agent utilities initialized\n");
 }
 
 std::string get_current_timestamp() {
