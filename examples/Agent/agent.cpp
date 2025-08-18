@@ -29,6 +29,35 @@
 
 using json = nlohmann::ordered_json;
 
+// 生成当前 SSE 会话里稳定不变的 id（整条流复用）
+static std::string make_stream_id() {
+    auto now = std::chrono::system_clock::now().time_since_epoch().count();
+    char buf[64];
+    snprintf(buf, sizeof(buf), "chatcmpl-agent-%llx", (unsigned long long) now);
+    return std::string(buf);
+}
+
+// 统一构造 OpenAI 形状的 streaming chunk（chat.completion.chunk）
+static std::string build_delta_chunk(const std::string &stream_id,
+                                     const std::string &model_name,
+                                     const nlohmann::ordered_json &delta) {
+    nlohmann::ordered_json chunk = {
+        {"id",      stream_id},
+        {"object",  "chat.completion.chunk"},
+        {"created", (long long) time(nullptr)},
+        {"model",   model_name},
+        {"choices", nlohmann::ordered_json::array({
+            nlohmann::ordered_json{
+                {"index", 0},
+                {"delta", delta},
+                {"finish_reason", nullptr}
+            }
+        })}
+    };
+    return std::string("data: ") + chunk.dump() + "\n\n";
+}
+
+
 struct SSEBridge {
     // SSEBridge（阻塞队列）
     
@@ -151,7 +180,12 @@ public:
                 result["choices"][0].erase("delta");
                 result["choices"][0]["message"] = json{
                     {"role", "assistant"},
-                    {"content", nullptr},
+                    /*
+                    1、fix:{"content", ""}--->{"content", nullptr}
+                    2、TODO：针对这里的 content 字段或许可以提一个 PR ，因为 jinja(minja)模板在解析 content 的时候如果 content 为空
+                    指针则会崩溃，因此需要弄清楚 server.cpp 中为什么返回 content 这个字段的时候返回的是空指针。
+                    */
+                    {"content", ""},
                     {"tool_calls", json::array()}
                 };
             }
@@ -261,14 +295,12 @@ public:
 
 static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
     for (const auto& tool_call : tool_calls) {
-        // 提取工具调用信息
         std::string tool_id = tool_call.value("id", "");
         std::string tool_name = tool_call["function"]["name"];
         std::string args_str = tool_call["function"]["arguments"];
         
         LOG_INF("执行工具: %s (id: %s)\n", tool_name.c_str(), tool_id.c_str());
         
-        // 解析参数
         json arguments;
         try {
             arguments = json::parse(args_str);
@@ -277,31 +309,94 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
             arguments = json::object();
         }
         
-        // 执行工具
         json result;
+        std::string result_content;
         try {
             result = tool_executor->execute(tool_name, arguments);
             LOG_INF("工具执行成功: %s\n", tool_name.c_str());
+            result_content = result.dump();
         } catch (const std::exception& e) {
             LOG_ERR("工具执行失败: %s: %s\n", tool_name.c_str(), e.what());
             result = json{
                 {"error", "Tool execution failed"},
                 {"details", e.what()}
             };
+            result_content = result.dump();
         }
         
-        // 添加工具结果消息
+        if (result_content.empty()) {
+            result_content = "{}";
+        }
+        
+        // 确保工具消息格式完整，包含所有必要字段
         json tool_message = {
             {"role", "tool"},
             {"tool_call_id", tool_id},
             {"name", tool_name},
-            {"content", result.dump()}
+            {"content", result_content},
+            {"reasoning_content", ""}  // 必须包含此字段
         };
         
         messages.push_back(tool_message);
     }
     
     return messages;
+}
+
+/*
+1、对 llama-server 返回的响应体中的 messages 字段进行修正。
+2、TODO:需要对 llama-server 返回响应体机制进行理解，最新分支可能已经解决了该问题。
+*/
+static void normalize_messages_for_llama(json& messages) {
+    for (auto &m : messages) {
+        // 确保所有消息都有content字段且为字符串
+        if (!m.contains("content")) {
+            m["content"] = "";
+        } else if (m["content"].is_null()) {
+            m["content"] = "";
+        } else if (!m["content"].is_string()) {
+            if (m["content"].is_object() || m["content"].is_array()) {
+                m["content"] = m["content"].dump();
+            } else {
+                m["content"] = "";
+            }
+        }
+        
+        // 确保所有消息都有reasoning_content字段且为字符串
+        if (!m.contains("reasoning_content")) {
+            m["reasoning_content"] = "";
+        } else if (m["reasoning_content"].is_null()) {
+            m["reasoning_content"] = "";
+        } else if (!m["reasoning_content"].is_string()) {
+            m["reasoning_content"] = "";
+        }
+        
+        // 特别处理tool角色的消息
+        if (m.contains("role") && m["role"] == "tool") {
+            // tool消息必须有content
+            if (m["content"].get<std::string>().empty()) {
+                m["content"] = "Tool executed successfully";
+            }
+            // 确保有tool_call_id
+            if (!m.contains("tool_call_id")) {
+                m["tool_call_id"] = "";
+            }
+            // 确保有name
+            if (!m.contains("name")) {
+                m["name"] = "unknown_tool";
+            }
+        }
+        
+        // 处理assistant角色带tool_calls的情况
+        if (m.contains("role") && m["role"] == "assistant") {
+            if (m.contains("tool_calls") && m["tool_calls"].is_array()) {
+                // 确保content不为null
+                if (!m.contains("content") || !m["content"].is_string()) {
+                    m["content"] = "";
+                }
+            }
+        }
+    }
 }
 
 // no streaming mode merge：补上 reasoning_content
@@ -341,13 +436,12 @@ static nlohmann::ordered_json merge_with_reasoning(const std::vector<nlohmann::o
     return result;
 }
 
-// 把 POST + 回调 改走 send(Request&, Response&, Error&) 通道
+// 帮助函数：POST + streaming（使用 httplib 的 send + content_receiver）
 static bool post_stream(
     httplib::Client &cli,
     const std::string &path,
     const std::string &json_body,
     const std::function<bool(const httplib::Response&)> &on_response,
-    // 注意：WithProgress 四参签名
     const std::function<bool(const char*, size_t, uint64_t, uint64_t)> &on_chunk,
     httplib::Response &out_resp,
     httplib::Error &out_err) {
@@ -366,81 +460,132 @@ static bool post_stream(
     return cli.send(req, out_resp, out_err);
 }
 
+/*
+一轮：把 llama-server 的 SSE 原样转到 bridge，但：
+- “吞掉”本轮末尾的 data: [DONE]，避免前端提前关流
+- 收集 JSON 块以判断是否出现 tool_calls，并把分片 tool_calls 合并回来
+*/
 static bool forward_llama_sse_once(
     httplib::Client &cli,
     const nlohmann::ordered_json &request_body,
     SSEBridge &bridge,
     nlohmann::ordered_json &out_merged_tool_message,
-    bool &out_saw_done_marker) {
+    bool &out_saw_done_marker,
+    const std::string &stream_id,
+    const std::string &model_name,
+    int round_number) {
+
     std::atomic<bool> saw_tool_calls{false};
     out_saw_done_marker = false;
     out_merged_tool_message = nlohmann::ordered_json();
-    
-    std::string linebuf; // 按行拆
+
+    std::string buf;
     std::vector<nlohmann::ordered_json> json_chunks;
-    
+
     httplib::Response resp;
     httplib::Error err;
-    
+
     bool ok = post_stream(
-        cli,
-        "/v1/chat/completions",
-        request_body.dump(),
-        // ResponseHandler：200 就继续
-        [&](const httplib::Response &r) {
-          return r.status == 200;
-        },
-        // ContentReceiverWithProgress：四参
-        [&](const char *data, size_t len, uint64_t /*off*/, uint64_t /*total*/) {
-          linebuf.append(data, len);
-          size_t pos;
-          while ((pos = linebuf.find('\n')) != std::string::npos) {
-            std::string line = linebuf.substr(0, pos);
-            linebuf.erase(0, pos + 1);
-    
-            // 原样透传（一行一写）
-            bridge.push(line + "\n");
-    
-            if (line.rfind("data:", 0) == 0) {
-              std::string payload = line.substr(5);
-              size_t st = payload.find_first_not_of(" \t");
-              if (st != std::string::npos) payload = payload.substr(st);
-    
-              if (payload == "[DONE]") {
-                out_saw_done_marker = true;
-              } else {
-                auto j = nlohmann::ordered_json::parse(payload, nullptr, false);
-                if (!j.is_discarded()) {
-                  json_chunks.push_back(j);
-                  if (j.contains("choices") && !j["choices"].empty()) {
-                    const auto &choice = j["choices"][0];
-                    if ((choice.contains("delta") && choice["delta"].contains("tool_calls")) ||
-                        (choice.contains("finish_reason") && choice["finish_reason"] == "tool_calls")) {
-                      saw_tool_calls = true;
-                    }
-                  }
+        cli, "/v1/chat/completions", request_body.dump(),
+        [&](const httplib::Response &r) { return r.status == 200; },
+        [&](const char *data, size_t len, uint64_t, uint64_t) {
+            buf.append(data, len);
+            size_t pos;
+            while ((pos = buf.find('\n')) != std::string::npos) {
+                std::string line = buf.substr(0, pos);
+                buf.erase(0, pos + 1);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+
+                if (line.empty() || line[0] == ':') continue;
+                if (line.rfind("data:", 0) != 0) continue;
+
+                std::string payload = line.substr(5);
+                size_t st = payload.find_first_not_of(" \t");
+                if (st != std::string::npos) payload = payload.substr(st);
+
+                // [DONE] 只记录，不转发（中间轮一定不能把 DONE 发到前端）
+                if (payload == "[DONE]") {
+                    out_saw_done_marker = true;
+                    continue;
                 }
-              }
+
+                auto j = nlohmann::ordered_json::parse(payload, nullptr, false);
+                if (j.is_discarded()) {
+                    // 异常块：原样透传，避免丢信息
+                    bridge.push(std::string("data: ") + payload + "\n\n");
+                    continue;
+                }
+
+                // 归一化 id/object/model：同一 HTTP 响应内保持稳定
+                j["id"]     = stream_id;
+                j["object"] = "chat.completion.chunk";
+                if (!model_name.empty()) j["model"] = model_name;
+
+                // —— 在这里先判断是否“带结束语义的 tool_calls 块” —— //
+                bool this_is_finish_tool_calls = false;
+                if (j.contains("choices") && !j["choices"].empty()) {
+                    auto &choice = j["choices"][0];
+
+                    // 记录是否出现工具调用（用于会后合并、驱动下一轮）
+                    if ((choice.contains("delta")   && choice["delta"].contains("tool_calls")) ||
+                        (choice.contains("message") && choice["message"].contains("tool_calls"))) {
+                        saw_tool_calls = true;
+                    }
+
+                    // “结束语义”：finish_reason == "tool_calls"
+                    if (choice.contains("finish_reason") && choice["finish_reason"].is_string()
+                        && choice["finish_reason"] == "tool_calls") {
+                        saw_tool_calls = true;
+                        this_is_finish_tool_calls = true;
+                    }
+
+                    // 多轮 role 处理：避免新开一条“消息”
+                    if (round_number > 1 && choice.contains("delta") && choice["delta"].is_object()) {
+                        auto &delta = choice["delta"];
+                        // 若本分片仅含 role，跳过（UI 不需要）
+                        if (delta.contains("role") && delta.size() == 1) {
+                            // 即使跳过，也要把原始块参与到 tool_calls 合并
+                            json_chunks.push_back(j);
+                            continue;
+                        }
+                        // 若 role 与其他键并存，仅移除 role
+                        if (delta.contains("role")) {
+                            delta.erase("role");
+                        }
+                    }
+
+                    // 字段兜底：有 reasoning_content 就补上 content = ""
+                    if (choice.contains("delta") && choice["delta"].is_object()) {
+                        auto &delta = choice["delta"];
+                        if (!delta.contains("content") && delta.contains("reasoning_content")) {
+                            delta["content"] = "";
+                        }
+                    }
+                }
+
+                // 参与工具合并判断（必须在可能 continue 之前做）
+                json_chunks.push_back(j);
+
+                // 关键：**屏蔽**带 finish_reason:"tool_calls" 的块，避免前端误以为一轮已结束
+                if (this_is_finish_tool_calls) {
+                    continue;
+                }
+
+                // 其他块正常转发给前端
+                bridge.push(std::string("data: ") + j.dump() + "\n\n");
             }
-          }
-          return true; // 继续接收
+            return true;
         },
-        resp, err);
-    
-    // 把尾巴里的残留也透出去
-    if (!linebuf.empty()) { bridge.push(linebuf); linebuf.clear(); }
-    
-    if (!ok || resp.status != 200) {
-      // 这里按你自己的错误处理约定来（可返回 false 或抛异常）
-      return false;
-    }
-    
+        resp, err
+    );
+
+    if (!ok || resp.status != 200) return false;
+
     if (saw_tool_calls) {
-      out_merged_tool_message = SSEParser::mergeToolCallChunks(json_chunks);
+        out_merged_tool_message = SSEParser::mergeToolCallChunks(json_chunks);
     }
     return saw_tool_calls;
 }
-
 
 class LlamaAgent {
 private:
@@ -510,15 +655,14 @@ public:
     }
 
     bool waitForServerStartup() {
-        // 最多尝试60次
-        const int max_attempts = 60;
-        // 每次间隔1秒
+        // 最多尝试 300 次检查。
+        const int max_attempts = 300;
+        // 每次检查间隔 1 秒，总共可以预留 300 秒（5 mins）的时间让 llama-server 进行启动。 
         const int retry_interval_ms = 1000;
 
         LOG_INF("正在等待 llama-server 启动...\n");
 
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
-            // 检查进程是否还在运行（避免无谓的等待）
 #ifdef _WIN32
             if (llama_process.hProcess) {
                 DWORD exit_code;
@@ -545,23 +689,23 @@ public:
             }
 #endif
 
-            // 尝试连接健康检查端点
+            // 尝试连接健康检查端点。
             auto res = llama_client->Get("/health");
             if (res && res->status == 200) {
-                LOG_INF("llama-server 启动成功！(尝试 %d/%d 次)\n", attempt, max_attempts);
+                LOG_INF(" llama-server 启动成功！(等待次数 %d/%d 次/秒)\n", attempt, max_attempts);
                 return true;
             }
 
-            // 输出等待进度
-            if (attempt % 10 == 0) {
+            // 输出等待进度，每两次检查输出一次进度。
+            if (attempt % 2 == 0) {
                 LOG_INF("等待 llama-server 启动中... (%d/%d)\n", attempt, max_attempts);
             }
 
-            // 等待后重试
+            // 等待后重试。
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_interval_ms));
         }
 
-        LOG_ERR("llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒\n",
+        LOG_ERR(" llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒\n",
                 max_attempts, max_attempts * retry_interval_ms / 1000);
         return false;
     }
@@ -584,7 +728,6 @@ public:
         }
 
         LOG_INF("正在启动 llama-server: %s\n", cmd.c_str());
-        // 在 Windows 上使用 CreateProcess 启动 llama-server 进程，在其他平台上使用 fork 和 system 调用。
 #ifdef _WIN32
         STARTUPINFOA si = {sizeof(si)};
         if (!CreateProcessA(NULL, const_cast<char*>(cmd.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &llama_process)) {
@@ -603,7 +746,7 @@ public:
         }
 #endif
 
-        // 创建 HTTP 客户端用于健康检查
+        // 上述代码已经在启动 llama-server ，这时候创建一个 HTTP 客户端用于健康检查，即检查 llama-server 是否启动成功。
         llama_client = std::make_unique<httplib::Client>(AgentConfig.llama_server_host, AgentConfig.llama_server_port);
 
         // 等待并检测 llama-server 启动状态
@@ -618,13 +761,9 @@ public:
 
         LOG_INF("正在停止 llama-server...\n");
 
-        // 根据不同的平台，使用不同的方法停止 llama-server 进程。
 #ifdef _WIN32
-        // 如果 llama_process.hProcess 有效，则优雅地终止进程
         if (llama_process.hProcess) {
-            // 首先尝试优雅终止
             if (TerminateProcess(llama_process.hProcess, 0)) {
-                // 等待进程结束，最多等待5秒
                 DWORD waitResult = WaitForSingleObject(llama_process.hProcess, 5000);
                 if (waitResult == WAIT_TIMEOUT) {
                     LOG_WRN("llama-server 进程在5秒内未响应，强制终止\n");
@@ -632,34 +771,26 @@ public:
             }
             CloseHandle(llama_process.hProcess);
             CloseHandle(llama_process.hThread);
-            // 清理进程信息
             memset(&llama_process, 0, sizeof(llama_process));
         }
 #else
-        // 如果 llama_pid 大于 0，则优雅地终止进程
         if (llama_pid > 0) {
-            // 首先发送 SIGTERM 信号进行优雅关闭
             if (kill(llama_pid, SIGTERM) == 0) {
-                // 等待进程结束，最多等待5秒
                 int wait_count = 0;
                 while (wait_count < 50 && kill(llama_pid, 0) == 0) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     wait_count++;
                 }
-
-                // 如果进程仍在运行，强制终止
                 if (kill(llama_pid, 0) == 0) {
                     LOG_WRN("llama-server 进程在5秒内未响应，强制终止\n");
                     kill(llama_pid, SIGKILL);
-                    // 再等待1秒确保进程被终止
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
             }
-            // 清理进程ID
             llama_pid = -1;
         }
 #endif
-        LOG_INF("llama-server 已停止。\n");
+        LOG_INF(" llama-server 已停止。\n");
     }
 
     void setupRoutes() {
@@ -707,7 +838,9 @@ public:
             json all_tools = tool_executor->getTools();
             request["tools"] = all_tools;
 
+            // 读操作：客户端在等待服务器回应时，如果 300（单位往往是秒）内没拿到回应，就触发一个读超时（read timeout）。
             llama_client->set_read_timeout(300);
+            // 写操作：客户端在等待服务器回应时，如果 300（单位往往是秒）内没拿到回应，就触发一个写超时（write timeout）。
             llama_client->set_write_timeout(120);
 
             // no streaming mode：跑多轮，最后合并（含 reasoning）后一次性返回
@@ -715,7 +848,10 @@ public:
               bool go = true;
               json final_resp;
               while (go) {
-                json one = request; one["messages"] = messages;
+                json one = request;
+                one["messages"] = messages;
+                // TODO：发送前对 messages 字段进行修正，可能是暂时的。
+                normalize_messages_for_llama(one["messages"]);
                 auto llama_res = llama_client->Post("/v1/chat/completions", one.dump(), "application/json");
                 if (!llama_res || llama_res->status != 200) {
                   json err = {{"error", {{"message", "Failed to connect to llama-server"}}}};
@@ -753,7 +889,8 @@ public:
                       }
                     }
                   } else {
-                    final_resp = merge_with_reasoning(jchunks); // <—— 修：把 reasoning 也合并
+                    //  把 reasoning 也合并
+                    final_resp = merge_with_reasoning(jchunks);
                     go = false;
                   }
                 } else {
@@ -789,40 +926,120 @@ public:
                 res.set_header("Cache-Control", "no-cache");
                 res.set_header("Connection", "keep-alive");
                 res.set_header("Access-Control-Allow-Origin", "*");
-
+            
                 auto bridge = std::make_shared<SSEBridge>();
-
-                // 生产者线程：跑多轮推理 + 工具调用，每轮把 llama-server 的 SSE 原样 push 到 bridge
+                
+                // 生产者线程：多轮推理 + 工具调用；中间轮不发 DONE，最后一轮统一发一次
                 std::thread producer([this, bridge, request, messages]() mutable {
-                  try {
-                    bool go = true;
-                    json msgs = messages;
-                    while (go) {
-                      json one = request; one["messages"] = msgs;
-                      nlohmann::ordered_json merged_tool_msg;
-                      bool saw_done = false;
+                    try {
+                        const std::string stream_id  = make_stream_id();
+                        const std::string model_name = request.value("model", "");
+                        json msgs = messages;
 
-                      bool has_tool = forward_llama_sse_once(*llama_client, one, *bridge, merged_tool_msg, saw_done);
-                      if (has_tool) {
-                        if (merged_tool_msg.contains("choices") && !merged_tool_msg["choices"].empty()
-                            && merged_tool_msg["choices"][0].contains("message")) {
-                          const auto &msg = merged_tool_msg["choices"][0]["message"];
-                          msgs.push_back(msg);
-                          if (msg.contains("tool_calls") && !msg["tool_calls"].empty()) {
-                            executeToolCalls(tool_executor.get(), msg["tool_calls"], msgs);
-                          }
+                        for (int round = 1; ; ++round) {
+                            LOG_INF("开始第 %d 轮推理\n", round);
+
+                            nlohmann::ordered_json one = request;
+                            one["messages"] = msgs;
+                            normalize_messages_for_llama(one["messages"]);
+                            one["stream"] = true;
+
+                            nlohmann::ordered_json merged_tool_msg;
+                            bool saw_done_marker = false;
+
+                            // 传递round参数
+                            bool has_tool_calls = forward_llama_sse_once(
+                                *llama_client, one, *bridge, merged_tool_msg, 
+                                saw_done_marker, stream_id, model_name, round);
+
+                            if (!has_tool_calls) {
+                                LOG_INF("第 %d 轮推理完成，无工具调用，结束会话\n", round);
+                                // 发送最终的[DONE]
+                                bridge->push("data: [DONE]\n\n");
+                                break;
+                            }
+
+                            // 有工具调用的处理
+                            if (merged_tool_msg.contains("choices") &&
+                                merged_tool_msg["choices"].is_array() &&
+                                !merged_tool_msg["choices"].empty() &&
+                                merged_tool_msg["choices"][0].contains("message")) {
+
+                                const auto &assist_msg = merged_tool_msg["choices"][0]["message"];
+
+                                // 确保消息包含必要的字段
+                                json normalized_msg = assist_msg;
+                                if (!normalized_msg.contains("content")) {
+                                    normalized_msg["content"] = "";
+                                }
+                                if (!normalized_msg.contains("reasoning_content")) {
+                                    normalized_msg["reasoning_content"] = "";
+                                }
+                                msgs.push_back(normalized_msg);
+
+                                // 在执行工具前，发送一个表示工具正在执行的消息
+                                json tool_executing_msg = {
+                                    {"id", stream_id},
+                                    {"object", "chat.completion.chunk"},
+                                    {"model", model_name},
+                                    {"choices", json::array({
+                                        json{
+                                            {"index", 0},
+                                            {"delta", json{
+                                                {"content", "\n\n Agent 正在调用工具执行操作 ......\n"}
+                                            }},
+                                            {"finish_reason", nullptr}
+                                        }
+                                    })}
+                                };
+                                bridge->push(std::string("data: ") + tool_executing_msg.dump() + "\n\n");
+
+                                // 执行工具
+                                size_t before = msgs.size();
+                                executeToolCalls(tool_executor.get(), assist_msg["tool_calls"], msgs);
+                                size_t added = msgs.size() - before;
+
+                                // 发送工具执行结果的提示
+                                for (size_t i = msgs.size() - added; i < msgs.size(); ++i) {
+                                    if (!msgs[i].contains("role") || msgs[i]["role"] != "tool") continue;
+                                    std::string tool_name = msgs[i].value("name", "unknown");
+                    
+                                    // 发送工具执行完成的消息
+                                    json tool_result_msg = {
+                                        {"id", stream_id},
+                                        {"object", "chat.completion.chunk"},
+                                        {"model", model_name},
+                                        {"choices", json::array({
+                                            json{
+                                                {"index", 0},
+                                                {"delta", json{ { "content", " Agent 调用工具 [" + tool_name + "] 执行操作完成，调用轮次：" + std::to_string(i) + "\n" }
+                                                }},
+                                                {"finish_reason", nullptr}
+                                            }
+                                        })}
+                                    };
+                                    bridge->push(std::string("data: ") + tool_result_msg.dump() + "\n\n");
+                    
+                                    LOG_INF("工具 %s 执行完成\n", tool_name.c_str());
+                                }
+
+                                continue;
+                            }
+
+                            break;
                         }
-                        // 继续 while(go)
-                      } else {
-                        // 最后一轮：把 [DONE] 发给前端结束
+                    } catch (const std::exception &e) {
+                        LOG_ERR("生产者线程异常: %s\n", e.what());
+                        nlohmann::ordered_json err = {
+                            {"error", {{"message", std::string("处理过程中出错: ") + e.what()}}}
+                        };
+                        bridge->push(std::string("data: ") + err.dump() + "\n\n");
                         bridge->push("data: [DONE]\n\n");
-                        go = false;
-                      }
+                    } catch (...) {
+                        LOG_ERR("生产者线程未知异常\n");
+                        bridge->push("data: [DONE]\n\n");
                     }
-                  } catch (...) {
-                    // 异常情况下，确保关闭
-                  }
-                  bridge->close();
+                    bridge->close();
                 });
 
                 // 消费者：chunked provider 从 bridge 读并写到客户端
@@ -882,9 +1099,6 @@ public:
     }
 
     bool start() {
-        // 初始化一个指向 llama-server 服务的客户端。
-        llama_client = std::make_unique<httplib::Client>(
-            AgentConfig.llama_server_host, AgentConfig.llama_server_port);
 
         // 如果启动 llama-server 失败的话直接返回。
         if (!startLlamaServer()) {
@@ -903,7 +1117,7 @@ public:
         // 启动 llama-agent 服务。
         running = true;
         server_thread = std::thread([this]() {
-            LOG_INF("代理服务器正在监听 http://%s:%d\n", AgentConfig.agent_host.c_str(), AgentConfig.agent_port);
+            LOG_INF(" Agent 正在监听 http://%s:%d\n", AgentConfig.agent_host.c_str(), AgentConfig.agent_port);
             server->listen(AgentConfig.agent_host, AgentConfig.agent_port);
         });
 
@@ -1010,12 +1224,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // 处理帮助和版本信息
+    // 终端输出帮助信息
     if (args.show_help) {
         printHelp(argv[0]);
         return 0;
     }
 
+    // 终端输出版本信息
     if (args.show_version) {
         printVersion();
         return 0;
@@ -1030,11 +1245,12 @@ int main(int argc, char** argv) {
 
     // 创建 LlamaAgent 实例
     LlamaAgent agent;
-    g_agent_instance = &agent;  // 设置全局引用以便信号处理器使用
+    // 设置全局引用以便信号处理器使用
+    g_agent_instance = &agent;
 
     // 如果代理实例加载配置文件失败，则输出错误信息并退出程序。
     if (!agent.loadConfig(config_file)) {
-        LOG_ERR("加载配置失败！\n");
+        LOG_ERR("加载 Agent 配置失败！\n");
         g_agent_instance = nullptr;
         return 1;
     }
@@ -1047,7 +1263,7 @@ int main(int argc, char** argv) {
     }
 
     // 输出代理正在运行的信息，并提示用户按 Ctrl+C 停止。
-    LOG_INF("Agent 正在运行，如果想要停止运行 Agent 请按下 Ctrl+C 。\n");
+    LOG_INF(" Agent 正在运行，如果想要停止运行 Agent 请按下 Ctrl+C 。\n");
 
     // 执行循环，直到收到终止信号。
     while (g_running) {
@@ -1061,7 +1277,7 @@ int main(int argc, char** argv) {
 
     // 清理全局引用
     g_agent_instance = nullptr;
-    LOG_INF("Agent 已完全停止。\n");
+    LOG_INF(" Agent 已完全停止。\n");
 
     return 0;
 }
