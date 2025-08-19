@@ -1,0 +1,1037 @@
+{
+    "qcopilot_host": "127.0.0.1",
+    "qcopilot_port": 8081,
+    "base_server_host": "127.0.0.1",
+    "base_server_port": 8080,
+    "base_server_path": "F:/github_repos/llama.cpp/build-x64-windows-msvc-debug/bin/Debug/llama-server.exe",
+    "model_path": "F:/llama.cpp-data/models/qwen2.5-1.5b-instruct-q8_0.gguf",
+    "n_ctx": 2048,
+    "n_gpu_layers": 99,
+    "auto_start_base_server": true,
+    "tools": [
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_convert_format",
+                "description": "Convert a vector dataset to another format using ogr2ogr. This does not change the geometry or CRS unless other options are specified.\n\nWHEN TO USE:\nUse for simple format conversions or field subsetting. Do not use for reprojection or spatial clipping (use dedicated tools).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Path to the source vector dataset (e.g., .shp, .gpkg, .geojson)."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Path to the destination dataset to create."
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "GDAL/OGR output driver name.",
+                            "enum": [
+                                "GPKG",
+                                "ESRI Shapefile",
+                                "GeoJSON",
+                                "FlatGeobuf",
+                                "CSV"
+                            ],
+                            "default": "GPKG"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "description": "Overwrite existing output.",
+                            "default": false
+                        },
+                        "nln": {
+                            "type": "string",
+                            "description": "New layer name for the destination dataset.",
+                            "default": ""
+                        },
+                        "select": {
+                            "type": "string",
+                            "description": "Comma-separated list of fields to copy (use quotes around names with spaces).",
+                            "default": ""
+                        },
+                        "where": {
+                            "type": "string",
+                            "description": "Attribute filter expressed like an SQL WHERE clause.",
+                            "default": ""
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "output_format"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -f \"{output_format}\" {nln:?-nln \"{nln}\"} {select:?-select \"{select}\"} {where:?-where \"{where}\"} \"{output_file}\" \"{input_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "in.shp",
+                        "output_file": "out.gpkg",
+                        "output_format": "GPKG",
+                        "overwrite": true
+                    }
+                },
+                {
+                    "args": {
+                        "input_file": "roads.geojson",
+                        "output_file": "roads.fgb",
+                        "output_format": "FlatGeobuf",
+                        "select": "id,name"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_reproject",
+                "description": "Reproject a vector dataset to a target CRS using ogr2ogr. Requires a valid target SRS. Optionally override source SRS.\n\nWHEN TO USE:\nUse for vector reprojection. For raster reprojection, use gdalwarp_reproject.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Path to source vector dataset."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Path to output dataset."
+                        },
+                        "target_srs": {
+                            "type": "string",
+                            "description": "Target SRS (e.g., 'EPSG:3857' or WKT/PROJ string)."
+                        },
+                        "source_srs": {
+                            "type": "string",
+                            "description": "Override source SRS if not embedded. Optional.",
+                            "default": ""
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": [
+                                "GPKG",
+                                "ESRI Shapefile",
+                                "GeoJSON",
+                                "FlatGeobuf"
+                            ],
+                            "default": "GPKG"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Overwrite output if exists."
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "target_srs"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -t_srs \"{target_srs}\" {source_srs:?-s_srs \"{source_srs}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "in.gpkg",
+                        "output_file": "out.gpkg",
+                        "target_srs": "EPSG:4326",
+                        "overwrite": true
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_clip_bbox",
+                "description": "Select and clip features intersecting a bounding box using ogr2ogr -spat. Note: geometries are selected but not clipped unless combined with -clipsrc.\n\nWHEN TO USE:\nUse when you want a spatial subset by extent. For true clipping to extent, prefer ogr_clip_layer with a polygon extent file or gdalwarp for rasters.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Source vector dataset."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Output dataset."
+                        },
+                        "minx": {
+                            "type": "number",
+                            "description": "Min X (left) of bounding box."
+                        },
+                        "miny": {
+                            "type": "number",
+                            "description": "Min Y (bottom) of bounding box."
+                        },
+                        "maxx": {
+                            "type": "number",
+                            "description": "Max X (right) of bounding box."
+                        },
+                        "maxy": {
+                            "type": "number",
+                            "description": "Max Y (top) of bounding box."
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": [
+                                "GPKG",
+                                "ESRI Shapefile",
+                                "GeoJSON",
+                                "FlatGeobuf"
+                            ],
+                            "default": "GPKG"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "spat_srs": {
+                            "type": "string",
+                            "description": "Optional SRS for the bbox if different from source.",
+                            "default": ""
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "minx",
+                        "miny",
+                        "maxx",
+                        "maxy"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -spat {minx} {miny} {maxx} {maxy} {spat_srs:?-spat_srs \"{spat_srs}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "in.geojson",
+                        "output_file": "out.fgb",
+                        "minx": 139.5,
+                        "miny": 35.3,
+                        "maxx": 139.9,
+                        "maxy": 35.8
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_clip_layer",
+                "description": "Clip features using a polygon layer with ogr2ogr -clipsrc/-clipdst to output only the intersection.\n\nWHEN TO USE:\nUse when you need true clipping of vector features by a polygon mask. For bbox-only filtering, use ogr_clip_bbox.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Source vector dataset."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Output dataset."
+                        },
+                        "clip_source": {
+                            "type": "string",
+                            "description": "Path to polygon datasource used as clip mask (vector)."
+                        },
+                        "clip_layer": {
+                            "type": "string",
+                            "description": "Layer name within clip_source to use.",
+                            "default": ""
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": [
+                                "GPKG",
+                                "ESRI Shapefile",
+                                "GeoJSON",
+                                "FlatGeobuf"
+                            ],
+                            "default": "GPKG"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "clip_source"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -clipsrc \"{clip_source}\" {clip_layer:?-clipsrclayer \"{clip_layer}\"} -clipdst \"{clip_source}\" {clip_layer:?-clipdstlayer \"{clip_layer}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "roads.gpkg",
+                        "output_file": "roads_clipped.gpkg",
+                        "clip_source": "mask.gpkg",
+                        "clip_layer": "study_area",
+                        "overwrite": true
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "ogrinfo",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogrinfo.exe",
+            "executable_linux": "/usr/bin/ogrinfo",
+            "function": {
+                "name": "ogr_info_summary",
+                "description": "List basic information about a vector dataset (layers, fields, extent) using ogrinfo.\n\nWHEN TO USE:\nPrefer json=true to make the output parseable. Use layer to target a specific layer.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dataset": {
+                            "type": "string",
+                            "description": "Vector datasource path."
+                        },
+                        "layer": {
+                            "type": "string",
+                            "description": "Optional layer name to inspect.",
+                            "default": ""
+                        },
+                        "summary_only": {
+                            "type": "boolean",
+                            "description": "If true, use -so to print summary instead of full feature dump.",
+                            "default": true
+                        },
+                        "json": {
+                            "type": "boolean",
+                            "description": "If true, include -json for parseable output (GDAL >= 3.7 for ogrinfo JSON).",
+                            "default": true
+                        }
+                    },
+                    "required": [
+                        "dataset"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {json:?-json} {summary_only:?-so} \"{dataset}\" {layer}",
+            "examples": [
+                {
+                    "args": {
+                        "dataset": "data.gpkg"
+                    }
+                },
+                {
+                    "args": {
+                        "dataset": "data.gpkg",
+                        "layer": "roads",
+                        "json": true
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdalinfo",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalinfo.exe",
+            "executable_linux": "/usr/bin/gdalinfo",
+            "function": {
+                "name": "gdal_info_summary",
+                "description": "List information about a raster dataset (size, geotransform, CRS, stats) using gdalinfo.\n\nWHEN TO USE:\nUse for fast metadata queries. Set json=true for parseable output; add stats or hist if needed (may read entire file).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dataset": {
+                            "type": "string",
+                            "description": "Raster dataset path."
+                        },
+                        "json": {
+                            "type": "boolean",
+                            "description": "Return JSON (-json). Recommended for parsing.",
+                            "default": true
+                        },
+                        "stats": {
+                            "type": "boolean",
+                            "description": "Compute statistics (-stats).",
+                            "default": false
+                        },
+                        "hist": {
+                            "type": "boolean",
+                            "description": "Compute histograms (-hist).",
+                            "default": false
+                        },
+                        "mm": {
+                            "type": "boolean",
+                            "description": "Compute min/max (-mm).",
+                            "default": false
+                        }
+                    },
+                    "required": [
+                        "dataset"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {json:?-json} {stats:?-stats} {hist:?-hist} {mm:?-mm} \"{dataset}\"",
+            "examples": [
+                {
+                    "args": {
+                        "dataset": "image.tif",
+                        "json": true,
+                        "stats": true
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdal_translate",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdal_translate.exe",
+            "executable_linux": "/usr/bin/gdal_translate",
+            "function": {
+                "name": "gdal_translate_convert",
+                "description": "Convert raster formats, optionally clip by extent, rescale and change data type using gdal_translate.\n\nWHEN TO USE:\nUse for format conversion and simple subsetting. For reprojection or cutline-based clipping, use gdalwarp.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Source raster."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Destination raster."
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Raster output format driver.",
+                            "enum": [
+                                "GTiff",
+                                "COG",
+                                "VRT",
+                                "AAIGrid",
+                                "PNG",
+                                "JPEG"
+                            ],
+                            "default": "GTiff"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "description": "Overwrite output if exists (use -of driver behavior).",
+                            "default": true
+                        },
+                        "projwin": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 4,
+                            "maxItems": 4,
+                            "description": "Optional window [ulx, uly, lrx, lry] in georeferenced coordinates (-projwin).",
+                            "default": []
+                        },
+                        "r": {
+                            "type": "string",
+                            "description": "Resampling method when resizing or warping (-r).",
+                            "enum": [
+                                "nearest",
+                                "bilinear",
+                                "cubic",
+                                "cubicspline",
+                                "lanczos",
+                                "average",
+                                "mode"
+                            ],
+                            "default": "nearest"
+                        },
+                        "scale": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "Optional rescale input range to 0-255, e.g. [min,max].",
+                            "default": []
+                        },
+                        "ot": {
+                            "type": "string",
+                            "description": "Output data type (-ot).",
+                            "enum": [
+                                "Byte",
+                                "UInt16",
+                                "Int16",
+                                "UInt32",
+                                "Int32",
+                                "Float32",
+                                "Float64"
+                            ],
+                            "default": "Byte"
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "output_format"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -of \"{output_format}\" {projwin:?-projwin {projwin[0]} {projwin[1]} {projwin[2]} {projwin[3]}} {scale:?-scale {scale[0]} {scale[1]}} -ot {ot} {r:?-r {r}} \"{input_file}\" \"{output_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "in.tif",
+                        "output_file": "out_cog.tif",
+                        "output_format": "COG"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdalwarp",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalwarp.exe",
+            "executable_linux": "/usr/bin/gdalwarp",
+            "function": {
+                "name": "gdalwarp_reproject",
+                "description": "Reproject and resample a raster using gdalwarp. Supports target resolution, extent and nodata.\n\nWHEN TO USE:\nUse for raster reprojection and resampling. For cutline masking, use gdalwarp_cutline.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Source raster."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Destination raster."
+                        },
+                        "t_srs": {
+                            "type": "string",
+                            "description": "Target SRS (e.g., 'EPSG:3857')."
+                        },
+                        "s_srs": {
+                            "type": "string",
+                            "description": "Source SRS override (optional).",
+                            "default": ""
+                        },
+                        "r": {
+                            "type": "string",
+                            "enum": [
+                                "near",
+                                "bilinear",
+                                "cubic",
+                                "cubicspline",
+                                "lanczos",
+                                "average",
+                                "rms",
+                                "mode",
+                                "min",
+                                "max",
+                                "med",
+                                "q1",
+                                "q3",
+                                "sum"
+                            ],
+                            "default": "near",
+                            "description": "Resampling method."
+                        },
+                        "tr": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "Target resolution [xres, yres] (-tr).",
+                            "default": []
+                        },
+                        "te": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 4,
+                            "maxItems": 4,
+                            "description": "Target extent [xmin,ymin,xmax,ymax] (-te).",
+                            "default": []
+                        },
+                        "dstnodata": {
+                            "type": "string",
+                            "description": "Destination nodata value(s) (-dstnodata).",
+                            "default": ""
+                        },
+                        "of": {
+                            "type": "string",
+                            "description": "Output format driver.",
+                            "enum": [
+                                "GTiff",
+                                "COG",
+                                "VRT",
+                                "HFA",
+                                "AAIGrid"
+                            ],
+                            "default": "GTiff"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "t_srs"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -t_srs \"{t_srs}\" {s_srs:?-s_srs \"{s_srs}\"} {r:?-r {r}} {tr:?-tr {tr[0]} {tr[1]}} {te:?-te {te[0]} {te[1]} {te[2]} {te[3]}} {dstnodata:?-dstnodata {dstnodata}} -of \"{of}\" \"{input_file}\" \"{output_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "in.tif",
+                        "output_file": "out_3857.tif",
+                        "t_srs": "EPSG:3857",
+                        "r": "bilinear"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdalwarp",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalwarp.exe",
+            "executable_linux": "/usr/bin/gdalwarp",
+            "function": {
+                "name": "gdalwarp_cutline",
+                "description": "Clip a raster to a polygon cutline and optionally crop to its bounds using gdalwarp.\n\nWHEN TO USE:\nUse when you need a raster masked by a vector polygon. Ensure cutline and raster share a compatible CRS or supply s_srs/t_srs via gdalwarp_reproject.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string"
+                        },
+                        "output_file": {
+                            "type": "string"
+                        },
+                        "cutline": {
+                            "type": "string",
+                            "description": "Vector datasource or WKT polygon used as cutline (-cutline)."
+                        },
+                        "crop_to_cutline": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Crop the output to the cutline extent."
+                        },
+                        "dstnodata": {
+                            "type": "string",
+                            "description": "Destination nodata value(s) (-dstnodata).",
+                            "default": ""
+                        },
+                        "of": {
+                            "type": "string",
+                            "enum": [
+                                "GTiff",
+                                "COG",
+                                "VRT"
+                            ],
+                            "default": "GTiff"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "cutline"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -cutline \"{cutline}\" {crop_to_cutline:?-crop_to_cutline} {dstnodata:?-dstnodata {dstnodata}} -of \"{of}\" \"{input_file}\" \"{output_file}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_file": "in.tif",
+                        "output_file": "clipped.tif",
+                        "cutline": "mask.gpkg",
+                        "dstnodata": "0"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdalbuildvrt",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalbuildvrt.exe",
+            "executable_linux": "/usr/bin/gdalbuildvrt",
+            "function": {
+                "name": "gdalbuildvrt_mosaic",
+                "description": "Build a VRT mosaic from many rasters using gdalbuildvrt.\n\nWHEN TO USE:\nUse for lightweight mosaics without resampling actual pixels. For a baked mosaic, follow with gdal_translate_convert to write GeoTIFF/COG.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_files": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 1,
+                            "description": "List of source rasters (ignored if input_file_list is provided)."
+                        },
+                        "input_file_list": {
+                            "type": "string",
+                            "description": "Optional path to text file listing input rasters (one per line).",
+                            "default": ""
+                        },
+                        "output_vrt": {
+                            "type": "string",
+                            "description": "Output VRT path."
+                        },
+                        "resolution": {
+                            "type": "string",
+                            "enum": [
+                                "user",
+                                "common",
+                                "average",
+                                "highest",
+                                "lowest",
+                                "same"
+                            ],
+                            "default": "average"
+                        },
+                        "tr": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "Target resolution [xres,yres] if resolution='user'.",
+                            "default": []
+                        },
+                        "separate": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Put each input as separate band (-separate)."
+                        },
+                        "hidenodata": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    },
+                    "required": [
+                        "output_vrt"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} {resolution:?-resolution {resolution}} {tr:?-tr {tr[0]} {tr[1]}} {separate:?-separate} {hidenodata:?-hidenodata} {input_file_list:?-input_file_list \"{input_file_list}\"} \"{output_vrt}\" {input_files}",
+            "examples": [
+                {
+                    "args": {
+                        "input_files": [
+                            "a.tif",
+                            "b.tif"
+                        ],
+                        "output_vrt": "mosaic.vrt"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdal_contour",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdal_contour.exe",
+            "executable_linux": "/usr/bin/gdal_contour",
+            "function": {
+                "name": "gdal_contour_lines",
+                "description": "Generate contour lines from a DEM using gdal_contour.\n\nWHEN TO USE:\nUse for vector contours. Ensure DEM units are known; set interval accordingly.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_dem": {
+                            "type": "string",
+                            "description": "Input elevation raster."
+                        },
+                        "output_vector": {
+                            "type": "string",
+                            "description": "Output vector path."
+                        },
+                        "interval": {
+                            "type": "number",
+                            "description": "Contour interval in elevation units.",
+                            "minimum": 0.000001
+                        },
+                        "attribute": {
+                            "type": "string",
+                            "description": "Name of attribute to store elevation values (-a).",
+                            "default": "elev"
+                        },
+                        "format": {
+                            "type": "string",
+                            "enum": [
+                                "GPKG",
+                                "ESRI Shapefile",
+                                "GeoJSON"
+                            ],
+                            "default": "GPKG"
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    },
+                    "required": [
+                        "input_dem",
+                        "output_vector",
+                        "interval"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite:?-overwrite} -a {attribute} -i {interval} -f \"{format}\" \"{output_vector}\" \"{input_dem}\"",
+            "examples": [
+                {
+                    "args": {
+                        "input_dem": "dem.tif",
+                        "output_vector": "contours.gpkg",
+                        "interval": 5.0
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdal_rasterize",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdal_rasterize.exe",
+            "executable_linux": "/usr/bin/gdal_rasterize",
+            "function": {
+                "name": "gdal_rasterize_burn",
+                "description": "Rasterize vector features into a new raster using a fixed burn value.\n\nWHEN TO USE:\nUse when you need a mask raster from vector data. For attribute-based burning, extend with -a <field>.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "vector": {
+                            "type": "string",
+                            "description": "Input vector datasource."
+                        },
+                        "out_raster": {
+                            "type": "string",
+                            "description": "Output raster path."
+                        },
+                        "burn_value": {
+                            "type": "number",
+                            "description": "Numeric value to burn into raster."
+                        },
+                        "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Output width in pixels."
+                        },
+                        "height": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Output height in pixels."
+                        },
+                        "a_srs": {
+                            "type": "string",
+                            "description": "Assign CRS to output (-a_srs).",
+                            "default": ""
+                        },
+                        "ot": {
+                            "type": "string",
+                            "enum": [
+                                "Byte",
+                                "UInt16",
+                                "Int16",
+                                "UInt32",
+                                "Int32",
+                                "Float32",
+                                "Float64"
+                            ],
+                            "default": "Byte"
+                        }
+                    },
+                    "required": [
+                        "vector",
+                        "out_raster",
+                        "burn_value",
+                        "width",
+                        "height"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -burn {burn_value} -ot {ot} {a_srs:?-a_srs \"{a_srs}\"} -ts {width} {height} \"{vector}\" \"{out_raster}\"",
+            "examples": [
+                {
+                    "args": {
+                        "vector": "zones.gpkg",
+                        "out_raster": "zones.tif",
+                        "burn_value": 1,
+                        "width": 2000,
+                        "height": 2000
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "gdaladdo",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdaladdo.exe",
+            "executable_linux": "/usr/bin/gdaladdo",
+            "function": {
+                "name": "gdaladdo_build_overviews",
+                "description": "Build or rebuild raster overviews (pyramids) for faster display and analysis.\n\nWHEN TO USE:\nUse for large rasters to improve performance. Many formats store external .ovr files; ensure write permission.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dataset": {
+                            "type": "string",
+                            "description": "Raster dataset to build overviews for."
+                        },
+                        "levels": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer",
+                                "minimum": 2
+                            },
+                            "minItems": 1,
+                            "description": "Overview decimation factors, e.g., [2,4,8,16]."
+                        },
+                        "r": {
+                            "type": "string",
+                            "enum": [
+                                "nearest",
+                                "average",
+                                "rms",
+                                "gauss",
+                                "cubic",
+                                "cubicspline",
+                                "lanczos",
+                                "average_magphase",
+                                "mode"
+                            ],
+                            "default": "nearest"
+                        },
+                        "clean": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "If true, remove existing overviews before building (-clean)."
+                        },
+                        "ro": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Open dataset in read-only mode (-ro)."
+                        }
+                    },
+                    "required": [
+                        "dataset",
+                        "levels"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {clean:?-clean} {ro:?-ro} -r {r} \"{dataset}\" {levels}",
+            "examples": [
+                {
+                    "args": {
+                        "dataset": "big.tif",
+                        "levels": [
+                            2,
+                            4,
+                            8,
+                            16
+                        ],
+                        "r": "average"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "executable": "qgis_process",
+            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/qgis_process.exe",
+            "executable_linux": "/usr/bin/qgis_process",
+            "function": {
+                "name": "qgis_process_run",
+                "description": "Run a QGIS Processing algorithm from the command-line via qgis_process. Parameters must match the algorithm's schema.\n\nWHEN TO USE:\nUse for operations better handled by QGIS Processing (e.g., dissolve, buffer, topology fixes). Discover algorithms with 'qgis_process list' and inspect help with 'qgis_process help <alg>'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "algorithm": {
+                            "type": "string",
+                            "description": "Algorithm ID, e.g., 'native:buffer'."
+                        },
+                        "parameters": {
+                            "type": "object",
+                            "description": "Algorithm parameters as a JSON object (same keys as QGIS Processing)."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Optional path to store algorithm output (if algorithm supports 'OUTPUT' param).",
+                            "default": ""
+                        },
+                        "extra": {
+                            "type": "string",
+                            "description": "Additional CLI flags, e.g., '--distance_units meters'.",
+                            "default": ""
+                        }
+                    },
+                    "required": [
+                        "algorithm",
+                        "parameters"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath run \"{algorithm}\" --json \"{parameters}\" {output_file:?-o \"{output_file}\"} {extra}",
+            "examples": [
+                {
+                    "args": {
+                        "algorithm": "native:buffer",
+                        "parameters": {
+                            "INPUT": "roads.gpkg|layername=roads",
+                            "DISTANCE": 50,
+                            "SEGMENTS": 8,
+                            "END_CAP_STYLE": 0,
+                            "JOIN_STYLE": 0,
+                            "MITER_LIMIT": 2,
+                            "DISSOLVE": true
+                        },
+                        "output_file": "buffer.gpkg"
+                    }
+                }
+            ]
+        }
+    ]
+}
