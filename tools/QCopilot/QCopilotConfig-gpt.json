@@ -3,16 +3,94 @@
     "qcopilot_port": 8081,
     "base_server_host": "127.0.0.1",
     "base_server_port": 8080,
-    "base_server_path": "F:/github_repos/llama.cpp/build-x64-windows-msvc-debug/bin/Debug/llama-server.exe",
-    "model_path": "F:/llama.cpp-data/models/qwen2.5-1.5b-instruct-q8_0.gguf",
-    "n_ctx": 2048,
+    "base_server_path": "F:/llama-bin-data/llama-b6175-bin-win-cuda-12.4-x64/llama-server.exe",
+    "model_path": "F:/models/Qwen3-4B-Instruct-2507-Q8_0.gguf",
+    "n_ctx": 65536,
     "n_gpu_layers": 99,
     "auto_start_base_server": true,
     "tools": [
         {
             "type": "function",
+            "executable": "shapefile_converter",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/shapefile_converter.exe",
+            "executable_linux": "/usr/local/bin/shapefile_converter",
+            "function": {
+                "name": "shapefile_converter",
+                "description": "Convert ESRI Shapefile attribute text encoding (e.g., GBK/GB2312) to UTF-8 (or another target encoding). Supports single-file conversion or batch/recursive directory processing, and automatically handles companion files (.shx, .dbf, .prj, etc.). WHEN TO USE: apply when Shapefile labels/attributes show garbled characters due to mismatched code pages; prefer this tool for bulk folder conversion.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_path": {
+                            "type": "string",
+                            "description": "Path to a Shapefile (.shp) or a directory containing Shapefiles. If a directory is provided, all *.shp files inside are processed.",
+                            "minLength": 1
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Optional destination path. If input is a file, this may be a target .shp path; if input is a folder, this may be an output folder. If omitted, outputs are written alongside inputs with a _utf8 suffix."
+                        },
+                        "r_flag": {
+                            "type": "string",
+                            "description": "Add -r flag for recursive processing",
+                            "enum": [
+                                "-r"
+                            ]
+                        },
+                        "s_flag": {
+                            "type": "string",
+                            "description": "Add -s flag for source encoding",
+                            "enum": [
+                                "-s"
+                            ],
+                            "default": "-s"
+                        },
+                        "source_encoding": {
+                            "type": "string",
+                            "description": "Source encoding name for DBF attributes. Typical values: GBK, GB2312, CP936.",
+                            "minLength": 2,
+                            "maxLength": 40,
+                            "pattern": "^[A-Za-z0-9.-]+$",
+                            "default": "GBK"
+                        },
+                        "t_flag": {
+                            "type": "string",
+                            "description": "Add -t flag for target encoding",
+                            "enum": [
+                                "-t"
+                            ],
+                            "default": "-t"
+                        },
+                        "target_encoding": {
+                            "type": "string",
+                            "description": "Target encoding name. Common values: UTF-8, ASCII, etc.",
+                            "minLength": 2,
+                            "maxLength": 40,
+                            "pattern": "^[A-Za-z0-9.-]+$",
+                            "default": "UTF-8"
+                        },
+                        "v_flag": {
+                            "type": "string",
+                            "description": "Add -v flag for verbose output",
+                            "enum": [
+                                "-v"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "input_path",
+                        "s_flag",
+                        "t_flag"
+
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "shapefile_converter {r_flag} {s_flag} {source_encoding} {t_flag} {target_encoding} {v_flag} \"{input_path}\" {output_path}"
+        },
+        {
+            "type": "function",
             "executable": "ogr2ogr",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_convert_format",
@@ -22,77 +100,64 @@
                     "properties": {
                         "input_file": {
                             "type": "string",
-                            "description": "Path to the source vector dataset (e.g., .shp, .gpkg, .geojson)."
+                            "description": "输入矢量文件路径，支持格式：Shapefile(.shp), GeoJSON(.geojson), KML(.kml), GPX(.gpx), GML(.gml), CSV(.csv)等",
+                            "minLength": 1,
+                            "pattern": "^.*\\.(shp|geojson|json|kml|gpx|gml|csv|tab|dxf)$"
                         },
                         "output_file": {
                             "type": "string",
-                            "description": "Path to the destination dataset to create."
+                            "description": "输出文件路径，扩展名决定输出格式",
+                            "minLength": 1
                         },
                         "output_format": {
                             "type": "string",
-                            "description": "GDAL/OGR output driver name.",
+                            "description": "输出格式驱动名称",
                             "enum": [
-                                "GPKG",
-                                "ESRI Shapefile",
                                 "GeoJSON",
-                                "FlatGeobuf",
-                                "CSV"
+                                "ESRI Shapefile",
+                                "KML",
+                                "GPX",
+                                "GML",
+                                "CSV",
+                                "MapInfo File",
+                                "DXF",
+                                "GPKG"
                             ],
-                            "default": "GPKG"
+                            "default": "GeoJSON"
                         },
                         "overwrite": {
                             "type": "boolean",
-                            "description": "Overwrite existing output.",
+                            "description": "是否覆盖已存在的输出文件",
                             "default": false
                         },
-                        "nln": {
+                        "encoding": {
                             "type": "string",
-                            "description": "New layer name for the destination dataset.",
-                            "default": ""
-                        },
-                        "select": {
-                            "type": "string",
-                            "description": "Comma-separated list of fields to copy (use quotes around names with spaces).",
-                            "default": ""
-                        },
-                        "where": {
-                            "type": "string",
-                            "description": "Attribute filter expressed like an SQL WHERE clause.",
-                            "default": ""
+                            "description": "字符编码",
+                            "enum": [
+                                "UTF-8",
+                                "GBK",
+                                "GB2312",
+                                "ISO-8859-1"
+                            ],
+                            "default": "UTF-8"
                         }
                     },
                     "required": [
                         "input_file",
                         "output_file",
-                        "output_format"
+                        "output_format",
+                        "overwrite",
+                        "encoding"
                     ],
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -f \"{output_format}\" {nln:?-nln \"{nln}\"} {select:?-select \"{select}\"} {where:?-where \"{where}\"} \"{output_file}\" \"{input_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "in.shp",
-                        "output_file": "out.gpkg",
-                        "output_format": "GPKG",
-                        "overwrite": true
-                    }
-                },
-                {
-                    "args": {
-                        "input_file": "roads.geojson",
-                        "output_file": "roads.fgb",
-                        "output_format": "FlatGeobuf",
-                        "select": "id,name"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -f \"{output_format}\" \"{output_file}\" \"{input_file}\" {encoding:?-lco} ENCODING={encoding}}"
         },
         {
             "type": "function",
             "executable": "ogr2ogr",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_reproject",
@@ -141,22 +206,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -t_srs \"{target_srs}\" {source_srs:?-s_srs \"{source_srs}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "in.gpkg",
-                        "output_file": "out.gpkg",
-                        "target_srs": "EPSG:4326",
-                        "overwrite": true
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -t_srs \"{target_srs}\" {source_srs:?-s_srs \"{source_srs}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\""
         },
         {
             "type": "function",
             "executable": "ogr2ogr",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_clip_bbox",
@@ -219,24 +274,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -spat {minx} {miny} {maxx} {maxy} {spat_srs:?-spat_srs \"{spat_srs}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "in.geojson",
-                        "output_file": "out.fgb",
-                        "minx": 139.5,
-                        "miny": 35.3,
-                        "maxx": 139.9,
-                        "maxy": 35.8
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -spat {minx} {miny} {maxx} {maxy} {spat_srs:?-spat_srs \"{spat_srs}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\""
         },
         {
             "type": "function",
             "executable": "ogr2ogr",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogr2ogr.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_clip_layer",
@@ -284,23 +327,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -clipsrc \"{clip_source}\" {clip_layer:?-clipsrclayer \"{clip_layer}\"} -clipdst \"{clip_source}\" {clip_layer:?-clipdstlayer \"{clip_layer}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "roads.gpkg",
-                        "output_file": "roads_clipped.gpkg",
-                        "clip_source": "mask.gpkg",
-                        "clip_layer": "study_area",
-                        "overwrite": true
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -clipsrc \"{clip_source}\" {clip_layer:?-clipsrclayer \"{clip_layer}\"} -clipdst \"{clip_source}\" {clip_layer:?-clipdstlayer \"{clip_layer}\"} -f \"{output_format}\" \"{output_file}\" \"{input_file}\""
         },
         {
             "type": "function",
             "executable": "ogrinfo",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/ogrinfo.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogrinfo.exe",
             "executable_linux": "/usr/bin/ogrinfo",
             "function": {
                 "name": "ogr_info_summary",
@@ -334,26 +366,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {json:?-json} {summary_only:?-so} \"{dataset}\" {layer}",
-            "examples": [
-                {
-                    "args": {
-                        "dataset": "data.gpkg"
-                    }
-                },
-                {
-                    "args": {
-                        "dataset": "data.gpkg",
-                        "layer": "roads",
-                        "json": true
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {json:?-json} {summary_only:?-so} \"{dataset}\" {layer}"
         },
         {
             "type": "function",
             "executable": "gdalinfo",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalinfo.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdalinfo.exe",
             "executable_linux": "/usr/bin/gdalinfo",
             "function": {
                 "name": "gdal_info_summary",
@@ -392,21 +410,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {json:?-json} {stats:?-stats} {hist:?-hist} {mm:?-mm} \"{dataset}\"",
-            "examples": [
-                {
-                    "args": {
-                        "dataset": "image.tif",
-                        "json": true,
-                        "stats": true
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {json:?-json} {stats:?-stats} {hist:?-hist} {mm:?-mm} \"{dataset}\""
         },
         {
             "type": "function",
             "executable": "gdal_translate",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdal_translate.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdal_translate.exe",
             "executable_linux": "/usr/bin/gdal_translate",
             "function": {
                 "name": "gdal_translate_convert",
@@ -497,21 +506,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath -of \"{output_format}\" {projwin:?-projwin {projwin[0]} {projwin[1]} {projwin[2]} {projwin[3]}} {scale:?-scale {scale[0]} {scale[1]}} -ot {ot} {r:?-r {r}} \"{input_file}\" \"{output_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "in.tif",
-                        "output_file": "out_cog.tif",
-                        "output_format": "COG"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath -of \"{output_format}\" {projwin:?-projwin {projwin[0]} {projwin[1]} {projwin[2]} {projwin[3]}} {scale:?-scale {scale[0]} {scale[1]}} -ot {ot} {r:?-r {r}} \"{input_file}\" \"{output_file}\""
         },
         {
             "type": "function",
             "executable": "gdalwarp",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalwarp.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdalwarp.exe",
             "executable_linux": "/usr/bin/gdalwarp",
             "function": {
                 "name": "gdalwarp_reproject",
@@ -607,22 +607,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -t_srs \"{t_srs}\" {s_srs:?-s_srs \"{s_srs}\"} {r:?-r {r}} {tr:?-tr {tr[0]} {tr[1]}} {te:?-te {te[0]} {te[1]} {te[2]} {te[3]}} {dstnodata:?-dstnodata {dstnodata}} -of \"{of}\" \"{input_file}\" \"{output_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "in.tif",
-                        "output_file": "out_3857.tif",
-                        "t_srs": "EPSG:3857",
-                        "r": "bilinear"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -t_srs \"{t_srs}\" {s_srs:?-s_srs \"{s_srs}\"} {r:?-r {r}} {tr:?-tr {tr[0]} {tr[1]}} {te:?-te {te[0]} {te[1]} {te[2]} {te[3]}} {dstnodata:?-dstnodata {dstnodata}} -of \"{of}\" \"{input_file}\" \"{output_file}\""
         },
         {
             "type": "function",
             "executable": "gdalwarp",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalwarp.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdalwarp.exe",
             "executable_linux": "/usr/bin/gdalwarp",
             "function": {
                 "name": "gdalwarp_cutline",
@@ -672,22 +662,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -cutline \"{cutline}\" {crop_to_cutline:?-crop_to_cutline} {dstnodata:?-dstnodata {dstnodata}} -of \"{of}\" \"{input_file}\" \"{output_file}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_file": "in.tif",
-                        "output_file": "clipped.tif",
-                        "cutline": "mask.gpkg",
-                        "dstnodata": "0"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -cutline \"{cutline}\" {crop_to_cutline:?-crop_to_cutline} {dstnodata:?-dstnodata {dstnodata}} -of \"{of}\" \"{input_file}\" \"{output_file}\""
         },
         {
             "type": "function",
             "executable": "gdalbuildvrt",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdalbuildvrt.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdalbuildvrt.exe",
             "executable_linux": "/usr/bin/gdalbuildvrt",
             "function": {
                 "name": "gdalbuildvrt_mosaic",
@@ -754,23 +734,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} {resolution:?-resolution {resolution}} {tr:?-tr {tr[0]} {tr[1]}} {separate:?-separate} {hidenodata:?-hidenodata} {input_file_list:?-input_file_list \"{input_file_list}\"} \"{output_vrt}\" {input_files}",
-            "examples": [
-                {
-                    "args": {
-                        "input_files": [
-                            "a.tif",
-                            "b.tif"
-                        ],
-                        "output_vrt": "mosaic.vrt"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} {resolution:?-resolution {resolution}} {tr:?-tr {tr[0]} {tr[1]}} {separate:?-separate} {hidenodata:?-hidenodata} {input_file_list:?-input_file_list \"{input_file_list}\"} \"{output_vrt}\" {input_files}"
         },
         {
             "type": "function",
             "executable": "gdal_contour",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdal_contour.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdal_contour.exe",
             "executable_linux": "/usr/bin/gdal_contour",
             "function": {
                 "name": "gdal_contour_lines",
@@ -818,21 +787,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {overwrite:?-overwrite} -a {attribute} -i {interval} -f \"{format}\" \"{output_vector}\" \"{input_dem}\"",
-            "examples": [
-                {
-                    "args": {
-                        "input_dem": "dem.tif",
-                        "output_vector": "contours.gpkg",
-                        "interval": 5.0
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {overwrite:?-overwrite} -a {attribute} -i {interval} -f \"{format}\" \"{output_vector}\" \"{input_dem}\""
         },
         {
             "type": "function",
             "executable": "gdal_rasterize",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdal_rasterize.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdal_rasterize.exe",
             "executable_linux": "/usr/bin/gdal_rasterize",
             "function": {
                 "name": "gdal_rasterize_burn",
@@ -891,23 +851,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath -burn {burn_value} -ot {ot} {a_srs:?-a_srs \"{a_srs}\"} -ts {width} {height} \"{vector}\" \"{out_raster}\"",
-            "examples": [
-                {
-                    "args": {
-                        "vector": "zones.gpkg",
-                        "out_raster": "zones.tif",
-                        "burn_value": 1,
-                        "width": 2000,
-                        "height": 2000
-                    }
-                }
-            ]
+            "command_template": "executableFilePath -burn {burn_value} -ot {ot} {a_srs:?-a_srs \"{a_srs}\"} -ts {width} {height} \"{vector}\" \"{out_raster}\""
         },
         {
             "type": "function",
             "executable": "gdaladdo",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/gdaladdo.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/gdaladdo.exe",
             "executable_linux": "/usr/bin/gdaladdo",
             "function": {
                 "name": "gdaladdo_build_overviews",
@@ -961,26 +910,12 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath {clean:?-clean} {ro:?-ro} -r {r} \"{dataset}\" {levels}",
-            "examples": [
-                {
-                    "args": {
-                        "dataset": "big.tif",
-                        "levels": [
-                            2,
-                            4,
-                            8,
-                            16
-                        ],
-                        "r": "average"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath {clean:?-clean} {ro:?-ro} -r {r} \"{dataset}\" {levels}"
         },
         {
             "type": "function",
             "executable": "qgis_process",
-            "executable_windows": "D:/yxb/garbage_data/DLHJ_20250207-1/DLHJ/bin/qgis_process.exe",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/qgis_process.exe",
             "executable_linux": "/usr/bin/qgis_process",
             "function": {
                 "name": "qgis_process_run",
@@ -1014,24 +949,7 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "executableFilePath run \"{algorithm}\" --json \"{parameters}\" {output_file:?-o \"{output_file}\"} {extra}",
-            "examples": [
-                {
-                    "args": {
-                        "algorithm": "native:buffer",
-                        "parameters": {
-                            "INPUT": "roads.gpkg|layername=roads",
-                            "DISTANCE": 50,
-                            "SEGMENTS": 8,
-                            "END_CAP_STYLE": 0,
-                            "JOIN_STYLE": 0,
-                            "MITER_LIMIT": 2,
-                            "DISSOLVE": true
-                        },
-                        "output_file": "buffer.gpkg"
-                    }
-                }
-            ]
+            "command_template": "executableFilePath run \"{algorithm}\" --json \"{parameters}\" {output_file:?-o \"{output_file}\"} {extra}"
         }
     ]
 }
