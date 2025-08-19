@@ -471,12 +471,14 @@ static bool forward_llama_sse_once(
     SSEBridge &bridge,
     nlohmann::ordered_json &out_merged_tool_message,
     bool &out_saw_done_marker,
+    bool &out_has_tool_calls,
     const std::string &stream_id,
     const std::string &model_name,
     int round_number) {
 
     std::atomic<bool> saw_tool_calls{false};
     out_saw_done_marker = false;
+    out_has_tool_calls = false;
     out_merged_tool_message = nlohmann::ordered_json();
 
     std::string buf;
@@ -580,11 +582,13 @@ static bool forward_llama_sse_once(
     );
 
     if (!ok || resp.status != 200) return false;
-
+    
+    out_has_tool_calls = saw_tool_calls.load();
     if (saw_tool_calls) {
         out_merged_tool_message = SSEParser::mergeToolCallChunks(json_chunks);
     }
-    return saw_tool_calls;
+    // 返回true表示成功处理
+    return true;
 }
 
 class QCopilot {
@@ -956,12 +960,19 @@ public:
 
                             nlohmann::ordered_json merged_tool_msg;
                             bool saw_done_marker = false;
-
+                            bool has_tool_calls = false;  // 新增变量
+                            
                             // 传递round参数
-                            bool has_tool_calls = forward_llama_sse_once(
+                            bool success = forward_llama_sse_once(
                                 *llama_client, one, *bridge, merged_tool_msg,
-                                saw_done_marker, stream_id, model_name, round);
-
+                                saw_done_marker, has_tool_calls, stream_id, model_name, round);
+                            
+                            if (!success) {
+                                LOG_ERR("第 %d 轮推理失败\n", round);
+                                bridge->push("data: [DONE]\n\n");
+                                break;
+                            }
+                            
                             if (!has_tool_calls) {
                                 LOG_INF("第 %d 轮推理完成，无工具调用，结束会话\n", round);
                                 // 发送最终的[DONE]
