@@ -156,6 +156,7 @@ bool ToolExecutor::registerExternalTools(const json& tool_definition) {
     // 经过上述检查后说明配置文件中的当前工具定义是有效的，将其保存到内存中的工具定义映射中。
     tool_definitions[name] = tool_definition;
     LOG_INF("成功注册外部工具： %s - %s\n", name.c_str(), function["description"].get<std::string>().c_str());
+    return true;
 }
 
 json ToolExecutor::execute(const std::string& name, const json& arguments) {
