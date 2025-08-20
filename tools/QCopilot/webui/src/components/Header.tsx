@@ -40,7 +40,7 @@ export default function Header() {
       <div className="flex items-center">
         <div
           className="tooltip tooltip-bottom"
-          data-tip="Settings"
+          data-tip="通用设置"
           onClick={() => setShowSettings(true)}
         >
           <button className="btn" aria-hidden={true}>
@@ -50,7 +50,7 @@ export default function Header() {
         </div>
 
         {/* theme controller is copied from https://daisyui.com/components/theme-controller/ */}
-        <div className="tooltip tooltip-bottom" data-tip="Themes">
+        <div className="tooltip tooltip-bottom" data-tip="通用主题">
           <div className="dropdown dropdown-end dropdown-bottom">
             <div tabIndex={0} role="button" className="btn m-1">
               <MoonIcon className="w-5 h-5" />

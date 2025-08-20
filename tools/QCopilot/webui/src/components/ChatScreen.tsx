@@ -235,14 +235,7 @@ export default function ChatScreen() {
         <div id="messages-list" className="grow" ref={msgListRef}>
           <div className="mt-auto flex flex-col items-center">
             {/* placeholder to shift the message to the bottom */}
-            {viewingChat ? (
-              ''
-            ) : (
-              <>
-                <div className="mb-4">Send a message to start</div>
-                <ServerInfo />
-              </>
-            )}
+            {viewingChat ? '' : <></>}
           </div>
           {[...messages, ...pendingMsgDisplay].map((msg) => (
             <ChatMessage
@@ -271,41 +264,6 @@ export default function ChatScreen() {
         {canvasData?.type === CanvasType.PY_INTERPRETER && (
           <CanvasPyInterpreter />
         )}
-      </div>
-    </div>
-  );
-}
-
-function ServerInfo() {
-  const { serverProps } = useAppContext();
-  const modalities = [];
-  if (serverProps?.modalities?.audio) {
-    modalities.push('audio');
-  }
-  if (serverProps?.modalities?.vision) {
-    modalities.push('vision');
-  }
-  return (
-    <div
-      className="card card-sm shadow-sm border-1 border-base-content/20 text-base-content/70 mb-6"
-      tabIndex={0}
-      aria-description="Server information"
-    >
-      <div className="card-body">
-        <b>Server Info</b>
-        <p>
-          <b>Model</b>: {serverProps?.model_path?.split(/(\\|\/)/).pop()}
-          <br />
-          <b>Build</b>: {serverProps?.build_info}
-          <br />
-          {modalities.length > 0 ? (
-            <>
-              <b>Supported modalities:</b> {modalities.join(', ')}
-            </>
-          ) : (
-            ''
-          )}
-        </p>
       </div>
     </div>
   );
@@ -348,7 +306,7 @@ function ChatInput({
       >
         {({ getRootProps, getInputProps }) => (
           <div
-            className="flex flex-col rounded-xl border-1 border-base-content/30 p-3 w-full"
+            className="flex flex-col rounded-4xl border-1 border-base-content/30 p-3 w-full"
             // when a file is pasted to the input, we handle it here
             // if a text is pasted, and if it is long text, we will convert it to a file
             onPasteCapture={(e: ClipboardEvent<HTMLInputElement>) => {
@@ -394,8 +352,10 @@ function ChatInput({
               <textarea
                 // Default (mobile): Enable vertical resize, overflow auto for scrolling if needed
                 // Large screens (lg:): Disable manual resize, apply max-height for autosize limit
-                className="text-md outline-none border-none w-full resize-vertical lg:resize-none lg:max-h-48 lg:overflow-y-auto" // Adjust lg:max-h-48 as needed (e.g., lg:max-h-60)
-                placeholder="Type a message (Shift+Enter to add a new line)"
+                className="text-md outline-none border-none w-full resize-vertical lg:resize-none lg:max-h-48 lg:overflow-y-auto text-left placeholder:text-center placeholder:align-middle placeholder:leading-[3rem]" // Adjust lg:max-h-48 as needed (e.g., lg:max-h-60)
+                //modify:将占位符内容设置成“输入消息（Shift+Enter 添加新行）”
+                //placeholder="Type a message (Shift+Enter to add a new line)"
+                placeholder="   Ask anything"
                 ref={textarea.ref}
                 onInput={textarea.onInput} // Hook's input handler (will only resize height on lg+ screens)
                 onKeyDown={(e) => {

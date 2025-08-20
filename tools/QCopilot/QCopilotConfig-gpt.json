@@ -94,7 +94,7 @@
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_convert_format",
-                "description": "Convert a vector dataset to another format using ogr2ogr. This does not change the geometry or CRS unless other options are specified.\n\nWHEN TO USE:\nUse for simple format conversions or field subsetting. Do not use for reprojection or spatial clipping (use dedicated tools).",
+                "description": "Convert a vector dataset to another format using ogr2ogr. This does not change the geometry or CRS unless other options are specified.WHEN TO USE:Use for simple format conversions or field subsetting. Do not use for reprojection or spatial clipping (use dedicated tools).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -161,7 +161,7 @@
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_reproject",
-                "description": "Reproject a vector dataset to a target CRS using ogr2ogr. Requires a valid target SRS. Optionally override source SRS.\n\nWHEN TO USE:\nUse for vector reprojection. For raster reprojection, use gdalwarp_reproject.",
+                "description": "Reproject a vector dataset to a target CRS using ogr2ogr. Requires a valid target SRS. Optionally override source SRS.WHEN TO USE:Use for vector reprojection. For raster reprojection, use gdalwarp_reproject.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -215,7 +215,7 @@
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_clip_bbox",
-                "description": "Select and clip features intersecting a bounding box using ogr2ogr -spat. Note: geometries are selected but not clipped unless combined with -clipsrc.\n\nWHEN TO USE:\nUse when you want a spatial subset by extent. For true clipping to extent, prefer ogr_clip_layer with a polygon extent file or gdalwarp for rasters.",
+                "description": "Select and clip features intersecting a bounding box using ogr2ogr -spat. Note: geometries are selected but not clipped unless combined with -clipsrc.WHEN TO USE:Use when you want a spatial subset by extent. For true clipping to extent, prefer ogr_clip_layer with a polygon extent file or gdalwarp for rasters.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -283,7 +283,7 @@
             "executable_linux": "/usr/bin/ogr2ogr",
             "function": {
                 "name": "ogr_clip_layer",
-                "description": "Clip features using a polygon layer with ogr2ogr -clipsrc/-clipdst to output only the intersection.\n\nWHEN TO USE:\nUse when you need true clipping of vector features by a polygon mask. For bbox-only filtering, use ogr_clip_bbox.",
+                "description": "Clip features using a polygon layer with ogr2ogr -clipsrc/-clipdst to output only the intersection.WHEN TO USE:Use when you need true clipping of vector features by a polygon mask. For bbox-only filtering, use ogr_clip_bbox.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -336,7 +336,7 @@
             "executable_linux": "/usr/bin/ogrinfo",
             "function": {
                 "name": "ogr_info_summary",
-                "description": "List basic information about a vector dataset (layers, fields, extent) using ogrinfo.\n\nWHEN TO USE:\nPrefer json=true to make the output parseable. Use layer to target a specific layer.",
+                "description": "List basic information about a vector dataset (layers, fields, extent) using ogrinfo.WHEN TO USE:Prefer json=true to make the output parseable. Use layer to target a specific layer.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -375,7 +375,7 @@
             "executable_linux": "/usr/bin/gdalinfo",
             "function": {
                 "name": "gdal_info_summary",
-                "description": "List information about a raster dataset (size, geotransform, CRS, stats) using gdalinfo.\n\nWHEN TO USE:\nUse for fast metadata queries. Set json=true for parseable output; add stats or hist if needed (may read entire file).",
+                "description": "List information about a raster dataset (size, geotransform, CRS, stats) using gdalinfo.WHEN TO USE:Use for fast metadata queries. Set json=true for parseable output; add stats or hist if needed (may read entire file).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -419,7 +419,7 @@
             "executable_linux": "/usr/bin/gdal_translate",
             "function": {
                 "name": "gdal_translate_convert",
-                "description": "Convert raster formats, optionally clip by extent, rescale and change data type using gdal_translate.\n\nWHEN TO USE:\nUse for format conversion and simple subsetting. For reprojection or cutline-based clipping, use gdalwarp.",
+                "description": "Convert raster formats, optionally clip by extent, rescale and change data type using gdal_translate.WHEN TO USE:Use for format conversion and simple subsetting. For reprojection or cutline-based clipping, use gdalwarp.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -515,7 +515,7 @@
             "executable_linux": "/usr/bin/gdalwarp",
             "function": {
                 "name": "gdalwarp_reproject",
-                "description": "Reproject and resample a raster using gdalwarp. Supports target resolution, extent and nodata.\n\nWHEN TO USE:\nUse for raster reprojection and resampling. For cutline masking, use gdalwarp_cutline.",
+                "description": "Reproject and resample a raster using gdalwarp. Supports target resolution, extent and nodata.WHEN TO USE:Use for raster reprojection and resampling. For cutline masking, use gdalwarp_cutline.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -616,7 +616,7 @@
             "executable_linux": "/usr/bin/gdalwarp",
             "function": {
                 "name": "gdalwarp_cutline",
-                "description": "Clip a raster to a polygon cutline and optionally crop to its bounds using gdalwarp.\n\nWHEN TO USE:\nUse when you need a raster masked by a vector polygon. Ensure cutline and raster share a compatible CRS or supply s_srs/t_srs via gdalwarp_reproject.",
+                "description": "Clip a raster to a polygon cutline and optionally crop to its bounds using gdalwarp.WHEN TO USE:Use when you need a raster masked by a vector polygon. Ensure cutline and raster share a compatible CRS or supply s_srs/t_srs via gdalwarp_reproject.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -671,7 +671,7 @@
             "executable_linux": "/usr/bin/gdalbuildvrt",
             "function": {
                 "name": "gdalbuildvrt_mosaic",
-                "description": "Build a VRT mosaic from many rasters using gdalbuildvrt.\n\nWHEN TO USE:\nUse for lightweight mosaics without resampling actual pixels. For a baked mosaic, follow with gdal_translate_convert to write GeoTIFF/COG.",
+                "description": "Build a VRT mosaic from many rasters using gdalbuildvrt.WHEN TO USE:Use for lightweight mosaics without resampling actual pixels. For a baked mosaic, follow with gdal_translate_convert to write GeoTIFF/COG.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -743,7 +743,7 @@
             "executable_linux": "/usr/bin/gdal_contour",
             "function": {
                 "name": "gdal_contour_lines",
-                "description": "Generate contour lines from a DEM using gdal_contour.\n\nWHEN TO USE:\nUse for vector contours. Ensure DEM units are known; set interval accordingly.",
+                "description": "Generate contour lines from a DEM using gdal_contour.WHEN TO USE:Use for vector contours. Ensure DEM units are known; set interval accordingly.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -796,7 +796,7 @@
             "executable_linux": "/usr/bin/gdal_rasterize",
             "function": {
                 "name": "gdal_rasterize_burn",
-                "description": "Rasterize vector features into a new raster using a fixed burn value.\n\nWHEN TO USE:\nUse when you need a mask raster from vector data. For attribute-based burning, extend with -a <field>.",
+                "description": "Rasterize vector features into a new raster using a fixed burn value.WHEN TO USE:Use when you need a mask raster from vector data. For attribute-based burning, extend with -a <field>.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -860,7 +860,7 @@
             "executable_linux": "/usr/bin/gdaladdo",
             "function": {
                 "name": "gdaladdo_build_overviews",
-                "description": "Build or rebuild raster overviews (pyramids) for faster display and analysis.\n\nWHEN TO USE:\nUse for large rasters to improve performance. Many formats store external .ovr files; ensure write permission.",
+                "description": "Build or rebuild raster overviews (pyramids) for faster display and analysis.WHEN TO USE:Use for large rasters to improve performance. Many formats store external .ovr files; ensure write permission.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -919,7 +919,7 @@
             "executable_linux": "/usr/bin/qgis_process",
             "function": {
                 "name": "qgis_process_run",
-                "description": "Run a QGIS Processing algorithm from the command-line via qgis_process. Parameters must match the algorithm's schema.\n\nWHEN TO USE:\nUse for operations better handled by QGIS Processing (e.g., dissolve, buffer, topology fixes). Discover algorithms with 'qgis_process list' and inspect help with 'qgis_process help <alg>'.",
+                "description": "Run a QGIS Processing algorithm from the command-line via qgis_process. Parameters must match the algorithm's schema.WHEN TO USE:Use for operations better handled by QGIS Processing (e.g., dissolve, buffer, topology fixes). Discover algorithms with 'qgis_process list' and inspect help with 'qgis_process help <alg>'.",
                 "parameters": {
                     "type": "object",
                     "properties": {

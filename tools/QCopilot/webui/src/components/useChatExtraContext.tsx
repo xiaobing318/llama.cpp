@@ -177,7 +177,7 @@ async function getFileAsBase64(file: File, outputUrl = true): Promise<string> {
         }
         resolve(result);
       } else {
-        reject(new Error('Failed to read file.'));
+        reject(new Error('读取文件失败。'));
       }
     };
     reader.readAsDataURL(file);
@@ -191,7 +191,7 @@ async function getFileAsBuffer(file: File): Promise<ArrayBuffer> {
       if (event.target?.result) {
         resolve(event.target.result as ArrayBuffer);
       } else {
-        reject(new Error('Failed to read file.'));
+        reject(new Error('读取文件失败。'));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -229,7 +229,7 @@ async function convertPDFToImage(file: File): Promise<string[]> {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     if (!ctx) {
-      throw new Error('Failed to get 2D context from canvas');
+      throw new Error('获取画布的 2D 上下文失败');
     }
     const task = page.render({ canvasContext: ctx, viewport: viewport });
     pages.push(
@@ -331,7 +331,7 @@ function svgBase64UrlToPngDataURL(base64UrlSvg: string): Promise<string> {
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
-          reject(new Error('Failed to get 2D canvas context.'));
+          reject(new Error('获取画布的 2D 上下文失败。'));
           return;
         }
 
@@ -354,9 +354,7 @@ function svgBase64UrlToPngDataURL(base64UrlSvg: string): Promise<string> {
       };
 
       img.onerror = () => {
-        reject(
-          new Error('Failed to load SVG image. Ensure the SVG data is valid.')
-        );
+        reject(new Error('加载 SVG 图像失败。请确保 SVG 数据有效。'));
       };
 
       // Load SVG string into an Image element

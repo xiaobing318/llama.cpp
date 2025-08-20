@@ -13,7 +13,6 @@ import {
   filterThoughtFromMsgs,
   normalizeMsgsForAPI,
   getSSEStreamAsync,
-  getServerProps,
 } from './misc';
 import { BASE_URL, CONFIG_DEFAULT, isDev } from '../Config';
 import { matchPath, useLocation, useNavigate } from 'react-router';
@@ -80,9 +79,7 @@ export const AppContextProvider = ({
   const params = matchPath('/chat/:convId', pathname);
   const convId = params?.params?.convId;
 
-  const [serverProps, setServerProps] = useState<LlamaCppServerProps | null>(
-    null
-  );
+  const [serverProps] = useState<LlamaCppServerProps | null>(null);
   const [viewingChat, setViewingChat] = useState<ViewingChat | null>(null);
   const [pendingMessages, setPendingMessages] = useState<
     Record<Conversation['id'], PendingMessage>
@@ -96,15 +93,6 @@ export const AppContextProvider = ({
 
   // get server props
   useEffect(() => {
-    getServerProps(BASE_URL, config.apiKey)
-      .then((props) => {
-        console.debug('Server props:', props);
-        setServerProps(props);
-      })
-      .catch((err) => {
-        console.error(err);
-        toast.error('Failed to fetch server props');
-      });
     // eslint-disable-next-line
   }, []);
 
@@ -163,7 +151,7 @@ export const AppContextProvider = ({
     const config = StorageUtils.getConfig();
     const currConversation = await StorageUtils.getOneConversation(convId);
     if (!currConversation) {
-      throw new Error('Current conversation is not found');
+      throw new Error('未找到当前对话');
     }
 
     const currMessages = StorageUtils.filterByLeafNodeId(
@@ -175,7 +163,7 @@ export const AppContextProvider = ({
     setAbort(convId, abortController);
 
     if (!currMessages) {
-      throw new Error('Current messages are not found');
+      throw new Error('当前消息未找到');
     }
 
     const pendingId = Date.now() + 1;
@@ -247,13 +235,13 @@ export const AppContextProvider = ({
       });
       if (fetchResponse.status !== 200) {
         const body = await fetchResponse.json();
-        throw new Error(body?.error?.message || 'Unknown error');
+        throw new Error(body?.error?.message || '未知错误');
       }
       const chunks = getSSEStreamAsync(fetchResponse);
       for await (const chunk of chunks) {
         // const stop = chunk.stop;
         if (chunk.error) {
-          throw new Error(chunk.error?.message || 'Unknown error');
+          throw new Error(chunk.error?.message || '未知错误');
         }
         const addedContent = chunk.choices[0].delta.content;
         const lastContent = pendingMsg.content || '';
@@ -284,7 +272,7 @@ export const AppContextProvider = ({
       } else {
         console.error(err);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        toast.error((err as any)?.message ?? 'Unknown error');
+        toast.error((err as any)?.message ?? '未知错误');
         throw err; // rethrow
       }
     }

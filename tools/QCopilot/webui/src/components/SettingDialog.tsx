@@ -207,7 +207,7 @@ const SETTING_SECTIONS: SettingSection[] = [
         label: (
           <>
             Custom JSON config (For more info, refer to{' '}
-            <OpenInNewTab href="https://github.com/ggerganov/llama.cpp/blob/master/tools/server/README.md">
+            <OpenInNewTab href="https://github.com/QCopilot/README.md">
               server documentation
             </OpenInNewTab>
             )
@@ -235,7 +235,7 @@ const SETTING_SECTIONS: SettingSection[] = [
               <br />
               <br />
               If you encounter any problems, create a{' '}
-              <OpenInNewTab href="https://github.com/ggerganov/llama.cpp/issues/new?template=019-bug-misc.yml">
+              <OpenInNewTab href="https://github.com/QCopilot">
                 Bug (misc.)
               </OpenInNewTab>{' '}
               report on Github. Please also specify <b>webui/experimental</b> on
@@ -286,7 +286,7 @@ export default function SettingDialog({
   const { showConfirm, showAlert } = useModals();
 
   const resetConfig = async () => {
-    if (await showConfirm('Are you sure you want to reset all settings?')) {
+    if (await showConfirm('您确定要重置所有设置吗？')) {
       setLocalConfig(CONFIG_DEFAULT);
     }
   };

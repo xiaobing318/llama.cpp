@@ -78,7 +78,7 @@ export default function Sidebar() {
         <div className="flex flex-col bg-base-200 min-h-full max-w-64 py-4 px-4">
           <div className="flex flex-row items-center justify-between mb-4 mt-4">
             <h2 className="font-bold ml-4" role="heading">
-              Conversations
+              对话列表
             </h2>
 
             {/* close sidebar button */}
@@ -103,7 +103,7 @@ export default function Sidebar() {
             aria-label="New conversation"
           >
             <PencilSquareIcon className="w-5 h-5" />
-            New conversation
+            添加新的对话
           </button>
 
           {/* list of conversations */}
@@ -134,26 +134,18 @@ export default function Sidebar() {
                   }}
                   onDelete={async () => {
                     if (isGenerating(conv.id)) {
-                      toast.error(
-                        'Cannot delete conversation while generating'
-                      );
+                      toast.error('生成时无法删除对话');
                       return;
                     }
-                    if (
-                      await showConfirm(
-                        'Are you sure to delete this conversation?'
-                      )
-                    ) {
-                      toast.success('Conversation deleted');
+                    if (await showConfirm('您确定要删除此对话吗？')) {
+                      toast.success('对话已删除');
                       StorageUtils.remove(conv.id);
                       navigate('/');
                     }
                   }}
                   onDownload={() => {
                     if (isGenerating(conv.id)) {
-                      toast.error(
-                        'Cannot download conversation while generating'
-                      );
+                      toast.error('生成时无法下载对话');
                       return;
                     }
                     const conversationJson = JSON.stringify(conv, null, 2);
@@ -171,13 +163,11 @@ export default function Sidebar() {
                   }}
                   onRename={async () => {
                     if (isGenerating(conv.id)) {
-                      toast.error(
-                        'Cannot rename conversation while generating'
-                      );
+                      toast.error('生成时无法重命名对话');
                       return;
                     }
                     const newName = await showPrompt(
-                      'Enter new name for the conversation',
+                      '输入对话的新名称',
                       conv.name
                     );
                     if (newName && newName.trim().length > 0) {
@@ -189,7 +179,7 @@ export default function Sidebar() {
             </div>
           ))}
           <div className="text-center text-xs opacity-40 mt-auto mx-4 pt-8">
-            Conversations are saved to browser's IndexedDB
+            对话保存到浏览器的 IndexedDB
           </div>
         </div>
       </div>
@@ -290,6 +280,12 @@ export function groupConversationsByDate(
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
 
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  const theDayBeforeYesterday = new Date(today);
+  theDayBeforeYesterday.setDate(today.getDate() - 2);
+
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 7);
 
@@ -298,6 +294,8 @@ export function groupConversationsByDate(
 
   const groups: { [key: string]: Conversation[] } = {
     Today: [],
+    Yesterday: [],
+    'The Day Before Yesterday': [],
     'Previous 7 Days': [],
     'Previous 30 Days': [],
   };
@@ -314,6 +312,10 @@ export function groupConversationsByDate(
 
     if (convDate >= today) {
       groups['Today'].push(conv);
+    } else if (convDate >= yesterday) {
+      groups['Yesterday'].push(conv);
+    } else if (convDate >= theDayBeforeYesterday) {
+      groups['The Day Before Yesterday'].push(conv);
     } else if (convDate >= sevenDaysAgo) {
       groups['Previous 7 Days'].push(conv);
     } else if (convDate >= thirtyDaysAgo) {
@@ -333,21 +335,35 @@ export function groupConversationsByDate(
 
   if (groups['Today'].length > 0) {
     result.push({
-      title: undefined, // no title for Today
+      title: '🌕 今天的对话内容',
       conversations: groups['Today'],
+    });
+  }
+
+  if (groups['The Day Before Yesterday'].length > 0) {
+    result.push({
+      title: '🌖 前天的对话内容',
+      conversations: groups['The Day Before Yesterday'],
+    });
+  }
+
+  if (groups['Yesterday'].length > 0) {
+    result.push({
+      title: '🌗 昨天的对话内容',
+      conversations: groups['Yesterday'],
     });
   }
 
   if (groups['Previous 7 Days'].length > 0) {
     result.push({
-      title: 'Previous 7 Days',
+      title: '🌘 前 7 天对话内容',
       conversations: groups['Previous 7 Days'],
     });
   }
 
   if (groups['Previous 30 Days'].length > 0) {
     result.push({
-      title: 'Previous 30 Days',
+      title: '🌑 前 30 天对话内容',
       conversations: groups['Previous 30 Days'],
     });
   }

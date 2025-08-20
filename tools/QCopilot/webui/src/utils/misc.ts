@@ -189,12 +189,12 @@ export const getServerProps = async (
       },
     });
     if (!response.ok) {
-      throw new Error('Failed to fetch server props');
+      throw new Error('获取 QCopilot 服务器属性失败');
     }
     const data = await response.json();
     return data as LlamaCppServerProps;
   } catch (error) {
-    console.error('Error fetching server props:', error);
+    console.error('获取 QCopilot服务器属性时出错：', error);
     throw error;
   }
 };
