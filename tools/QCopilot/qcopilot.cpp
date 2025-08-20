@@ -593,7 +593,7 @@ static bool forward_llama_sse_once(
 
 class QCopilot {
 private:
-    QCopilotConfig QCopilotConfig;
+    struct QCopilotConfig QCopilotConfig;
     std::unique_ptr<httplib::Server> server;
     std::unique_ptr<httplib::Client> llama_client;
     std::unique_ptr<ToolExecutor> tool_executor;
