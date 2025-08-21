@@ -3813,225 +3813,618 @@ inline void signal_handler(int signal) {
     shutdown_handler(signal);
 }
 
+/*
+ * main函数 - 程序的入口点
+ * 参数说明:
+ * - argc: 命令行参数的数量
+ * - argv: 命令行参数的字符串数组
+ * 返回值: 0表示成功，1表示失败
+ */
 int main(int argc, char ** argv) {
-    // own arguments required by this example
+    /*
+     * 步骤1: 初始化参数结构体
+     * common_params是一个结构体，用来存储服务器运行所需的所有配置参数
+     * 比如端口号、模型文件路径、线程数等等
+     */
     common_params params;
 
+    /*
+     * 步骤2: 解析命令行参数
+     * 这个函数会读取用户在命令行输入的参数(如 --port 8080 --model model.gguf)
+     * 并将这些参数存储到params结构体中
+     * LLAMA_EXAMPLE_SERVER指定这是server模式的参数解析
+     * 如果参数解析失败(比如用户输入了无效参数)，返回1退出程序
+     */
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
 
+    /*
+     * 步骤3: 通用初始化
+     * 执行一些基础的初始化工作，比如设置日志系统等
+     */
     common_init();
 
-    // struct that contains llama context and inference
+    /*
+     * 步骤4: 创建服务器上下文对象
+     * server_context是一个包含所有服务器状态的结构体
+     * 包括模型加载状态、推理上下文、任务队列等
+     * 这个对象是整个服务器的核心数据结构
+     */
     server_context ctx_server;
 
+    /*
+     * 步骤5: 初始化llama后端
+     * 这个函数初始化llama.cpp库的底层组件
+     * 为后续的模型加载和推理做准备
+     */
     llama_backend_init();
+    
+    /*
+     * 步骤6: 初始化NUMA (Non-Uniform Memory Access) 支持
+     * NUMA是一种多处理器系统的内存架构
+     * 这个函数根据用户配置来优化内存访问性能
+     * params.numa包含了NUMA相关的配置参数
+     */
     llama_numa_init(params.numa);
 
+    /*
+     * 步骤7: 打印系统信息到日志
+     * 这些信息对于调试和性能优化非常有用:
+     * - n_threads: 用于推理的线程数
+     * - n_threads_batch: 用于批处理的线程数  
+     * - total_threads: 系统总的可用CPU线程数
+     */
     LOG_INF("system info: n_threads = %d, n_threads_batch = %d, total_threads = %d\n", params.cpuparams.n_threads, params.cpuparams_batch.n_threads, std::thread::hardware_concurrency());
     LOG_INF("\n");
+    
+    /*
+     * 打印详细的系统信息，包括CPU型号、内存大小等
+     * 这些信息有助于用户了解服务器运行环境
+     */
     LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     LOG_INF("\n");
 
+    /*
+     * 步骤8: 创建HTTP服务器对象
+     * 使用std::unique_ptr智能指针来管理服务器生命周期
+     * 这里需要判断是否启用SSL加密
+     */
     std::unique_ptr<httplib::Server> svr;
+    
+/*
+ * SSL支持检查: 编译时定义的宏，用来检查是否支持OpenSSL
+ */
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    /*
+     * 如果用户提供了SSL私钥和证书文件，就创建SSL服务器
+     * SSL(安全套接字层)提供HTTPS加密通信功能
+     * 证书文件用于证明服务器身份，私钥用于加密解密
+     */
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
         LOG_INF("Running with SSL: key = %s, cert = %s\n", params.ssl_file_key.c_str(), params.ssl_file_cert.c_str());
         svr.reset(
             new httplib::SSLServer(params.ssl_file_cert.c_str(), params.ssl_file_key.c_str())
         );
     } else {
+        /*
+         * 如果没有提供SSL证书，就创建普通的HTTP服务器
+         * 这种情况下通信不加密，不适合生产环境
+         */
         LOG_INF("Running without SSL\n");
         svr.reset(new httplib::Server());
     }
 #else
+    /*
+     * 如果编译时没有包含SSL支持，但用户又提供了SSL证书
+     * 就报错并退出，因为无法满足用户的SSL需求
+     */
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
         LOG_ERR("Server is built without SSL support\n");
         return 1;
     }
+    /*
+     * 没有SSL支持且用户也没要求SSL，就创建普通的HTTP服务器
+     */
     svr.reset(new httplib::Server());
 #endif
 
+    /*
+     * 步骤9: 初始化服务器状态
+     * 使用std::atomic保证在多线程环境下状态访问的线程安全性
+     * SERVER_STATE_LOADING_MODEL表示服务器初始状态为“正在加载模型”
+     * 这个状态会在模型加载完成后改变为“就绪”状态
+     */
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
+    /*
+     * 步骤10: 设置服务器默认HTTP头
+     * 在所有HTTP响应中都会包含"Server: llama.cpp"头
+     * 这有助于客户端识别服务器类型和版本
+     */
     svr->set_default_headers({{"Server", "llama.cpp"}});
+    
+    /*
+     * 设置请求日志记录器
+     * log_server_request函数会记录所有进入的HTTP请求
+     * 包括请求方法、URL、响应状态码等信息，方便调试和监控
+     */
     svr->set_logger(log_server_request);
 
+    /*
+     * 步骤11: 定义错误响应处理函数 (Lambda表达式)
+     * 这个lambda函数用于统一处理错误响应的格式
+     * 参数:
+     * - res: HTTP响应对象，用于设置响应内容和状态码
+     * - error_data: 错误信息的JSON数据
+     * 功能: 将错误信息包装为标准的JSON格式并返回给客户端
+     */
     auto res_error = [](httplib::Response & res, const json & error_data) {
+        /* 将错误数据包装在"error"字段中，形成标准的错误响应格式 */
         json final_response {{"error", error_data}};
+        /* 设置响应内容为JSON格式，并指定内容类型 */
         res.set_content(safe_json_to_str(final_response), MIMETYPE_JSON);
+        /* 从错误数据中提取状态码，如果没有则默认使用500(内部服务器错误) */
         res.status = json_value(error_data, "code", 500);
     };
 
+    /*
+     * 定义成功响应处理函数 (Lambda表达式)
+     * 这个lambda函数用于统一处理成功响应的格式
+     * 参数:
+     * - res: HTTP响应对象
+     * - data: 要返回给客户端的JSON数据
+     * 功能: 将数据转换为JSON格式并设置200状态码(成功)
+     */
     auto res_ok = [](httplib::Response & res, const json & data) {
+        /* 设置响应内容为JSON格式 */
         res.set_content(safe_json_to_str(data), MIMETYPE_JSON);
+        /* 设置200状态码表示请求成功 */
         res.status = 200;
     };
 
+    /*
+     * 步骤12: 设置全局异常处理器
+     * 当服务器处理请求时发生未捕获的异常时，这个处理器会被调用
+     * 它保证服务器不会因为异常而崩溃，而是返回友好的错误响应
+     * 参数:
+     * - req: HTTP请求对象(这里没使用所以用_占位)
+     * - res: HTTP响应对象，用于返回错误信息
+     * - ep: 异常指针，包含了具体的异常信息
+     */
     svr->set_exception_handler([&res_error](const httplib::Request &, httplib::Response & res, const std::exception_ptr & ep) {
         std::string message;
         try {
+            /*
+             * 重新抛出异常，这样可以捕获到具体的异常类型
+             * 这是一个C++标准做法，用于处理std::exception_ptr
+             */
             std::rethrow_exception(ep);
         } catch (const std::exception & e) {
+            /* 捕获标准的C++异常，获取其错误消息 */
             message = e.what();
         } catch (...) {
+            /* 捕获所有其他类型的异常(非标准异常) */
             message = "Unknown Exception";
         }
 
         try {
+            /*
+             * 将异常信息格式化为标准的错误响应格式
+             * ERROR_TYPE_SERVER表示这是服务器内部错误
+             */
             json formatted_error = format_error_response(message, ERROR_TYPE_SERVER);
+            /* 记录警告日志，方便开发者调试 */
             LOG_WRN("got exception: %s\n", formatted_error.dump().c_str());
+            /* 使用统一的错误响应处理函数 */
             res_error(res, formatted_error);
         } catch (const std::exception & e) {
+            /*
+             * 如果在处理异常时又发生了异常(双重异常)
+             * 记录错误日志，这通常表示严重的程序问题
+             */
             LOG_ERR("got another exception: %s | while hanlding exception: %s\n", e.what(), message.c_str());
         }
     });
 
+    /*
+     * 步骤13: 设置HTTP错误处理器
+     * 当HTTP请求发生错误(如404、500等)时，这个处理器会被调用
+     * 它主要处理一些特定的HTTP状态码，提供更友好的错误信息
+     */
     svr->set_error_handler([&res_error](const httplib::Request &, httplib::Response & res) {
+        /*
+         * 特别处理404错误(找不到文件)
+         * 返回标准化的JSON错误响应而不是简单的HTML页面
+         */
         if (res.status == 404) {
             res_error(res, format_error_response("File Not Found", ERROR_TYPE_NOT_FOUND));
         }
-        // for other error codes, we skip processing here because it's already done by res_error()
+        /*
+         * 对于其他错误码，我们不在这里处理
+         * 因为它们通常已经通过res_error()函数处理过了
+         */
     });
 
-    // set timeouts and change hostname and port
+    /*
+     * 步骤14: 设置服务器超时参数
+     * 超时设置对于防止请求太慢或客户端无响应非常重要
+     */
+    /* 设置读取超时: 服务器等待读取客户端数据的最长时间 */
     svr->set_read_timeout (params.timeout_read);
+    /* 设置写入超时: 服务器等待向客户端发送数据的最长时间 */
     svr->set_write_timeout(params.timeout_write);
 
+    /*
+     * 步骤15: 准备日志数据
+     * 创建一个哈希表来存储要记录到日志中的关键信息
+     * 这些信息在服务器启动时会被打印，方便管理员检查配置
+     */
     std::unordered_map<std::string, std::string> log_data;
 
+    /* 记录服务器的主机名(如localhost或IP地址) */
     log_data["hostname"] = params.hostname;
+    /* 记录服务器的端口号(转换为字符串以便存储) */
     log_data["port"]     = std::to_string(params.port);
 
+    /*
+     * 步骤16: 处理API密钥日志信息
+     * 出于安全考虑，不能在日志中显示完整的API密钥
+     * 只显示部分信息或统计数据
+     */
     if (params.api_keys.size() == 1) {
+        /* 如果只有一个API密钥，只显示后4位字符，其余用****隐藏 */
         auto key = params.api_keys[0];
         log_data["api_key"] = "api_key: ****" + key.substr(std::max((int)(key.length() - 4), 0));
     } else if (params.api_keys.size() > 1) {
+        /* 如果有多个API密钥，只显示数量而不显示具体内容 */
         log_data["api_key"] = "api_key: " + std::to_string(params.api_keys.size()) + " keys loaded";
     }
 
-    // Necessary similarity of prompt for slot selection
+    /*
+     * 步骤17: 设置提示相似性阈值
+     * 这个参数用于智能选择处理插槽(slot)
+     * 当新请求的提示与某个插槽中的提示相似度超过这个阈值时
+     * 可以复用该插槽，提高性能和资源利用率
+     */
     ctx_server.slot_prompt_similarity = params.slot_prompt_similarity;
 
-    //
-    // Middlewares
-    //
+    /*
+     * ================================================================
+     * 中间件设置部分 (Middlewares)
+     * ================================================================
+     * 中间件是在处理HTTP请求之前执行的函数
+     * 它们可以用于验证、权限检查、日志记录等
+     */
 
+    /*
+     * 步骤18: 定义API密钥验证中间件
+     * 这个中间件负责验证客户端提供的API密钥是否有效
+     * 它会在每个需要身份验证的请求之前被调用
+     * 
+     * 参数:
+     * - params: 包含服务器配置的参数对象(包括允许的API密钥列表)
+     * - res_error: 错误响应处理函数
+     * 返回值: true表示验证通过，false表示验证失败
+     */
     auto middleware_validate_api_key = [&params, &res_error](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 定义公开端点列表
+         * 这些端点不需要API密钥验证，任何人都可以访问
+         * static关键字保证这个列表只初始化一次，提高性能
+         */
         static const std::unordered_set<std::string> public_endpoints = {
-            "/health",
-            "/models",
-            "/v1/models",
-            "/api/tags"
+            "/health",      /* 健康检查端点 */
+            "/models",      /* 模型信息端点 */
+            "/v1/models",   /* OpenAI兼容的模型信息端点 */
+            "/api/tags"     /* 标签信息端点 */
         };
 
-        // If API key is not set, skip validation
+        /*
+         * 检查是否启用了API密钥验证
+         * 如果管理员没有配置API密钥，则跳过验证，允许所有请求
+         * 这种情况下服务器就是完全开放的
+         */
         if (params.api_keys.empty()) {
             return true;
         }
 
-        // If path is public or is static file, skip validation
+        /*
+         * 检查请求的路径是否为公开端点
+         * 公开端点和首页("/")不需要API密钥验证
+         * find()函数在集合中查找元素，未找到时返回end()
+         */
         if (public_endpoints.find(req.path) != public_endpoints.end() || req.path == "/") {
             return true;
         }
 
-        // Check for API key in the header
+        /*
+         * 从请求头中获取Authorization字段
+         * 按照HTTP标准，API密钥通常以"Bearer 密钥"的格式传递
+         */
         auto auth_header = req.get_header_value("Authorization");
 
+        /*
+         * 检查Authorization头是否以"Bearer "开头
+         * Bearer是一种标准的HTTP身份验证方式
+         */
         std::string prefix = "Bearer ";
         if (auth_header.substr(0, prefix.size()) == prefix) {
+            /*
+             * 提取实际的API密钥(去掉"Bearer "前缀)
+             * substr()函数从指定位置开始截取子字符串
+             */
             std::string received_api_key = auth_header.substr(prefix.size());
+            /*
+             * 在允许的API密钥列表中查找接收到的密钥
+             * std::find()在容器中查找元素，找到则返回迭代器
+             */
             if (std::find(params.api_keys.begin(), params.api_keys.end(), received_api_key) != params.api_keys.end()) {
-                return true; // API key is valid
+                return true; /* API密钥有效，验证通过 */
             }
         }
 
-        // API key is invalid or not provided
+        /*
+         * 执行到这里说明API密钥无效或未提供
+         * 使用统一的错误响应处理函数返回身份验证错误
+         */
         res_error(res, format_error_response("Invalid API Key", ERROR_TYPE_AUTHENTICATION));
 
+        /* 记录未授权访问的警告日志 */
         LOG_WRN("Unauthorized: Invalid API Key\n");
 
-        return false;
+        return false; /* 验证失败 */
     };
 
+    /*
+     * 步骤19: 定义服务器状态检查中间件
+     * 这个中间件负责检查服务器当前的状态
+     * 在模型加载期间，大部分请求都会被拒绝或返回特殊页面
+     * 
+     * 参数:
+     * - res_error: 错误响应处理函数
+     * - state: 服务器当前状态的原子变量引用
+     * 返回值: true表示允许继续处理请求，false表示已处理完成，无需继续
+     */
     auto middleware_server_state = [&res_error, &state](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 获取服务器当前状态
+         * load()是原子操作，保证在多线程环境下安全读取
+         */
         server_state current_state = state.load();
+        
+        /*
+         * 如果服务器正在加载模型，需要特殊处理
+         * 在这个状态下，服务器还不能提供正常的AI服务
+         */
         if (current_state == SERVER_STATE_LOADING_MODEL) {
+            /*
+             * 解析请求路径的文件扩展名
+             * string_split函数以'.'为分隔符切分路径
+             * 这样可以判断请求的是静态文件还是API接口
+             */
             auto tmp = string_split<std::string>(req.path, '.');
+            
+            /*
+             * 对于首页或HTML文件请求，返回加载页面
+             * 这是一个特殊的等待页面，告诉用户模型正在加载
+             */
             if (req.path == "/" || tmp.back() == "html") {
+                /*
+                 * 设置响应内容为内嵌的HTML加载页面
+                 * loading_html是编译时嵌入的静态HTML数据
+                 * reinterpret_cast将字节数据转换为字符数据
+                 */
                 res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
+                /*
+                 * 设置503状态码(服务不可用)
+                 * 这告诉客户端服务器暂时不可用，请稍后重试
+                 */
                 res.status = 503;
             } else if (req.path == "/models" || req.path == "/v1/models" || req.path == "/api/tags") {
-                // allow the models endpoint to be accessed during loading
+                /*
+                 * 特殊情况: 允许在加载期间访问模型信息端点
+                 * 这些端点不需要模型就能返回基本信息
+                 * 返回true表示继续处理请求，不在这里拦截
+                 */
                 return true;
             } else {
+                /*
+                 * 对于其他所有API请求，返回“服务不可用”错误
+                 * 因为模型还没加载完成，无法提供AI推理服务
+                 */
                 res_error(res, format_error_response("Loading model", ERROR_TYPE_UNAVAILABLE));
             }
+            /*
+             * 返回false表示请求已经被处理完成
+             * 不需要继续传递给后续的路由处理器
+             */
             return false;
         }
+        /*
+         * 如果服务器处于正常状态(模型已加载)
+         * 返回true允许请求继续处理
+         */
         return true;
     };
 
-    // register server middlewares
+    /*
+     * 步骤20: 注册中间件到HTTP服务器
+     * set_pre_routing_handler设置一个在路由匹配之前执行的处理器
+     * 所有进入的HTTP请求都会先经过这个处理器
+     * 
+     * 处理器的执行顺序:
+     * 1. CORS跨域处理
+     * 2. 服务器状态检查
+     * 3. API密钥验证
+     */
     svr->set_pre_routing_handler([&middleware_validate_api_key, &middleware_server_state](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 步骤21: 处理CORS(跨域资源共享)请求
+         * CORS允许前端网页从不同的域名访问这个API服务器
+         * 这对于Web应用的前后端分离非常重要
+         */
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        // If this is OPTIONS request, skip validation because browsers don't include Authorization header
+        
+        /*
+         * 特殊处理OPTIONS请求(预检请求)
+         * 浏览器在发送实际的CORS请求之前会发送OPTIONS请求
+         * 来检查服务器是否允许跨域访问
+         */
         if (req.method == "OPTIONS") {
+            /* 告诉浏览器允许携带身份验证信息(如cookies、身份验证头) */
             res.set_header("Access-Control-Allow-Credentials", "true");
+            /* 指定允许的HTTP方法 */
             res.set_header("Access-Control-Allow-Methods",     "GET, POST");
+            /* 允许所有请求头(通配符*) */
             res.set_header("Access-Control-Allow-Headers",     "*");
-            res.set_content("", "text/html"); // blank response, no data
-            return httplib::Server::HandlerResponse::Handled; // skip further processing
+            /* 返回空内容，OPTIONS请求不需要实际数据 */
+            res.set_content("", "text/html");
+            /*
+             * 返回Handled表示请求已处理完成
+             * 跳过后续的中间件和路由处理
+             */
+            return httplib::Server::HandlerResponse::Handled;
         }
+        
+        /*
+         * 步骤22: 执行服务器状态检查中间件
+         * 如果服务器正在加载模型或其他不可用状态
+         * 就会在这里被拦截并返回相应的错误或等待页面
+         */
         if (!middleware_server_state(req, res)) {
+            /* 如果中间件返回false，说明请求已处理，不需继续 */
             return httplib::Server::HandlerResponse::Handled;
         }
+        
+        /*
+         * 步骤23: 执行API密钥验证中间件
+         * 如果启用了API密钥验证，会在这里检查请求的授权信息
+         * 无效的API密钥请求会被拒绝
+         */
         if (!middleware_validate_api_key(req, res)) {
+            /* 如果API密钥验证失败，请求被拒绝 */
             return httplib::Server::HandlerResponse::Handled;
         }
+        
+        /*
+         * 所有中间件检查都通过了
+         * 返回Unhandled表示请求可以继续传递给路由处理器
+         */
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
-    //
-    // Route handlers (or controllers)
-    //
+    /*
+     * ================================================================
+     * 路由处理器部分 (Route Handlers / Controllers)
+     * ================================================================
+     * 路由处理器是处理具体HTTP请求的函数
+     * 每个处理器对应一个或多个API端点
+     * 它们实现了服务器的核心业务逻辑
+     */
 
+    /*
+     * 步骤24: 定义健康检查处理器
+     * 这个处理器提供一个简单的健康检查端点
+     * 通常用于负载均衡器、监控系统或容器编排器检查服务器状态
+     * 
+     * API端点: GET /health
+     * 响应格式: {"status": "ok"}
+     * 特点: 不需要API密钥，在模型加载期间也可访问
+     */
     const auto handle_health = [&](const httplib::Request &, httplib::Response & res) {
-        // error and loading states are handled by middleware
+        /*
+         * 错误和加载状态已经在中间件中处理了
+         * 如果能执行到这里，说明服务器状态正常
+         * 直接返回成功状态
+         */
         json health = {{"status", "ok"}};
-        res_ok(res, health);
+        res_ok(res, health); /* 使用统一的成功响应处理函数 */
     };
 
+    /*
+     * 步骤25: 定义插槽管理处理器
+     * 插槽(Slot)是服务器用来并发处理多个推理请求的机制
+     * 每个插槽可以独立处理一个对话或推理任务
+     * 这个端点提供插槽的实时状态信息，用于监控和调试
+     * 
+     * API端点: GET /slots
+     * 可选参数: fail_on_no_slot=true (如果没有空闲插槽就返回错误)
+     * 响应格式: 插槽状态数据的JSON数组
+     */
     const auto handle_slots = [&](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 检查是否启用了插槽端点
+         * 管理员需要在启动服务器时使用--slots参数才能启用这个功能
+         * 这样设计可以减少不必要的计算开销
+         */
         if (!params.endpoint_slots) {
             res_error(res, format_error_response("This server does not support slots endpoint. Start it with `--slots`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
-        // request slots data using task queue
+        /*
+         * 使用任务队列机制请求插槽数据
+         * 这是一种异步设计模式，避免阻塞HTTP线程
+         * 先获取一个唯一的任务ID
+         */
         int task_id = ctx_server.queue_tasks.get_new_id();
         {
+            /*
+             * 创建一个类型为SERVER_TASK_TYPE_METRICS的任务
+             * 这个任务类型专门用于收集服务器指标和插槽状态
+             */
             server_task task(SERVER_TASK_TYPE_METRICS);
             task.id = task_id;
+            /*
+             * 将任务ID添加到等待结果的列表中
+             * 这样当任务完成时可以获得通知
+             */
             ctx_server.queue_results.add_waiting_task_id(task_id);
-            ctx_server.queue_tasks.post(std::move(task), true); // high-priority task
+            /*
+             * 将任务提交到任务队列
+             * true参数表示这是高优先级任务，会被优先处理
+             * std::move用于移动语义，避免不必要的对象复制
+             */
+            ctx_server.queue_tasks.post(std::move(task), true);
         }
 
-        // get the result
+        /*
+         * 等待任务执行完成并获取结果
+         * recv()函数会阻塞当前线程直到任务完成
+         * 返回的是一个智能指针，包含任务的执行结果
+         */
         server_task_result_ptr result = ctx_server.queue_results.recv(task_id);
+        /*
+         * 任务完成后从等待列表中移除该任务ID
+         * 释放相关的内存资源
+         */
         ctx_server.queue_results.remove_waiting_task_id(task_id);
 
+        /*
+         * 检查任务执行是否出错
+         * 如果出错，直接返回错误信息给客户端
+         */
         if (result->is_error()) {
             res_error(res, result->to_json());
             return;
         }
 
-        // TODO: get rid of this dynamic_cast
+        /*
+         * 将通用的任务结果转换为具体的指标结果类型
+         * dynamic_cast是运行时类型转换，可以安全地转换类型
+         * TODO注释表示这是一个需要优化的地方
+         */
         auto res_metrics = dynamic_cast<server_task_result_metrics*>(result.get());
+        /* 断言检查，确保类型转换成功 */
         GGML_ASSERT(res_metrics != nullptr);
 
-        // optionally return "fail_on_no_slot" error
+        /*
+         * 处理可选的fail_on_no_slot参数
+         * 如果客户端设置了这个参数且当前没有空闲插槽
+         * 就返回错误而不是正常的状态信息
+         * 这对于客户端的负载均衡很有用
+         */
         if (req.has_param("fail_on_no_slot")) {
             if (res_metrics->n_idle_slots == 0) {
                 res_error(res, format_error_response("no slot available", ERROR_TYPE_UNAVAILABLE));
@@ -4039,207 +4432,512 @@ int main(int argc, char ** argv) {
             }
         }
 
+        /*
+         * 返回插槽状态数据
+         * slots_data包含所有插槽的详细信息，如占用状态、处理进度等
+         */
         res_ok(res, res_metrics->slots_data);
     };
 
+    /*
+     * 步骤26: 定义指标监控处理器
+     * 这个处理器提供服务器的详细性能指标
+     * 主要用于监控系统(Prometheus)和性能分析
+     * 返回的数据包括处理速度、令牌数量、请求状态等
+     * 
+     * API端点: GET /metrics
+     * 响应格式: Prometheus格式的文本数据
+     * 特点: 需要在启动时使用--metrics参数才能开启
+     */
     const auto handle_metrics = [&](const httplib::Request &, httplib::Response & res) {
+        /*
+         * 检查是否启用了指标端点
+         * 管理员需要在启动服务器时使用--metrics参数才能启用这个功能
+         * 这样设计可以避免不必要的性能开销，因为统计数据需要额外的计算
+         */
         if (!params.endpoint_metrics) {
             res_error(res, format_error_response("This server does not support metrics endpoint. Start it with `--metrics`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
-        // request slots data using task queue
+        /*
+         * 使用任务队列机制请求指标数据
+         * 这与插槽处理器类似，使用相同的异步模式
+         * 避免阻塞HTTP处理线程，提高并发性能
+         */
         int task_id = ctx_server.queue_tasks.get_new_id();
         {
+            /*
+             * 创建指标收集任务
+             * SERVER_TASK_TYPE_METRICS类型的任务专门用于收集各种性能指标
+             * 包括处理时间、令牌数量、插槽使用情况等
+             */
             server_task task(SERVER_TASK_TYPE_METRICS);
             task.id = task_id;
+            /* 将任务ID添加到等待结果的列表中 */
             ctx_server.queue_results.add_waiting_task_id(task_id);
-            ctx_server.queue_tasks.post(std::move(task), true); // high-priority task
+            /*
+             * 提交高优先级任务
+             * 指标收集通常需要快速响应，因为监控系统会定期轮询
+             */
+            ctx_server.queue_tasks.post(std::move(task), true);
         }
 
-        // get the result
+        /*
+         * 等待指标收集任务完成并获取结果
+         * 这里会阻塞直到服务器内部完成所有指标的计算
+         */
         server_task_result_ptr result = ctx_server.queue_results.recv(task_id);
+        /* 清理任务ID，释放内存资源 */
         ctx_server.queue_results.remove_waiting_task_id(task_id);
 
+        /*
+         * 检查指标收集是否成功
+         * 如果失败，可能是由于服务器内部错误或资源不足
+         */
         if (result->is_error()) {
             res_error(res, result->to_json());
             return;
         }
 
-        // TODO: get rid of this dynamic_cast
+        /*
+         * 将通用任务结果转换为具体的指标结果类型
+         * 这里使用dynamic_cast是为了安全地访问指标数据
+         * TODO注释表示这是一个可以优化的地方，可能有更高效的做法
+         */
         auto res_metrics = dynamic_cast<server_task_result_metrics*>(result.get());
+        /* 断言检查，确保类型转换成功 */
         GGML_ASSERT(res_metrics != nullptr);
 
-        // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names
+        /*
+         * 定义所有指标的结构和数据
+         * 按照Prometheus标准进行命名和分类
+         * 参考: https://prometheus.io/docs/practices/naming/#metric-names
+         * 
+         * 指标类型说明:
+         * - counter: 计数器，只增不减的指标(如总请求数)
+         * - gauge: 仪表，可以上下波动的指标(如当前连接数)
+         */
         json all_metrics_def = json {
+            /*
+             * Counter类型指标 - 累积性数据，用于衡量总量和趋势
+             */
             {"counter", {{
+                /*
+                 * 提示令牌总数 - 服务器启动以来处理的所有提示令牌数量
+                 * 用于衡量服务器的工作负载和处理量
+                 */
                     {"name",  "prompt_tokens_total"},
                     {"help",  "Number of prompt tokens processed."},
                     {"value",  (uint64_t) res_metrics->n_prompt_tokens_processed_total}
             }, {
+                /*
+                 * 提示处理总时间 - 处理所有提示所花费的总秒数
+                 * 除以1000是为了将毫秒转换为秒
+                 */
                     {"name",  "prompt_seconds_total"},
                     {"help",  "Prompt process time"},
                     {"value",  (uint64_t) res_metrics->t_prompt_processing_total / 1.e3}
             }, {
+                /*
+                 * 生成令牌总数 - 服务器生成的所有回复令牌数量
+                 * 用于衡量输出的总量
+                 */
                     {"name",  "tokens_predicted_total"},
                     {"help",  "Number of generation tokens processed."},
                     {"value",  (uint64_t) res_metrics->n_tokens_predicted_total}
             }, {
+                /*
+                 * 令牌生成总时间 - 生成所有令牌所花费的总秒数
+                 * 用于计算平均生成速度
+                 */
                     {"name",  "tokens_predicted_seconds_total"},
                     {"help",  "Predict process time"},
                     {"value",  (uint64_t) res_metrics->t_tokens_generation_total / 1.e3}
             }, {
+                /*
+                 * 解码调用总次数 - llama_decode()函数的调用次数
+                 * 这是核心推理函数，反映模型的实际工作量
+                 */
                     {"name",  "n_decode_total"},
                     {"help",  "Total number of llama_decode() calls"},
                     {"value",  res_metrics->n_decode_total}
             }, {
+                /*
+                 * 历史最大上下文长度 - 曾经处理过的最长对话上下文
+                 * n_past表示已处理的令牌数，反映内存使用情况
+                 */
                     {"name",  "n_past_max"},
                     {"help",  "Largest observed n_past."},
                     {"value",  res_metrics->n_past_max}
             }, {
+                /*
+                 * 平均繁忙插槽数 - 每次解码时平均有多少个插槽在工作
+                 * 用于衡量并发处理的效率，防止除零错误
+                 */
                     {"name",  "n_busy_slots_per_decode"},
                     {"help",  "Average number of busy slots per llama_decode() call"},
                     {"value",  (float) res_metrics->n_busy_slots_total / std::max((float) res_metrics->n_decode_total, 1.f)}
             }}},
+            /*
+             * Gauge类型指标 - 即时数据，反映当前状态
+             */
             {"gauge", {{
+                /*
+                 * 提示处理速度 - 每秒处理的提示令牌数
+                 * 计算公式: 令牌数 / (处理时间/1000)
+                 * 三元运算符避免除零错误
+                 */
                     {"name",  "prompt_tokens_seconds"},
                     {"help",  "Average prompt throughput in tokens/s."},
                     {"value",  res_metrics->n_prompt_tokens_processed ? 1.e3 / res_metrics->t_prompt_processing * res_metrics->n_prompt_tokens_processed : 0.}
             },{
+                /*
+                 * 令牌生成速度 - 每秒生成的令牌数
+                 * 这是衡量模型性能的关键指标
+                 */
                     {"name",  "predicted_tokens_seconds"},
                     {"help",  "Average generation throughput in tokens/s."},
                     {"value",  res_metrics->n_tokens_predicted ? 1.e3 / res_metrics->t_tokens_generation * res_metrics->n_tokens_predicted : 0.}
             },{
+                /*
+                 * 当前处理中的请求数 - 正在被处理的请求数量
+                 * 反映服务器的实时负载
+                 */
                     {"name",  "requests_processing"},
                     {"help",  "Number of requests processing."},
                     {"value",  (uint64_t) res_metrics->n_processing_slots}
             },{
+                /*
+                 * 延迟处理的请求数 - 等待处理的请求数量
+                 * 如果这个数值过高，说明服务器负载过重
+                 */
                     {"name",  "requests_deferred"},
                     {"help",  "Number of requests deferred."},
                     {"value",  (uint64_t) res_metrics->n_tasks_deferred}
             }}}
         };
 
+        /*
+         * 创建字符串流用于构建Prometheus格式的输出
+         * Prometheus是一种标准的监控数据交换格式
+         * 支持大多数监控系统如Grafana、Datadog等
+         */
         std::stringstream prometheus;
 
+        /*
+         * 遍历所有指标类型(counter和gauge)
+         * 将JSON结构转换为Prometheus文本格式
+         */
         for (const auto & el : all_metrics_def.items()) {
+            /* 获取指标类型(如"counter"或"gauge") */
             const auto & type        = el.key();
+            /* 获取该类型下的所有指标定义 */
             const auto & metrics_def = el.value();
 
+            /*
+             * 遍历当前类型下的所有具体指标
+             * 为每个指标生成符合Prometheus标准的文本行
+             */
             for (const auto & metric_def : metrics_def) {
+                /* 提取指标名称 */
                 const std::string name = metric_def.at("name");
+                /* 提取指标说明文本 */
                 const std::string help = metric_def.at("help");
 
+                /*
+                 * 安全地提取指标数值
+                 * json_value函数提供默认值，避免缺失字段时的错误
+                 */
                 auto value = json_value(metric_def, "value", 0.);
+                
+                /*
+                 * 按照Prometheus标准格式输出每个指标:
+                 * 1. # HELP 行: 描述指标的作用
+                 * 2. # TYPE 行: 指定指标类型
+                 * 3. 数据行: 实际的指标名和数值
+                 * "llamacpp:"前缀用于区分不同服务的指标
+                 */
                 prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
                             << "# TYPE llamacpp:" << name << " " << type  << "\n"
                             << "llamacpp:"        << name << " " << value << "\n";
             }
         }
 
+        /*
+         * 添加自定义HTTP头信息
+         * Process-Start-Time-Unix包含服务器的启动时间戳
+         * 用于计算服务器运行时长和重启动监控
+         */
         res.set_header("Process-Start-Time-Unix", std::to_string(res_metrics->t_start));
 
+        /*
+         * 设置响应内容和类型
+         * "text/plain; version=0.0.4"是Prometheus标准的MIME类型
+         * version参数指定Prometheus数据格式的版本
+         */
         res.set_content(prometheus.str(), "text/plain; version=0.0.4");
-        res.status = 200; // HTTP OK
+        /* 设置200状态码表示请求成功 */
+        res.status = 200;
     };
 
+    /*
+     * 步骤27: 定义插槽保存处理器
+     * 这个处理器允许将某个插槽的当前状态保存到文件
+     * 主要用于保存对话上下文、中间状态等，方便后续恢复
+     * 这对于长期对话或服务器重启可恢复性非常有用
+     * 
+     * API端点: POST /slots/{id}/save
+     * 请求参数: {"filename": "文件名"}
+     * 响应格式: 保存操作的结果信息
+     */
     const auto handle_slots_save = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        /*
+         * 解析HTTP请求体中的JSON数据
+         * 客户端需要提供要保存的文件名
+         */
         json request_data = json::parse(req.body);
+        /* 提取文件名参数 */
         std::string filename = request_data.at("filename");
+        
+        /*
+         * 验证文件名的安全性
+         * fs_validate_filename函数检查文件名是否包含非法字符
+         * 防止路径遍历攻击(如"../../../etc/passwd")
+         */
         if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
+        
+        /*
+         * 构建完整的文件路径
+         * params.slot_save_path是管理员配置的保存目录
+         * 这样可以限制文件只能保存在指定目录下
+         */
         std::string filepath = params.slot_save_path + filename;
 
+        /*
+         * 使用任务队列机制执行保存操作
+         * 保存操作可能涉及大量数据写入，不宜在HTTP线程中直接执行
+         */
         int task_id = ctx_server.queue_tasks.get_new_id();
         {
+            /*
+             * 创建插槽保存任务
+             * SERVER_TASK_TYPE_SLOT_SAVE类型专门处理插槽状态的保存
+             */
             server_task task(SERVER_TASK_TYPE_SLOT_SAVE);
             task.id = task_id;
+            /* 设置要保存的插槽 ID */
             task.slot_action.slot_id  = id_slot;
+            /* 设置文件名(不包含路径) */
             task.slot_action.filename = filename;
+            /* 设置完整的文件路径 */
             task.slot_action.filepath = filepath;
 
+            /* 注册等待结果并提交任务 */
             ctx_server.queue_results.add_waiting_task_id(task_id);
             ctx_server.queue_tasks.post(std::move(task));
         }
 
+        /*
+         * 等待保存操作完成
+         * 这个过程可能耗时较长，取决于插槽中数据的大小
+         */
         server_task_result_ptr result = ctx_server.queue_results.recv(task_id);
+        /* 清理任务资源 */
         ctx_server.queue_results.remove_waiting_task_id(task_id);
 
+        /*
+         * 检查保存操作是否成功
+         * 失败原因可能包括:磁盘空间不足、权限问题、插槽不存在等
+         */
         if (result->is_error()) {
             res_error(res, result->to_json());
             return;
         }
 
+        /* 返回保存成功的结果信息 */
         res_ok(res, result->to_json());
     };
 
+    /*
+     * 步骤28: 定义插槽恢复处理器
+     * 这个处理器允许从之前保存的文件中恢复插槽的状态
+     * 主要用于恢复对话上下文、继续中断的对话等
+     * 这对于提供稳定的长期对话服务非常重要
+     * 
+     * API端点: POST /slots/{id}/restore
+     * 请求参数: {"filename": "要恢复的文件名"}
+     * 响应格式: 恢复操作的结果信息
+     */
     const auto handle_slots_restore = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        /*
+         * 解析请求中的JSON数据
+         * 客户端需要指定要恢复的文件名
+         */
         json request_data = json::parse(req.body);
+        /* 获取要恢复的文件名 */
         std::string filename = request_data.at("filename");
+        
+        /*
+         * 验证文件名的合法性和安全性
+         * 防止恶意文件访问，保护系统安全
+         */
         if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
+        
+        /*
+         * 构建完整的文件路径
+         * 确保文件只能从指定的保存目录中读取
+         */
         std::string filepath = params.slot_save_path + filename;
 
+        /*
+         * 使用任务队列机制执行恢复操作
+         * 恢复操作可能需要加载大量数据，耗时较长
+         */
         int task_id = ctx_server.queue_tasks.get_new_id();
         {
+            /*
+             * 创建插槽恢复任务
+             * SERVER_TASK_TYPE_SLOT_RESTORE类型专门处理插槽状态的恢复
+             */
             server_task task(SERVER_TASK_TYPE_SLOT_RESTORE);
             task.id = task_id;
+            /* 设置要恢复的目标插槽 ID */
             task.slot_action.slot_id  = id_slot;
+            /* 设置源文件名 */
             task.slot_action.filename = filename;
+            /* 设置源文件的完整路径 */
             task.slot_action.filepath = filepath;
 
+            /* 注册等待结果并提交任务 */
             ctx_server.queue_results.add_waiting_task_id(task_id);
             ctx_server.queue_tasks.post(std::move(task));
         }
 
+        /*
+         * 等待恢复操作完成
+         * 恢复过程包括读取文件、解析数据、重建插槽状态等
+         */
         server_task_result_ptr result = ctx_server.queue_results.recv(task_id);
+        /* 清理任务资源 */
         ctx_server.queue_results.remove_waiting_task_id(task_id);
 
+        /*
+         * 检查恢复操作是否成功
+         * 失败原因可能包括:文件不存在、文件损坏、插槽占用等
+         */
         if (result->is_error()) {
             res_error(res, result->to_json());
             return;
         }
 
+        /*
+         * 验证结果类型是否正确
+         * 确保返回的是插槽保存/加载类型的结果
+         */
         GGML_ASSERT(dynamic_cast<server_task_result_slot_save_load*>(result.get()) != nullptr);
+        /* 返回恢复成功的结果信息 */
         res_ok(res, result->to_json());
     };
 
+    /*
+     * 步骤29: 定义插槽擦除处理器
+     * 这个处理器用于清空指定插槽的所有状态和数据
+     * 包括对话上下文、生成历史、缓存数据等
+     * 这对于释放内存和重置插槽状态非常有用
+     * 
+     * API端点: POST /slots/{id}/erase
+     * 请求参数: 无(只需要插槽ID)
+     * 响应格式: 擦除操作的结果信息
+     */
     const auto handle_slots_erase = [&ctx_server, &res_error, &res_ok](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
+        /*
+         * 使用任务队列机制执行擦除操作
+         * 擦除操作可能需要清理大量内存数据，耗时不定
+         */
         int task_id = ctx_server.queue_tasks.get_new_id();
         {
+            /*
+             * 创建插槽擦除任务
+             * SERVER_TASK_TYPE_SLOT_ERASE类型专门处理插槽的完全清空
+             * 这是一个破坏性操作，不可恢复
+             */
             server_task task(SERVER_TASK_TYPE_SLOT_ERASE);
             task.id = task_id;
+            /* 设置要擦除的插槽 ID */
             task.slot_action.slot_id = id_slot;
 
+            /* 注册等待结果并提交任务 */
             ctx_server.queue_results.add_waiting_task_id(task_id);
             ctx_server.queue_tasks.post(std::move(task));
         }
 
+        /*
+         * 等待擦除操作完成
+         * 擦除过程包括清理内存、重置状态变量、释放资源等
+         */
         server_task_result_ptr result = ctx_server.queue_results.recv(task_id);
+        /* 清理任务资源 */
         ctx_server.queue_results.remove_waiting_task_id(task_id);
 
+        /*
+         * 检查擦除操作是否成功
+         * 失败原因可能包括:插槽不存在、插槽正在使用中等
+         */
         if (result->is_error()) {
             res_error(res, result->to_json());
             return;
         }
 
+        /*
+         * 验证结果类型是否正确
+         * 确保返回的是插槽擦除类型的结果
+         */
         GGML_ASSERT(dynamic_cast<server_task_result_slot_erase*>(result.get()) != nullptr);
+        /* 返回擦除成功的结果信息 */
         res_ok(res, result->to_json());
     };
 
+    /*
+     * 步骤30: 定义插槽动作统一处理器
+     * 这个处理器是插槽管理功能的统一入口
+     * 根据请求参数中的action字段来路由到具体的操作
+     * 支持save(保存)、restore(恢复)、erase(擦除)三种操作
+     * 
+     * API端点: POST /slots/{id}?action=save|restore|erase
+     * 路径参数: id - 插槽ID
+     * 查询参数: action - 要执行的动作
+     */
     const auto handle_slots_action = [&params, &res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 检查是否配置了插槽保存路径
+         * 如果没有配置保存路径，则不支持任何插槽操作
+         * 这是一个安全措施，防止文件系统被正用
+         */
         if (params.slot_save_path.empty()) {
             res_error(res, format_error_response("This server does not support slots action. Start it with `--slot-save-path`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
+        /*
+         * 从路径参数中获取插槽ID
+         * URL格式如: /slots/5?action=save
+         * path_params.at("id_slot")获取路径中的{id}部分
+         */
         std::string id_slot_str = req.path_params.at("id_slot");
         int id_slot;
 
+        /*
+         * 将字符串转换为整数
+         * 使用try-catch捕获转换错误，防止程序崩溃
+         * 如果输入不是数字("abc"、"1.5"等)就会抛异常
+         */
         try {
             id_slot = std::stoi(id_slot_str);
         } catch (const std::exception &) {
@@ -4247,136 +4945,396 @@ int main(int argc, char ** argv) {
             return;
         }
 
+        /*
+         * 从查询参数中获取动作类型
+         * 如: /slots/5?action=save 中的 "save"
+         */
         std::string action = req.get_param_value("action");
 
+        /*
+         * 根据动作类型路由到对应的处理器
+         * 这种设计模式叫做“策略模式”，便于扩展和维护
+         */
         if (action == "save") {
+            /* 调用插槽保存处理器 */
             handle_slots_save(req, res, id_slot);
         } else if (action == "restore") {
+            /* 调用插槽恢复处理器 */
             handle_slots_restore(req, res, id_slot);
         } else if (action == "erase") {
+            /* 调用插槽擦除处理器 */
             handle_slots_erase(req, res, id_slot);
         } else {
+            /*
+             * 如果动作类型不在支持列表中，返回错误
+             * 帮助客户端发现参数错误
+             */
             res_error(res, format_error_response("Invalid action", ERROR_TYPE_INVALID_REQUEST));
         }
     };
 
+    /*
+     * 步骤31: 定义服务器属性查询处理器
+     * 这个处理器提供服务器的基本信息和配置
+     * 主要用于客户端发现服务器的能力和限制
+     * 这个端点是公开的，不需要API密钥验证
+     * 
+     * API端点: GET /props
+     * 响应格式: 包含服务器配置信息的JSON对象
+     * 特点: 只返回安全的、允许公开的信息
+     */
     const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
-        // this endpoint is publicly available, please only return what is safe to be exposed
+        /*
+         * 重要安全注意事项:
+         * 这个端点是公开可访问的，请仅返回安全的信息
+         * 不要暴露敏感配置、API密钥、内部路径等
+         */
         json data = {
+            /*
+             * 默认生成设置 - 为客户端提供参考的默认参数
+             * 包括温度、top-p、最大令牌数等推理参数
+             */
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
+            
+            /*
+             * 插槽总数 - 服务器可以同时处理的最大请求数
+             * 客户端可以根据这个信息来控制并发数
+             */
             { "total_slots",                 ctx_server.params_base.n_parallel },
+            
+            /*
+             * 模型文件路径 - 当前加载的模型文件位置
+             * 帮助客户端确认正在使用的模型
+             */
             { "model_path",                  ctx_server.params_base.model.path },
+            
+            /*
+             * 模型支持的模态 - 指明模型的能力范围
+             * vision: 是否支持图像处理(多模态模型)
+             * audio: 是否支持音频处理
+             */
             { "modalities",                  json{
                 {"vision", ctx_server.oai_parser_opt.allow_image},
                 {"audio",  ctx_server.oai_parser_opt.allow_audio},
             } },
+            
+            /*
+             * 聊天模板 - 用于格式化对话的模板字符串
+             * 不同模型可能有不同的对话格式要求
+             */
             { "chat_template",               common_chat_templates_source(ctx_server.chat_templates.get()) },
+            
+            /*
+             * BOS令牌 - Begin Of Sequence，序列开始令牌
+             * 用于标记文本的开始，对于正确的令牌化非常重要
+             */
             { "bos_token",                   common_token_to_piece(ctx_server.ctx, llama_vocab_bos(ctx_server.vocab), /* special= */ true)},
+            
+            /*
+             * EOS令牌 - End Of Sequence，序列结束令牌
+             * 用于标记文本的结束，告诉模型停止生成
+             */
             { "eos_token",                   common_token_to_piece(ctx_server.ctx, llama_vocab_eos(ctx_server.vocab), /* special= */ true)},
+            
+            /*
+             * 构建信息 - 服务器的版本和编译信息
+             * 用于调试和版本兼容性检查
+             */
             { "build_info",                  build_info },
         };
+        
+        /*
+         * 条件性添加工具使用模板
+         * 只有在启用Jinja模板引擎时才会可用
+         * tool_use模板用于处理函数调用(Function Calling)功能
+         */
         if (ctx_server.params_base.use_jinja) {
             if (auto tool_use_src = common_chat_templates_source(ctx_server.chat_templates.get(), "tool_use")) {
                 data["chat_template_tool_use"] = tool_use_src;
             }
         }
 
+        /* 返回组装好的服务器属性信息 */
         res_ok(res, data);
     };
 
+    /*
+     * 步骤32: 定义服务器属性修改处理器
+     * 这个处理器允许动态修改服务器的全局属性
+     * 主要用于运行时调整服务器参数，而无需重启
+     * 这是一个高级功能，需要特殊权限才能使用
+     * 
+     * API端点: POST /props
+     * 请求参数: 要修改的属性JSON对象
+     * 响应格式: {"success": true} 或错误信息
+     * 注意: 需要在启动时使用--props参数才能启用
+     */
     const auto handle_props_change = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 检查是否启用了属性修改端点
+         * 这是一个安全措施，防止未授权的配置修改
+         * 只有管理员明确指定--props参数才会开放这个功能
+         */
         if (!ctx_server.params_base.endpoint_props) {
             res_error(res, format_error_response("This server does not support changing global properties. Start it with `--props`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
+        /*
+         * 解析请求体中的JSON数据
+         * 客户端需要发送要修改的属性和新值
+         * 格式如: {"max_tokens": 1000, "temperature": 0.8}
+         */
         json data = json::parse(req.body);
 
+        /*
+         * TODO: 在这里实现具体的属性更新逻辑
+         * 可能包括:
+         * - 更新默认生成参数
+         * - 修改日志级别
+         * - 调整性能参数
+         * - 验证参数的有效性和安全性
+         */
         // update any props here
 
+        /*
+         * 返回成功响应
+         * 在实际实现中，应该返回更详细的信息
+         * 如修改了哪些属性、新的值是什么等
+         */
         res_ok(res, {{ "success", true }});
     };
 
+    /*
+     * 步骤33: 定义API信息展示处理器
+     * 这个处理器提供详细的模型和API信息
+     * 主要用于客户端发现和展示服务器的详细能力
+     * 格式与Ollama API兼容，方便集成已有工具
+     * 
+     * API端点: GET /api/show
+     * 响应格式: 包含模型详细信息的JSON对象
+     * 特点: 公开端点，不需要身份验证
+     */
     const auto handle_api_show = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
         json data = {
+            /*
+             * 聊天模板 - 用于格式化对话的模板
+             * 这里出现了两次，可能是为了兼容不同版本的客户端
+             */
             {
                 "template", common_chat_templates_source(ctx_server.chat_templates.get()),
             },
+            /*
+             * 模型基本信息 - 包含模型的核心参数
+             * context_length: 模型支持的最大上下文长度
+             * 这是从最后一个插槽中获取的，所有插槽应该有相同的配置
+             */
             {
                 "model_info", {
                     { "llama.context_length", ctx_server.slots.back().n_ctx, },
                 }
             },
-            {"modelfile", ""},
-            {"parameters", ""},
+            
+            /*
+             * Ollama兼容字段 - 为了与Ollama API保持兼容
+             * 这些字段在llama.cpp中可能不适用，所以留空
+             */
+            {"modelfile", ""},    /* 模型文件内容，在llama.cpp中不适用 */
+            {"parameters", ""},   /* 模型参数，已在其他地方提供 */
+            
+            /* 聊天模板(重复，可能是历史原因) */
             {"template", common_chat_templates_source(ctx_server.chat_templates.get())},
+            
+            /*
+             * 模型详细信息 - 描述模型的技术细节
+             * 这些信息在llama.cpp中大部分都是空的或固定的
+             */
             {"details", {
-                {"parent_model", ""},
-                {"format", "gguf"},
-                {"family", ""},
-                {"families", {""}},
-                {"parameter_size", ""},
-                {"quantization_level", ""}
+                {"parent_model", ""},        /* 父模型，用于模型继承 */
+                {"format", "gguf"},          /* 模型格式，llama.cpp使用GGUF格式 */
+                {"family", ""},             /* 模型家族(如GPT、Llama等) */
+                {"families", {""}},          /* 模型家族列表 */
+                {"parameter_size", ""},      /* 模型参数数量(如7B、8B等) */
+                {"quantization_level", ""}  /* 量化级别(如Q4_0、Q8_0等) */
             }},
+            
+            /*
+             * 额外的模型信息字段(空的，可能是为了兼容性)
+             * 具体信息已在上面的model_info字段中提供
+             */
             {"model_info", ""},
+            
+            /*
+             * API能力列表 - 显示服务器支持的功能
+             * completion: 支持文本补全功能
+             * 可以扩展为: ["completion", "chat", "embedding", "vision"]
+             */
             {"capabilities", {"completion"}}
         };
 
+        /* 返回详细的API信息 */
         res_ok(res, data);
     };
 
-    // handle completion-like requests (completion, chat, infill)
-    // we can optionally provide a custom format for partial results and final results
+    /*
+     * 步骤34: 定义补全类请求的统一处理器
+     * 这是服务器的核心处理器，负责处理所有的AI文本生成请求
+     * 支持多种类型的请求:
+     * - completion: 文本补全(给定提示，生成继续内容)
+     * - chat: 对话式交互(基于聊天模板的对话)
+     * - infill: 代码填充(基于上下文生成中间内容)
+     * 
+     * 特色:
+     * - 支持流式输出(边生成边返回)
+     * - 支持多模态输入(文本+图片)
+     * - 兼容OpenAI API格式
+     * - 自动连接断开检测
+     */
     const auto handle_completions_impl = [&ctx_server, &res_error, &res_ok](
-            server_task_type type,
-            json & data,
-            const std::vector<raw_buffer> & files,
-            const std::function<bool()> & is_connection_closed,
-            httplib::Response & res,
-            oaicompat_type oaicompat) -> void {
+            server_task_type type,                                      /* 任务类型: 补全或填充 */
+            json & data,                                               /* 请求参数JSON数据 */
+            const std::vector<raw_buffer> & files,                     /* 上传的文件数据(图片等) */
+            const std::function<bool()> & is_connection_closed,        /* 连接断开检测函数 */
+            httplib::Response & res,                                   /* HTTP响应对象 */
+            oaicompat_type oaicompat                                   /* OpenAI兼容模式 */
+        ) -> void {
+        /*
+         * 断言检查: 确保任务类型的正确性
+         * 只支持补全(COMPLETION)和填充(INFILL)两种类型
+         * 聊天(CHAT)类型会在外层先转换为补全格式
+         */
         GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
 
+        /*
+         * 生成唯一的补全ID
+         * 用于跟踪和标识这次请求，方便日志记录和调试
+         * 格式通常为 "chatcmpl-" + 随机字符串
+         */
         auto completion_id = gen_chatcmplid();
+        
+        /*
+         * 任务ID集合 - 用于跟踪此请求创建的所有子任务
+         * 在请求取消或失败时，需要清理所有相关任务
+         */
         std::unordered_set<int> task_ids;
+        
+        /*
+         * 使用try-catch捕获处理过程中的各种异常
+         * 包括参数错误、资源不足、网络断开等
+         */
         try {
+            /*
+             * 任务列表 - 存储将要提交给任务队列的所有任务
+             * 一个请求可能会分解为多个并行任务来提高效率
+             */
             std::vector<server_task> tasks;
 
+            /*
+             * 提取提示内容
+             * prompt可以是字符串或复杂的JSON结构
+             * 例如在聊天模式下可能包含多轮对话历史
+             */
             const auto & prompt = data.at("prompt");
-            // TODO: this log can become very long, put it behind a flag or think about a more compact format
+            /*
+             * TODO: 这个日志可能会变得非常长
+             * 应该放在一个标志后面或者考虑更紧凑的格式
+             * 目前被注释掉了以避免日志过多
+             */
             //SRV_DBG("Prompt: %s\n", prompt.is_string() ? prompt.get<std::string>().c_str() : prompt.dump(2).c_str());
 
-            // process files
-            mtmd::bitmaps bitmaps;
-            const bool has_mtmd = ctx_server.mctx != nullptr;
+            /*
+             * 处理上传的文件(主要是图片)
+             * 这是多模态功能的核心部分，允许模型同时理解文本和图像
+             */
+            mtmd::bitmaps bitmaps;  /* 存储处理后的图片数据 */
+            const bool has_mtmd = ctx_server.mctx != nullptr;  /* 检查是否支持多模态 */
             {
+                /*
+                 * 检查多模态支持
+                 * 如果服务器不支持多模态但客户端上传了文件，就抛出异常
+                 * 这避免了无意义的处理尝试和混乱的错误信息
+                 */
                 if (!has_mtmd && !files.empty()) {
                     throw std::runtime_error("This server does not support multimodal");
                 }
+                
+                /*
+                 * 遍历所有上传的文件
+                 * 将它们转换为模型可以理解的位图格式
+                 */
                 for (auto & file : files) {
+                    /*
+                     * 从原始数据缓冲区初始化位图
+                     * mtmd_helper_bitmap_init_from_buf函数处理图片解码和预处理
+                     * 支持常见的图片格式如JPEG、PNG等
+                     */
                     mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(ctx_server.mctx, file.data(), file.size()));
+                    /*
+                     * 检查位图初始化是否成功
+                     * 如果文件格式不支持或损坏，就会失败
+                     */
                     if (!bmp.ptr) {
                         throw std::runtime_error("Failed to load image or audio file");
                     }
-                    // calculate bitmap hash (for KV caching)
+                    
+                    /*
+                     * 计算位图的哈希值(用于KV缓存)
+                     * KV缓存是一个重要的优化技术，可以:
+                     * - 避免重复处理相同的图片
+                     * - 加速相似请求的处理速度
+                     * - 节约GPU显存和计算资源
+                     */
                     std::string hash = fnv_hash(bmp.data(), bmp.n_bytes());
-                    bmp.set_id(hash.c_str());
+                    bmp.set_id(hash.c_str());  /* 设置位图的唯一标识符 */
+                    
+                    /*
+                     * 将处理好的位图添加到集合中
+                     * std::move用于移动语义，避免不必要的内存复制
+                     */
                     bitmaps.entries.push_back(std::move(bmp));
                 }
             }
 
-            // process prompt
+            /*
+             * 处理提示词 - 这是文本生成的核心步骤
+             * 将用户输入的文本转换为模型可以理解的令牌序列
+             */
             std::vector<server_tokens> inputs;
 
+            /*
+             * 根据是否支持多模态来选择不同的处理方式
+             * oaicompat表示是否使用OpenAI兼容模式
+             */
             if (oaicompat && has_mtmd) {
-                // multimodal
+                /*
+                 * 多模态处理分支 - 同时处理文本和图片
+                 * 这是更复杂的处理流程，需要特殊的令牌化方式
+                 */
                 std::string prompt_str = prompt.get<std::string>();
+                
+                /*
+                 * 多模态输入文本结构
+                 * add_special: 是否添加特殊令牌(如BOS/EOS)
+                 * parse_special: 是否解析文本中的特殊标记
+                 */
                 mtmd_input_text inp_txt = {
                     prompt_str.c_str(),
                     /* add_special */   true,
                     /* parse_special */ true,
                 };
+                
+                /*
+                 * 初始化多模态输入块结构
+                 * chunks用于存储混合了文本和图片的令牌序列
+                 */
                 mtmd::input_chunks chunks(mtmd_input_chunks_init());
-                auto bitmaps_c_ptr = bitmaps.c_ptr();
+                auto bitmaps_c_ptr = bitmaps.c_ptr();  /* 获取C风格指针以兼容C API */
+                
+                /*
+                 * 执行多模态令牌化
+                 * 这个函数会将文本和图片结合成一个统一的令牌序列
+                 * 返回0表示成功，非0表示失败
+                 */
                 int32_t tokenized = mtmd_tokenize(ctx_server.mctx,
                                                     chunks.ptr.get(),
                                                     &inp_txt,
@@ -4386,107 +5344,283 @@ int main(int argc, char ** argv) {
                     throw std::runtime_error("Failed to tokenize prompt");
                 }
 
+                /*
+                 * 将多模态chunks转换为server_tokens格式
+                 * true参数表示这是多模态数据
+                 */
                 server_tokens tmp(chunks, true);
                 inputs.push_back(std::move(tmp));
             } else {
-                // non-multimodal version
+                /*
+                 * 纯文本处理分支 - 只处理文本输入
+                 * 这是更简单、更快速的处理方式
+                 */
                 auto tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
+                
+                /*
+                 * 将每个令牌化的提示转换为server_tokens格式
+                 * 一个请求可能包含多个子提示(如批处理请求)
+                 */
                 for (auto & p : tokenized_prompts) {
                     auto tmp = server_tokens(p, ctx_server.mctx != nullptr);
                     inputs.push_back(std::move(tmp));
                 }
             }
 
+            /*
+             * 为任务列表预分配内存空间
+             * 这有助于避免动态内存分配的开销，提高性能
+             */
             tasks.reserve(inputs.size());
+            
+            /*
+             * 为每个输入创建一个对应的任务
+             * 这支持批处理请求，一次可以处理多个提示
+             */
             for (size_t i = 0; i < inputs.size(); i++) {
+                /*
+                 * 创建一个新的服务器任务
+                 * type可以是补全(COMPLETION)或填充(INFILL)
+                 */
                 server_task task = server_task(type);
 
+                /* 设置任务的唯一标识符，用于跟踪和管理 */
                 task.id    = ctx_server.queue_tasks.get_new_id();
+                /* 设置任务在批处理中的索引位置 */
                 task.index = i;
 
+                /*
+                 * 设置任务的令牌化提示
+                 * std::move用于移动语义，避免复制大量数据
+                 */
                 task.prompt_tokens    = std::move(inputs[i]);
+                
+                /*
+                 * 从请求JSON中解析生成参数
+                 * 包括温度、top-p、最大令牌数等所有推理参数
+                 */
                 task.params           = server_task::params_from_json_cmpl(
-                        ctx_server.ctx,
-                        ctx_server.params_base,
-                        data);
+                        ctx_server.ctx,      /* llama上下文 */
+                        ctx_server.params_base,  /* 基础参数 */
+                        data                 /* 请求数据 */
+                );
+                
+                /*
+                 * 设置指定的插槽 ID(可选)
+                 * 如果用户指定了-1以外的值，就会尝试使用指定插槽
+                 * -1表示由服务器自动选择可用插槽
+                 */
                 task.id_selected_slot = json_value(data, "id_slot", -1);
 
-                // OAI-compat
-                task.params.oaicompat                 = oaicompat;
-                task.params.oaicompat_cmpl_id         = completion_id;
-                // oaicompat_model is already populated by params_from_json_cmpl
+                /*
+                 * OpenAI兼容性设置
+                 * 这些参数用于确保响应格式符合OpenAI API标准
+                 */
+                task.params.oaicompat         = oaicompat;      /* 是否启用OpenAI兼容模式 */
+                task.params.oaicompat_cmpl_id = completion_id;  /* 补全请求的唯一ID */
+                /*
+                 * oaicompat_model已经在params_from_json_cmpl中填充
+                 * 它指定了客户端请求的模型名称
+                 */
 
+                /* 将配置好的任务添加到任务列表 */
                 tasks.push_back(std::move(task));
             }
 
+            /*
+             * 提取所有任务的ID列表
+             * 用于后续的任务管理和清理工作
+             */
             task_ids = server_task::get_list_id(tasks);
+            
+            /*
+             * 将任务添加到等待结果的列表中
+             * 这样当任务完成时，可以通知请求处理器
+             */
             ctx_server.queue_results.add_waiting_tasks(tasks);
+            
+            /*
+             * 将任务提交到任务队列
+             * 从这里开始，任务就会被工作线程异步处理
+             * std::move避免不必要的数据复制
+             */
             ctx_server.queue_tasks.post(std::move(tasks));
         } catch (const std::exception & e) {
             res_error(res, format_error_response(e.what(), ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 检查是否启用流式响应模式
+         * stream=true: 边生成边发送，类似ChatGPT的打字机效果
+         * stream=false: 等待完整生成后一次性返回所有内容
+         */
         bool stream = json_value(data, "stream", false);
 
+        /*
+         * 非流式响应处理分支
+         * 等待所有任务完成后统一返回结果
+         */
         if (!stream) {
+            /*
+             * 等待并接收所有任务的完整结果
+             * 这是一个阻塞操作，会等到所有任务都完成
+             */
             ctx_server.receive_multi_results(task_ids, [&](std::vector<server_task_result_ptr> & results) {
+                /*
+                 * 成功回调函数 - 处理任务完成的结果
+                 * 根据结果数量决定返回格式
+                 */
                 if (results.size() == 1) {
-                    // single result
+                    /*
+                     * 单个结果 - 直接返回JSON对象
+                     * 这是最常见的情况(单个提示请求)
+                     */
                     res_ok(res, results[0]->to_json());
                 } else {
-                    // multiple results (multitask)
+                    /*
+                     * 多个结果 - 包装成JSON数组返回
+                     * 这发生在批处理请求中(一次提交多个提示)
+                     */
                     json arr = json::array();
                     for (auto & res : results) {
+                        /* 将每个结果转换为JSON并添加到数组 */
                         arr.push_back(res->to_json());
                     }
                     res_ok(res, arr);
                 }
             }, [&](const json & error_data) {
+                /*
+                 * 错误回调函数 - 处理任务执行过程中的错误
+                 * 例如模型加载失败、内存不足、参数错误等
+                 */
                 res_error(res, error_data);
             }, is_connection_closed);
 
+            /*
+             * 清理等待列表中的任务ID
+             * 无论成功还是失败，都需要从等待队列中移除这些任务
+             * 防止内存泄漏和资源占用
+             */
             ctx_server.queue_results.remove_waiting_task_ids(task_ids);
         } else {
+            /*
+             * 流式响应处理分支
+             * 实时发送生成的内容，边生成边传输
+             * 使用Server-Sent Events(SSE)协议进行实时通信
+             */
             const auto chunked_content_provider = [task_ids, &ctx_server, oaicompat](size_t, httplib::DataSink & sink) {
+                /*
+                 * 开始接收流式结果
+                 * 每当有新内容生成时就立即发送给客户端
+                 */
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result_ptr & result) -> bool {
+                    /*
+                     * 数据回调函数 - 处理每个生成的数据块
+                     * 返回true继续接收，返回false停止生成
+                     */
                     json res_json = result->to_json();
                     if (res_json.is_array()) {
+                        /*
+                         * 批处理结果 - 遍历数组中的每个元素
+                         * 为每个结果单独发送一个SSE事件
+                         */
                         for (const auto & res : res_json) {
                             if (!server_sent_event(sink, "data", res)) {
-                                // sending failed (HTTP connection closed), cancel the generation
+                                /*
+                                 * 发送失败 - 通常是HTTP连接已关闭
+                                 * 立即取消生成，避免浪费计算资源
+                                 */
                                 return false;
                             }
                         }
                         return true;
                     } else {
+                        /*
+                         * 单个结果 - 直接发送SSE事件
+                         * 包含生成的文本片段和相关元数据
+                         */
                         return server_sent_event(sink, "data", res_json);
                     }
                 }, [&](const json & error_data) {
+                    /*
+                     * 错误回调函数 - 发送错误信息给客户端
+                     * 使用SSE的error事件类型通知前端发生了错误
+                     */
                     server_sent_event(sink, "error", error_data);
                 }, [&sink]() {
-                    // note: do not use req.is_connection_closed here because req is already destroyed
+                    /*
+                     * 连接检查回调函数 - 检测客户端是否断开连接
+                     * 注意：这里不能使用req.is_connection_closed，因为req对象已被销毁
+                     * 通过sink的可写状态来判断连接是否还有效
+                     */
                     return !sink.is_writable();
                 });
+                
+                /*
+                 * OpenAI兼容性处理
+                 * 发送流式响应结束标记，符合OpenAI API规范
+                 */
                 if (oaicompat != OAICOMPAT_TYPE_NONE) {
                     static const std::string ev_done = "data: [DONE]\n\n";
                     sink.write(ev_done.data(), ev_done.size());
                 }
+                
+                /*
+                 * 完成响应传输
+                 * 通知HTTP库响应已完成，可以关闭连接
+                 */
                 sink.done();
-                return false;
+                return false;  /* 表示内容提供器已完成工作 */
             };
 
+            /*
+             * 响应完成回调函数
+             * 无论流式传输成功还是失败都会被调用
+             * 用于清理资源和移除等待中的任务
+             */
             auto on_complete = [task_ids, &ctx_server] (bool) {
+                /*
+                 * 从等待结果队列中移除任务ID
+                 * 释放相关资源，防止内存泄漏
+                 * bool参数表示是否成功完成，但这里我们不关心
+                 */
                 ctx_server.queue_results.remove_waiting_task_ids(task_ids);
             };
 
+            /*
+             * 设置HTTP响应为分块传输模式
+             * Content-Type: text/event-stream 表示这是SSE流
+             * chunked_content_provider: 内容提供器，负责生成和发送数据
+             * on_complete: 完成回调，用于资源清理
+             */
             res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         }
     };
 
+    /*
+     * 标准补全接口处理器
+     * 处理 /completion 端点的请求，使用llama.cpp原生格式
+     * 不进行OpenAI兼容性转换，直接使用原始请求格式
+     */
     const auto handle_completions = [&handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 解析请求体中的JSON数据
+         * 包含提示文本、生成参数等所有必要信息
+         */
         json data = json::parse(req.body);
+        
+        /*
+         * 创建空的文件数组
+         * 标准补全接口不支持文件上传，所以这里是空的
+         */
         std::vector<raw_buffer> files; // dummy
+        
+        /*
+         * 调用通用补全实现函数
+         * SERVER_TASK_TYPE_COMPLETION: 指定任务类型为文本补全
+         * OAICOMPAT_TYPE_NONE: 不启用OpenAI兼容模式
+         */
         handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
@@ -4496,9 +5630,33 @@ int main(int argc, char ** argv) {
             OAICOMPAT_TYPE_NONE);
     };
 
+    /*
+     * OpenAI兼容补全接口处理器
+     * 处理 /v1/completions 端点的请求，兼容OpenAI API格式
+     * 将OpenAI格式的请求转换为llama.cpp内部格式
+     */
     const auto handle_completions_oai = [&handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 解析并转换OpenAI格式的请求参数
+         * oaicompat_completion_params_parse函数负责：
+         * - 将OpenAI字段名映射到llama.cpp字段名
+         * - 处理参数格式差异(如温度范围、停止词格式等)
+         * - 添加默认值和参数验证
+         */
         json data = oaicompat_completion_params_parse(json::parse(req.body));
+        
+        /*
+         * 创建空的文件数组
+         * OpenAI补全接口不支持文件上传(文件上传在chat接口中支持)
+         */
         std::vector<raw_buffer> files; // dummy
+        
+        /*
+         * 调用通用补全实现函数
+         * SERVER_TASK_TYPE_COMPLETION: 指定任务类型为文本补全
+         * OAICOMPAT_TYPE_COMPLETION: 启用OpenAI补全兼容模式
+         * 响应格式会符合OpenAI API规范
+         */
         handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
@@ -4508,76 +5666,167 @@ int main(int argc, char ** argv) {
             OAICOMPAT_TYPE_COMPLETION);
     };
 
+    /*
+     * 代码填充(Infill)接口处理器
+     * 处理 /infill 端点的请求，用于代码自动补全功能
+     * 实现Fill-In-the-Middle(FIM)技术，在指定位置插入代码
+     */
     const auto handle_infill = [&ctx_server, &res_error, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
-        // check model compatibility
+        /*
+         * 检查模型兼容性 - 验证模型是否支持FIM功能
+         * FIM需要特殊的词汇表令牌来标记前缀、后缀和中间部分
+         */
         std::string err;
+        
+        /*
+         * 检查前缀令牌 - 标记代码前部分的特殊token
+         * 如果模型词汇表中没有这个token，就无法进行填充操作
+         */
         if (llama_vocab_fim_pre(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "prefix token is missing. ";
         }
+        
+        /*
+         * 检查后缀令牌 - 标记代码后部分的特殊token
+         * 用于告诉模型在哪里结束填充内容
+         */
         if (llama_vocab_fim_suf(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "suffix token is missing. ";
         }
+        
+        /*
+         * 检查中间令牌 - 标记需要填充位置的特殊token
+         * 这是FIM的关键token，告诉模型在此处生成内容
+         */
         if (llama_vocab_fim_mid(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "middle token is missing. ";
         }
+        
+        /*
+         * 如果缺少任何必要的FIM令牌，返回不支持错误
+         * 避免用户尝试使用不兼容的模型进行填充操作
+         */
         if (!err.empty()) {
             res_error(res, format_error_response(string_format("Infill is not supported by this model: %s", err.c_str()), ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
+        /*
+         * 解析请求体中的JSON数据
+         * 包含前缀、后缀、额外上下文等填充所需的所有信息
+         */
         json data = json::parse(req.body);
 
-        // validate input
+        /*
+         * 输入参数验证 - 确保请求格式正确
+         * 严格的参数验证可以避免后续处理中的错误
+         */
+        
+        /*
+         * 验证可选的prompt参数
+         * prompt用于提供额外的指导信息，如编程语言类型、代码风格等
+         */
         if (data.contains("prompt") && !data.at("prompt").is_string()) {
-            // prompt is optional
             res_error(res, format_error_response("\"prompt\" must be a string", ERROR_TYPE_INVALID_REQUEST));
         }
 
+        /*
+         * 验证必需的input_prefix参数
+         * 包含光标位置之前的所有代码内容
+         */
         if (!data.contains("input_prefix")) {
             res_error(res, format_error_response("\"input_prefix\" is required", ERROR_TYPE_INVALID_REQUEST));
         }
 
+        /*
+         * 验证必需的input_suffix参数
+         * 包含光标位置之后的所有代码内容
+         */
         if (!data.contains("input_suffix")) {
             res_error(res, format_error_response("\"input_suffix\" is required", ERROR_TYPE_INVALID_REQUEST));
         }
 
+        /*
+         * 验证可选的input_extra参数
+         * 用于提供额外的上下文信息，如其他相关文件内容
+         * 必须是包含filename和text字段的对象数组
+         */
         if (data.contains("input_extra") && !data.at("input_extra").is_array()) {
-            // input_extra is optional
             res_error(res, format_error_response("\"input_extra\" must be an array of {\"filename\": string, \"text\": string}", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 处理额外上下文信息
+         * 这些信息可以帮助模型更好地理解代码结构和意图
+         */
         json input_extra = json_value(data, "input_extra", json::array());
         for (const auto & chunk : input_extra) {
-            // { "text": string, "filename": string }
+            /*
+             * 验证每个上下文块的格式
+             * 每个块必须包含text字段，filename字段是可选的
+             */
             if (!chunk.contains("text") || !chunk.at("text").is_string()) {
                 res_error(res, format_error_response("extra_context chunk must contain a \"text\" field with a string value", ERROR_TYPE_INVALID_REQUEST));
                 return;
             }
-            // filename is optional
+            
+            /*
+             * 验证可选的filename字段
+             * 如果提供了filename，它必须是字符串类型
+             */
             if (chunk.contains("filename") && !chunk.at("filename").is_string()) {
                 res_error(res, format_error_response("extra_context chunk's \"filename\" field must be a string", ERROR_TYPE_INVALID_REQUEST));
                 return;
             }
         }
-        data["input_extra"] = input_extra; // default to empty array if it's not exist
+        
+        /*
+         * 确保input_extra字段存在
+         * 如果请求中没有提供，就设置为空数组
+         * 这样后续处理函数可以安全地访问这个字段
+         */
+        data["input_extra"] = input_extra;
 
+        /*
+         * 提取和令牌化提示文本
+         * 将用户提供的文本指导转换为模型可理解的token序列
+         */
         std::string prompt = json_value(data, "prompt", std::string());
         std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, false, true);
         SRV_DBG("creating infill tasks, n_prompts = %d\n", (int) tokenized_prompts.size());
+        
+        /*
+         * 格式化填充提示 - 这是FIM的核心步骤
+         * format_infill函数会：
+         * - 将前缀、后缀、额外上下文按FIM格式重新排列
+         * - 插入特殊的FIM令牌(prefix, suffix, middle)
+         * - 考虑上下文长度限制，适当截断内容
+         * - 生成最终的提示序列供模型处理
+         */
         data["prompt"] = format_infill(
-            ctx_server.vocab,
-            data.at("input_prefix"),
-            data.at("input_suffix"),
-            data.at("input_extra"),
-            ctx_server.params_base.n_batch,
-            ctx_server.params_base.n_predict,
-            ctx_server.slots[0].n_ctx, // TODO: there should be a better way
-            ctx_server.params_base.spm_infill,
-            tokenized_prompts[0]
+            ctx_server.vocab,                        /* 词汇表，用于令牌转换 */
+            data.at("input_prefix"),                 /* 光标前的代码 */
+            data.at("input_suffix"),                 /* 光标后的代码 */
+            data.at("input_extra"),                  /* 额外上下文信息 */
+            ctx_server.params_base.n_batch,          /* 批处理大小 */
+            ctx_server.params_base.n_predict,        /* 最大预测令牌数 */
+            ctx_server.slots[0].n_ctx,               /* 上下文窗口大小 TODO: 应该有更好的方式获取 */
+            ctx_server.params_base.spm_infill,       /* 是否使用SentencePiece填充格式 */
+            tokenized_prompts[0]                     /* 令牌化的提示 */
         );
 
+        /*
+         * 创建空的文件数组
+         * 填充接口不支持文件上传，只处理纯文本代码
+         */
         std::vector<raw_buffer> files; // dummy
+        
+        /*
+         * 调用通用补全实现函数
+         * SERVER_TASK_TYPE_INFILL: 指定任务类型为代码填充
+         * OAICOMPAT_TYPE_NONE: 填充功能不兼容OpenAI API
+         */
         handle_completions_impl(
             SERVER_TASK_TYPE_INFILL,
             data,
@@ -4587,16 +5836,52 @@ int main(int argc, char ** argv) {
             OAICOMPAT_TYPE_NONE); // infill is not OAI compatible
     };
 
+    /*
+     * OpenAI兼容聊天补全接口处理器
+     * 处理 /v1/chat/completions 端点，兼容OpenAI Chat API格式
+     * 支持多轮对话、角色扮演、多模态输入(图片、音频等)
+     */
     const auto handle_chat_completions = [&ctx_server, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 记录调试信息 - 打印完整的请求体
+         * 这有助于调试聊天请求的格式和内容
+         * 注意：生产环境中可能包含敏感信息，需要谨慎记录
+         */
         LOG_DBG("request: %s\n", req.body.c_str());
 
+        /*
+         * 解析请求体JSON数据
+         * 聊天请求通常包含messages数组、模型名称、生成参数等
+         */
         auto body = json::parse(req.body);
+        
+        /*
+         * 用于存储解析出的文件数据
+         * 聊天接口支持多模态输入，如图片、音频等附件
+         */
         std::vector<raw_buffer> files;
+        
+        /*
+         * 解析并转换OpenAI聊天格式
+         * oaicompat_chat_params_parse函数负责：
+         * - 将messages数组转换为单一的prompt字符串
+         * - 处理system、user、assistant角色的消息
+         * - 提取并解码base64编码的图片/音频数据
+         * - 应用聊天模板格式化对话历史
+         * - 转换OpenAI参数到llama.cpp内部格式
+         */
         json data = oaicompat_chat_params_parse(
-            body,
-            ctx_server.oai_parser_opt,
-            files);
+            body,                        /* 原始请求JSON */
+            ctx_server.oai_parser_opt,   /* OpenAI解析器选项 */
+            files                        /* 输出：解析出的文件数据 */
+        );
 
+        /*
+         * 调用通用补全实现函数
+         * SERVER_TASK_TYPE_COMPLETION: 聊天最终也是文本补全任务
+         * OAICOMPAT_TYPE_CHAT: 启用OpenAI聊天兼容模式
+         * 响应格式会符合OpenAI Chat API规范
+         */
         handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
@@ -4606,235 +5891,534 @@ int main(int argc, char ** argv) {
             OAICOMPAT_TYPE_CHAT);
     };
 
-    // same with handle_chat_completions, but without inference part
+    /*
+     * 聊天模板应用接口处理器
+     * 与handle_chat_completions相同的解析逻辑，但不执行推理
+     * 只返回应用聊天模板后的最终prompt，用于调试和验证
+     */
     const auto handle_apply_template = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 解析请求体JSON数据
+         * 包含与聊天接口相同的messages数组和参数
+         */
         auto body = json::parse(req.body);
+        
+        /*
+         * 创建空的文件数组(此接口不使用文件功能)
+         * 只是为了满足解析函数的参数要求
+         */
         std::vector<raw_buffer> files; // dummy, unused
+        
+        /*
+         * 使用与聊天接口相同的解析逻辑
+         * 将messages转换为格式化的prompt字符串
+         * 应用模型的聊天模板、角色标记等
+         */
         json data = oaicompat_chat_params_parse(
-            body,
-            ctx_server.oai_parser_opt,
-            files);
+            body,                        /* 原始请求JSON */
+            ctx_server.oai_parser_opt,   /* OpenAI解析器选项 */
+            files                        /* 未使用的文件数组 */
+        );
+        
+        /*
+         * 返回处理后的prompt
+         * 这让开发者可以预览最终发送给模型的prompt内容
+         * 有助于调试聊天模板的效果和问题排查
+         */
         res_ok(res, {{ "prompt", std::move(data.at("prompt")) }});
     };
 
+    /*
+     * 模型信息查询接口处理器
+     * 处理 /v1/models 端点，兼容OpenAI API格式
+     * 返回当前加载模型的详细信息和能力列表
+     */
     const auto handle_models = [&params, &ctx_server, &state, &res_ok](const httplib::Request &, httplib::Response & res) {
+        /*
+         * 获取当前服务器状态
+         * 使用原子操作确保状态读取的线程安全性
+         */
         server_state current_state = state.load();
+        
+        /*
+         * 模型元数据初始化
+         * 只有在服务器就绪状态下才能获取模型信息
+         */
         json model_meta = nullptr;
         if (current_state == SERVER_STATE_READY) {
+            /*
+             * 获取模型元数据信息
+             * 包括模型架构、参数数量、词汇表大小等详细信息
+             */
             model_meta = ctx_server.model_meta();
         }
 
+        /*
+         * 构建模型列表响应
+         * 包含两种格式：Ollama兼容格式和OpenAI兼容格式
+         */
         json models = {
+            /*
+             * Ollama API兼容格式
+             * 提供更详细的模型信息，包括能力和参数
+             */
             {"models", {
                 {
+                    /* 模型名称，优先使用别名，否则使用文件路径 */
                     {"name", params.model_alias.empty() ? params.model.path : params.model_alias},
                     {"model", params.model_alias.empty() ? params.model.path : params.model_alias},
-                    {"modified_at", ""},
-                    {"size", ""},
-                    {"digest", ""}, // dummy value, llama.cpp does not support managing model file's hash
-                    {"type", "model"},
-                    {"description", ""},
-                    {"tags", {""}},
-                    {"capabilities", {"completion"}},
-                    {"parameters", ""},
+                    
+                    /* 模型文件信息(这些字段为占位符，llama.cpp目前不支持) */
+                    {"modified_at", ""},           /* 修改时间 */
+                    {"size", ""},                  /* 文件大小 */
+                    {"digest", ""},               /* 文件哈希值 - llama.cpp不支持管理模型文件哈希 */
+                    
+                    /* 模型基本属性 */
+                    {"type", "model"},            /* 类型：模型 */
+                    {"description", ""},          /* 描述信息 */
+                    {"tags", {""}},              /* 标签列表 */
+                    {"capabilities", {"completion"}}, /* 支持的功能：文本补全 */
+                    {"parameters", ""},           /* 参数信息 */
+                    
+                    /* 详细信息 */
                     {"details", {
-                        {"parent_model", ""},
-                        {"format", "gguf"},
-                        {"family", ""},
-                        {"families", {""}},
-                        {"parameter_size", ""},
-                        {"quantization_level", ""}
+                        {"parent_model", ""},            /* 父模型 */
+                        {"format", "gguf"},             /* 模型格式：GGUF */
+                        {"family", ""},                 /* 模型家族 */
+                        {"families", {""}},             /* 模型家族列表 */
+                        {"parameter_size", ""},         /* 参数规模 */
+                        {"quantization_level", ""}      /* 量化级别 */
                     }}
                 }
             }},
-            {"object", "list"},
+            
+            /*
+             * OpenAI API兼容格式
+             * 符合OpenAI /v1/models 端点的响应格式
+             */
+            {"object", "list"},               /* 对象类型：列表 */
             {"data", {
                 {
+                    /* 模型标识符，与模型名称相同 */
                     {"id",       params.model_alias.empty() ? params.model.path : params.model_alias},
-                    {"object",   "model"},
-                    {"created",  std::time(0)},
-                    {"owned_by", "llamacpp"},
-                    {"meta",     model_meta},
+                    {"object",   "model"},        /* 对象类型：模型 */
+                    {"created",  std::time(0)},   /* 创建时间戳(使用当前时间) */
+                    {"owned_by", "llamacpp"},     /* 所有者：llama.cpp */
+                    {"meta",     model_meta},     /* 模型元数据(详细的模型信息) */
                 },
             }}
         };
 
+        /*
+         * 返回成功响应
+         * 客户端可以根据需要解析Ollama格式或OpenAI格式的数据
+         */
         res_ok(res, models);
     };
 
+    /*
+     * 文本令牌化接口处理器
+     * 处理 /tokenize 端点，将文本转换为token ID序列
+     * 用于调试、分析文本如何被模型理解，以及计算token使用量
+     */
     const auto handle_tokenize = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 解析请求体JSON数据
+         * 应包含要令牌化的文本内容和相关选项
+         */
         const json body = json::parse(req.body);
 
+        /*
+         * 初始化令牌响应数组
+         * 将存储令牌ID和对应的文本片段
+         */
         json tokens_response = json::array();
+        
+        /*
+         * 检查是否提供了content字段
+         * content包含需要令牌化的文本内容
+         */
         if (body.count("content") != 0) {
+            /*
+             * 解析令牌化选项
+             * add_special: 是否添加特殊令牌(如BOS/EOS)
+             * parse_special: 是否解析文本中的特殊标记
+             * with_pieces: 是否在响应中包含每个token对应的文本片段
+             */
             const bool add_special = json_value(body, "add_special", false);
             const bool parse_special = json_value(body, "parse_special", true);
             const bool with_pieces = json_value(body, "with_pieces", false);
 
+            /*
+             * 执行令牌化操作
+             * tokenize_mixed函数处理混合内容(文本+特殊标记)
+             * 返回token ID的向量
+             */
             llama_tokens tokens = tokenize_mixed(ctx_server.vocab, body.at("content"), add_special, parse_special);
 
+            /*
+             * 根据with_pieces选项决定响应格式
+             */
             if (with_pieces) {
+                /*
+                 * 详细模式：包含每个token的ID和对应的文本片段
+                 * 这对于理解令牌化过程很有帮助
+                 */
                 for (const auto& token : tokens) {
+                    /*
+                     * 获取token对应的文本片段
+                     * 将token ID转换回原始文本表示
+                     */
                     std::string piece = common_token_to_piece(ctx_server.ctx, token);
                     json piece_json;
 
-                    // Check if the piece is valid UTF-8
+                    /*
+                     * 检查文本片段是否为有效的UTF-8编码
+                     * 某些token可能包含特殊字符或字节序列
+                     */
                     if (is_valid_utf8(piece)) {
+                        /*
+                         * 有效UTF-8：直接存储为字符串
+                         * 这是大多数普通文本token的情况
+                         */
                         piece_json = piece;
                     } else {
-                        // If not valid UTF-8, store as array of byte values
+                        /*
+                         * 无效UTF-8：存储为字节值数组
+                         * 这通常发生在特殊字符或二进制数据中
+                         * 保留原始字节信息以便调试
+                         */
                         piece_json = json::array();
                         for (unsigned char c : piece) {
                             piece_json.push_back(static_cast<int>(c));
                         }
                     }
 
+                    /*
+                     * 将token信息添加到响应中
+                     * 包含ID和对应的文本片段
+                     */
                     tokens_response.push_back({
-                        {"id", token},
-                        {"piece", piece_json}
+                        {"id", token},          /* token ID */
+                        {"piece", piece_json}   /* 对应的文本片段 */
                     });
                 }
             } else {
+                /*
+                 * 简单模式：只返回token ID数组
+                 * 适用于只需要token数量或ID序列的场景
+                 */
                 tokens_response = tokens;
             }
         }
 
+        /*
+         * 格式化令牌化响应
+         * 包装成标准的API响应格式
+         */
         const json data = format_tokenizer_response(tokens_response);
         res_ok(res, data);
     };
 
+    /*
+     * 令牌反向转换接口处理器
+     * 处理 /detokenize 端点，将token ID序列转换回原始文本
+     * 与tokenize操作相反，用于验证令牌化结果或调试
+     */
     const auto handle_detokenize = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 解析请求体JSON数据
+         * 应包含要反向转换的token ID数组
+         */
         const json body = json::parse(req.body);
 
+        /*
+         * 初始化输出文本内容
+         * 将存储从token序列重建的文本
+         */
         std::string content;
+        
+        /*
+         * 检查是否提供了tokens字段
+         * tokens包含需要转换的token ID数组
+         */
         if (body.count("tokens") != 0) {
+            /*
+             * 获取token ID数组
+             * 从JSON中提取llama_tokens类型的token序列
+             */
             const llama_tokens tokens = body.at("tokens");
+            
+            /*
+             * 执行反向令牌化操作
+             * tokens_to_str函数将token ID序列转换为连续的文本字符串
+             * 使用迭代器范围[begin, end)处理整个token序列
+             */
             content = tokens_to_str(ctx_server.ctx, tokens.cbegin(), tokens.cend());
         }
 
+        /*
+         * 格式化反向令牌化响应
+         * 包装成标准的API响应格式，包含重建的文本内容
+         */
         const json data = format_detokenized_response(content);
         res_ok(res, data);
     };
 
+    /*
+     * 嵌入向量生成接口实现
+     * 处理文本嵌入请求，将文本转换为高维向量表示
+     * 支持OpenAI API兼容格式，用于语义搜索、文本相似度等任务
+     */
     const auto handle_embeddings_impl = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res, oaicompat_type oaicompat) {
+        /*
+         * 检查嵌入功能是否启用
+         * 嵌入功能需要在服务器启动时使用 --embeddings 参数开启
+         * 这是因为嵌入模式与文本生成模式使用不同的推理配置
+         */
         if (!ctx_server.params_base.embedding) {
             res_error(res, format_error_response("This server does not support embeddings. Start it with `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
+        /*
+         * 检查OpenAI兼容性要求
+         * OpenAI API要求使用特定的pooling类型来聚合token embeddings
+         * LLAMA_POOLING_TYPE_NONE不兼容OpenAI格式
+         */
         if (oaicompat != OAICOMPAT_TYPE_NONE && llama_pooling_type(ctx_server.ctx) == LLAMA_POOLING_TYPE_NONE) {
             res_error(res, format_error_response("Pooling type 'none' is not OAI compatible. Please use a different pooling type", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 解析请求体JSON数据
+         * 包含要嵌入的文本内容和相关配置选项
+         */
         const json body = json::parse(req.body);
 
-        // for the shape of input/content, see tokenize_input_prompts()
+        /*
+         * 提取输入内容
+         * 支持两种字段名：input(OpenAI兼容) 和 content(llama.cpp原生)
+         * 输入格式参考 tokenize_input_prompts() 函数的要求
+         */
         json prompt;
         if (body.count("input") != 0) {
+            /*
+             * OpenAI兼容格式：使用"input"字段
+             * 保持OpenAI API的兼容性
+             */
             prompt = body.at("input");
         } else if (body.contains("content")) {
-            oaicompat = OAICOMPAT_TYPE_NONE; // "content" field is not OAI compatible
+            /*
+             * llama.cpp原生格式：使用"content"字段
+             * 这种格式不兼容OpenAI API，需要重置兼容性标志
+             */
+            oaicompat = OAICOMPAT_TYPE_NONE;
             prompt = body.at("content");
         } else {
+            /*
+             * 输入内容缺失错误
+             * 必须提供input或content中的一个字段
+             */
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 解析编码格式选项
+         * 决定嵌入向量的返回格式：浮点数组或base64编码
+         */
         bool use_base64 = false;
         if (body.count("encoding_format") != 0) {
             const std::string& format = body.at("encoding_format");
             if (format == "base64") {
+                /*
+                 * base64格式：适用于需要压缩传输或存储的场景
+                 * 可以减少网络传输大小，但需要客户端解码
+                 */
                 use_base64 = true;
             } else if (format != "float") {
+                /*
+                 * 不支持的格式错误
+                 * 只支持float(默认)和base64两种格式
+                 */
                 res_error(res, format_error_response("The format to return the embeddings in. Can be either float or base64", ERROR_TYPE_INVALID_REQUEST));
                 return;
             }
         }
 
+        /*
+         * 令牌化输入文本
+         * 将文本转换为模型可处理的token序列
+         * 添加特殊token(BOS等)以确保正确的模型理解
+         */
         auto tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
         for (const auto & tokens : tokenized_prompts) {
-            // this check is necessary for models that do not add BOS token to the input
+            /*
+             * 检查token序列有效性
+             * 某些模型不会自动添加BOS token，需要确保输入不为空
+             * 空输入会导致嵌入计算失败
+             */
             if (tokens.empty()) {
                 res_error(res, format_error_response("Input content cannot be empty", ERROR_TYPE_INVALID_REQUEST));
                 return;
             }
         }
 
-        int embd_normalize = 2; // default to Euclidean/L2 norm
+        /*
+         * 解析嵌入向量归一化选项
+         * 控制如何对生成的嵌入向量进行标准化处理
+         */
+        int embd_normalize = 2; // 默认使用欧几里得/L2范数归一化
         if (body.count("embd_normalize") != 0) {
             embd_normalize = body.at("embd_normalize");
+            /*
+             * 检查归一化兼容性
+             * 某些pooling类型不支持归一化，会忽略此参数
+             */
             if (llama_pooling_type(ctx_server.ctx) == LLAMA_POOLING_TYPE_NONE) {
                 SRV_DBG("embd_normalize is not supported by pooling type %d, ignoring it\n", llama_pooling_type(ctx_server.ctx));
             }
         }
 
-        // create and queue the task
-        json responses = json::array();
-        bool error = false;
-        std::unordered_set<int> task_ids;
+        /*
+         * 创建并提交嵌入任务
+         * 将每个令牌化的提示转换为独立的嵌入任务
+         */
+        json responses = json::array();  /* 存储所有嵌入结果 */
+        bool error = false;              /* 错误标志 */
+        std::unordered_set<int> task_ids; /* 任务ID集合，用于跟踪 */
         {
+            /*
+             * 任务创建代码块
+             * 使用代码块限制tasks变量的作用域，及时释放内存
+             */
             std::vector<server_task> tasks;
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
+                /*
+                 * 创建嵌入任务
+                 * 每个输入文本都会创建一个独立的嵌入任务
+                 */
                 server_task task = server_task(SERVER_TASK_TYPE_EMBEDDING);
 
-                task.id            = ctx_server.queue_tasks.get_new_id();
-                task.index         = i;
-                task.prompt_tokens = server_tokens(tokenized_prompts[i], ctx_server.mctx != nullptr);
+                /* 设置任务基本属性 */
+                task.id            = ctx_server.queue_tasks.get_new_id(); /* 获取唯一任务ID */
+                task.index         = i;                                   /* 批处理中的索引位置 */
+                task.prompt_tokens = server_tokens(tokenized_prompts[i], ctx_server.mctx != nullptr); /* 令牌化的输入 */
 
-                // OAI-compat
-                task.params.oaicompat = oaicompat;
-                task.params.embd_normalize = embd_normalize;
+                /* 设置OpenAI兼容性和嵌入参数 */
+                task.params.oaicompat = oaicompat;           /* OpenAI兼容模式 */
+                task.params.embd_normalize = embd_normalize; /* 向量归一化选项 */
 
+                /* 将任务添加到批处理列表 */
                 tasks.push_back(std::move(task));
             }
 
-            task_ids = server_task::get_list_id(tasks);
-            ctx_server.queue_results.add_waiting_tasks(tasks);
-            ctx_server.queue_tasks.post(std::move(tasks));
+            /*
+             * 提交任务到处理队列
+             * 这些任务会被后台工作线程异步处理
+             */
+            task_ids = server_task::get_list_id(tasks);      /* 提取所有任务ID */
+            ctx_server.queue_results.add_waiting_tasks(tasks); /* 添加到等待结果列表 */
+            ctx_server.queue_tasks.post(std::move(tasks));   /* 提交到任务队列 */
         }
 
-        // get the result
+        /*
+         * 等待并获取嵌入结果
+         * 这是一个阻塞操作，会等待所有嵌入任务完成
+         */
         ctx_server.receive_multi_results(task_ids, [&](std::vector<server_task_result_ptr> & results) {
+            /*
+             * 成功回调：处理所有嵌入结果
+             * 将每个结果转换为JSON格式并添加到响应数组
+             */
             for (auto & res : results) {
+                /*
+                 * 类型安全检查：确保结果是嵌入类型
+                 * 使用动态类型转换验证结果的正确性
+                 */
                 GGML_ASSERT(dynamic_cast<server_task_result_embd*>(res.get()) != nullptr);
                 responses.push_back(res->to_json());
             }
         }, [&](const json & error_data) {
+            /*
+             * 错误回调：处理嵌入计算过程中的错误
+             * 例如内存不足、模型加载失败等
+             */
             res_error(res, error_data);
             error = true;
         }, req.is_connection_closed);
 
+        /*
+         * 清理等待列表中的任务ID
+         * 无论成功还是失败，都需要从等待队列中移除
+         */
         ctx_server.queue_results.remove_waiting_task_ids(task_ids);
 
+        /*
+         * 检查是否发生错误
+         * 如果有错误，提前返回(错误响应已在回调中发送)
+         */
         if (error) {
             return;
         }
 
-        // write JSON response
+        /*
+         * 构建并发送JSON响应
+         * 根据兼容性模式选择不同的响应格式
+         */
         json root = oaicompat == OAICOMPAT_TYPE_EMBEDDING
-            ? format_embeddings_response_oaicompat(body, responses, use_base64)
-            : json(responses);
+            ? format_embeddings_response_oaicompat(body, responses, use_base64) /* OpenAI兼容格式 */
+            : json(responses);                                                   /* llama.cpp原生格式 */
         res_ok(res, root);
     };
 
+    /*
+     * 标准嵌入接口处理器
+     * 处理 /embeddings 端点，使用llama.cpp原生格式
+     * 不进行OpenAI兼容性转换，直接使用原始响应格式
+     */
     const auto handle_embeddings = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
         handle_embeddings_impl(req, res, OAICOMPAT_TYPE_NONE);
     };
 
+    /*
+     * OpenAI兼容嵌入接口处理器
+     * 处理 /v1/embeddings 端点，兼容OpenAI Embeddings API格式
+     * 响应格式符合OpenAI API规范，便于现有应用迁移
+     */
     const auto handle_embeddings_oai = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
         handle_embeddings_impl(req, res, OAICOMPAT_TYPE_EMBEDDING);
     };
 
+    /*
+     * 文档重排序接口处理器
+     * 处理 /rerank 端点，根据查询对文档列表进行相关性排序
+     * 用于搜索系统中提高检索结果的精准度
+     */
     const auto handle_rerank = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 检查重排序功能是否启用
+         * 重排序需要特定的embedding模式和pooling类型
+         * 必须使用 --reranking 参数启动服务器
+         */
         if (!ctx_server.params_base.embedding || ctx_server.params_base.pooling_type != LLAMA_POOLING_TYPE_RANK) {
             res_error(res, format_error_response("This server does not support reranking. Start it with `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
+        /*
+         * 解析请求体JSON数据
+         * 包含查询文本和待排序的文档列表
+         */
         const json body = json::parse(req.body);
 
-        // TODO: implement
+        /*
+         * TODO: 待实现的top_n功能
+         * top_n参数用于限制返回的最相关文档数量
+         * 目前被注释掉，将来可能会实现
+         */
         //int top_n = 1;
         //if (body.count("top_n") != 1) {
         //    top_n = body.at("top_n");
@@ -4843,295 +6427,717 @@ int main(int argc, char ** argv) {
         //    return;
         //}
 
-        // if true, use TEI API format, otherwise use Jina API format
-        // Jina: https://jina.ai/reranker/
-        // TEI: https://huggingface.github.io/text-embeddings-inference/#/Text%20Embeddings%20Inference/rerank
+        /*
+         * 检测API格式类型
+         * 支持两种API格式：
+         * - TEI (Text Embeddings Inference): 使用"texts"字段
+         * - Jina: 使用"documents"字段
+         * 参考链接:
+         * Jina: https://jina.ai/reranker/
+         * TEI: https://huggingface.github.io/text-embeddings-inference/#/Text%20Embeddings%20Inference/rerank
+         */
         bool is_tei_format = body.contains("texts");
 
+        /*
+         * 提取并验证查询文本
+         * 查询文本是用来对文档进行排序的基准
+         */
         json query;
         if (body.count("query") == 1) {
             query = body.at("query");
+            /*
+             * 验证查询格式：必须是字符串类型
+             * 不支持复杂的查询结构
+             */
             if (!query.is_string()) {
                 res_error(res, format_error_response("\"query\" must be a string", ERROR_TYPE_INVALID_REQUEST));
                 return;
             }
         } else {
+            /*
+             * 查询文本缺失错误
+             * query字段是重排序的必需参数
+             */
             res_error(res, format_error_response("\"query\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 提取文档列表
+         * 支持两种字段名：documents(Jina格式) 和 texts(TEI格式)
+         * 优先使用documents，如果不存在则尝试texts
+         */
         std::vector<std::string> documents = json_value(body, "documents",
                                              json_value(body, "texts", std::vector<std::string>()));
         if (documents.empty()) {
+            /*
+             * 文档列表验证
+             * 必须提供至少一个文档用于排序
+             */
             res_error(res, format_error_response("\"documents\" must be a non-empty string array", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 令牌化查询文本
+         * 不添加特殊token，直接处理原始文本
+         * [0]取第一个结果，因为查询只有一个字符串
+         */
         llama_tokens tokenized_query = tokenize_input_prompts(ctx_server.vocab, query, /* add_special */ false, true)[0];
 
-        // create and queue the task
-        json responses = json::array();
-        bool error = false;
-        std::unordered_set<int> task_ids;
+        /*
+         * 创建并提交重排序任务
+         * 为每个文档创建一个与查询的相关性评分任务
+         */
+        json responses = json::array();  /* 存储所有排序结果 */
+        bool error = false;              /* 错误标志 */
+        std::unordered_set<int> task_ids; /* 任务ID集合，用于跟踪 */
         {
+            /*
+             * 任务创建代码块
+             * 限制tasks变量的作用域，及时释放内存
+             */
             std::vector<server_task> tasks;
+            
+            /*
+             * 令牌化所有文档
+             * 不添加特殊token，保持文档的原始语义
+             */
             auto tokenized_docs = tokenize_input_prompts(ctx_server.vocab, documents, /* add_special */ false, true);
+            
+            /*
+             * 预分配任务容器空间
+             * 提高性能，避免动态扩容
+             */
             tasks.reserve(tokenized_docs.size());
+            
+            /*
+             * 为每个文档创建重排序任务
+             * 每个任务计算一个文档与查询的相关性得分
+             */
             for (size_t i = 0; i < tokenized_docs.size(); i++) {
+                /*
+                 * 格式化重排序输入
+                 * format_rerank函数将查询和文档组合成模型能理解的格式
+                 * 通常是 [查询] [分隔符] [文档] 的形式
+                 */
                 auto tmp = format_rerank(ctx_server.vocab, tokenized_query, tokenized_docs[i]);
+                
+                /* 创建重排序任务 */
                 server_task task   = server_task(SERVER_TASK_TYPE_RERANK);
-                task.id            = ctx_server.queue_tasks.get_new_id();
-                task.index         = i;
-                task.prompt_tokens = server_tokens(tmp, ctx_server.mctx != nullptr);
+                task.id            = ctx_server.queue_tasks.get_new_id(); /* 获取唯一任务ID */
+                task.index         = i;                                   /* 文档在批处理中的索引 */
+                task.prompt_tokens = server_tokens(tmp, ctx_server.mctx != nullptr); /* 格式化后的令牌序列 */
+                
+                /* 将任务添加到批处理列表 */
                 tasks.push_back(std::move(task));
             }
 
-            task_ids = server_task::get_list_id(tasks);
-            ctx_server.queue_results.add_waiting_tasks(tasks);
-            ctx_server.queue_tasks.post(std::move(tasks));
+            /*
+             * 提交任务到处理队列
+             * 这些任务会被后台工作线程异步处理
+             */
+            task_ids = server_task::get_list_id(tasks);      /* 提取所有任务ID */
+            ctx_server.queue_results.add_waiting_tasks(tasks); /* 添加到等待结果列表 */
+            ctx_server.queue_tasks.post(std::move(tasks));   /* 提交到任务队列 */
         }
 
+        /*
+         * 等待并获取重排序结果
+         * 收集所有文档的相关性得分
+         */
         ctx_server.receive_multi_results(task_ids, [&](std::vector<server_task_result_ptr> & results) {
+            /*
+             * 成功回调：处理所有重排序结果
+             * 每个结果包含一个文档的相关性得分
+             */
             for (auto & res : results) {
+                /*
+                 * 类型安全检查：确保结果是重排序类型
+                 * 使用动态类型转换验证结果的正确性
+                 */
                 GGML_ASSERT(dynamic_cast<server_task_result_rerank*>(res.get()) != nullptr);
                 responses.push_back(res->to_json());
             }
         }, [&](const json & error_data) {
+            /*
+             * 错误回调：处理重排序计算过程中的错误
+             * 例如模型加载失败、内存不足等
+             */
             res_error(res, error_data);
             error = true;
         }, req.is_connection_closed);
 
+        /*
+         * 检查是否发生错误
+         * 如果有错误，提前返回(错误响应已在回调中发送)
+         */
         if (error) {
             return;
         }
 
-        // write JSON response
+        /*
+         * 构建并发送JSON响应
+         * 格式化重排序结果，按相关性得分排序文档
+         */
         json root = format_response_rerank(
-            body,
-            responses,
-            is_tei_format,
-            documents);
+            body,           /* 原始请求体 */
+            responses,      /* 所有文档的得分结果 */
+            is_tei_format,  /* API格式类型(TEI或Jina) */
+            documents       /* 原始文档列表 */
+        );
 
         res_ok(res, root);
     };
 
+    /*
+     * LoRA适配器列表查询接口处理器
+     * 处理 /lora_adapters 端点，返回当前加载的所有LoRA适配器信息
+     * LoRA (Low-Rank Adaptation) 是一种参数高效的微调技术
+     */
     const auto handle_lora_adapters_list = [&](const httplib::Request &, httplib::Response & res) {
+        /*
+         * 初始化结果数组
+         * 用于存储所有LoRA适配器的信息
+         */
         json result = json::array();
+        
+        /*
+         * 获取服务器配置的LoRA适配器列表
+         * 这些适配器在服务器启动时通过命令行参数配置
+         */
         const auto & loras = ctx_server.params_base.lora_adapters;
+        
+        /*
+         * 遍历所有LoRA适配器
+         * 将每个适配器的信息转换为JSON对象
+         */
         for (size_t i = 0; i < loras.size(); ++i) {
             auto & lora = loras[i];
+            /*
+             * 构建适配器信息对象
+             * 包含ID、文件路径和缩放因子
+             */
             result.push_back({
-                {"id", i},
-                {"path", lora.path},
-                {"scale", lora.scale},
+                {"id", i},              /* 适配器的唯一标识符(索引) */
+                {"path", lora.path},    /* LoRA权重文件的路径 */
+                {"scale", lora.scale},  /* 适配器的缩放因子(影响强度) */
             });
         }
+        
+        /*
+         * 返回成功响应
+         * 包含所有可用的LoRA适配器信息
+         */
         res_ok(res, result);
         res.status = 200; // HTTP OK
     };
 
+    /*
+     * LoRA适配器应用接口处理器
+     * 处理 /lora_adapters/apply 端点，动态切换或组合LoRA适配器
+     * 允许在运行时改变模型的行为，无需重启服务器
+     */
     const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
+        /*
+         * 解析请求体JSON数据
+         * 应包含要应用的LoRA适配器配置数组
+         */
         const json body = json::parse(req.body);
+        
+        /*
+         * 验证请求体格式
+         * 必须是JSON数组，每个元素描述一个适配器的应用配置
+         */
         if (!body.is_array()) {
             res_error(res, format_error_response("Request body must be an array", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
+        /*
+         * 创建LoRA配置任务
+         * 这是一个同步操作，需要等待完成
+         */
         int task_id = ctx_server.queue_tasks.get_new_id();
         {
+            /*
+             * 构建LoRA设置任务
+             * 任务包含新的适配器配置信息
+             */
             server_task task(SERVER_TASK_TYPE_SET_LORA);
             task.id = task_id;
+            /*
+             * 解析LoRA应用请求
+             * parse_lora_request函数验证并转换请求格式
+             * 检查适配器ID的有效性、缩放因子的合理性等
+             */
             task.set_lora = parse_lora_request(ctx_server.params_base.lora_adapters, body);
+            
+            /*
+             * 提交任务并等待结果
+             * LoRA切换需要修改模型权重，是一个相对重要的操作
+             */
             ctx_server.queue_results.add_waiting_task_id(task_id);
             ctx_server.queue_tasks.post(std::move(task));
         }
 
-        // get the result
+        /*
+         * 等待并获取任务执行结果
+         * 这是一个阻塞操作，会等待LoRA应用完成
+         */
         server_task_result_ptr result = ctx_server.queue_results.recv(task_id);
         ctx_server.queue_results.remove_waiting_task_id(task_id);
 
+        /*
+         * 检查任务执行结果
+         * 如果应用失败，返回错误信息
+         */
         if (result->is_error()) {
             res_error(res, result->to_json());
             return;
         }
 
+        /*
+         * 类型安全检查：确保结果是LoRA应用类型
+         * 验证返回结果的正确性
+         */
         GGML_ASSERT(dynamic_cast<server_task_result_apply_lora*>(result.get()) != nullptr);
         res_ok(res, result->to_json());
     };
 
-    //
-    // Router
-    //
+    /*
+     * ================================
+     * HTTP路由注册和服务器配置
+     * ================================
+     * 这部分代码负责设置HTTP服务器的路由规则
+     * 将URL路径映射到对应的处理函数
+     */
 
+    /*
+     * Web UI配置
+     * 决定是否提供Web用户界面服务
+     */
     if (!params.webui) {
+        /*
+         * Web UI被禁用
+         * 服务器只提供API接口，不提供Web界面
+         */
         LOG_INF("Web UI is disabled\n");
     } else {
-        // register static assets routes
+        /*
+         * Web UI已启用
+         * 配置静态文件服务或嵌入式Web界面
+         */
+        
+        /*
+         * 静态文件路由注册
+         * 检查是否指定了自定义的静态文件目录
+         */
         if (!params.public_path.empty()) {
-            // Set the base directory for serving static files
+            /*
+             * 使用外部静态文件目录
+             * 将指定目录挂载到HTTP根路径，用于提供HTML、CSS、JS等静态资源
+             */
             bool is_found = svr->set_mount_point(params.api_prefix + "/", params.public_path);
             if (!is_found) {
+                /*
+                 * 静态文件目录不存在或无法访问
+                 * 这是一个致命错误，服务器无法启动
+                 */
                 LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
                 return 1;
             }
         } else {
-            // using embedded static index.html
+            /*
+             * 使用嵌入式Web界面
+             * 静态HTML文件已编译到二进制文件中，无需外部文件
+             */
             svr->Get(params.api_prefix + "/", [](const httplib::Request & req, httplib::Response & res) {
+                /*
+                 * 检查浏览器是否支持gzip压缩
+                 * 嵌入的HTML文件使用gzip压缩以减小体积
+                 */
                 if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
+                    /*
+                     * 浏览器不支持gzip
+                     * 返回错误信息，现代浏览器都应该支持gzip
+                     */
                     res.set_content("Error: gzip is not supported by this browser", "text/plain");
                 } else {
+                    /*
+                     * 设置gzip压缩响应头
+                     * 告诉浏览器内容是gzip压缩的
+                     */
                     res.set_header("Content-Encoding", "gzip");
-                    // COEP and COOP headers, required by pyodide (python interpreter)
+                    
+                    /*
+                     * 设置跨域安全策略头
+                     * COEP和COOP头部是pyodide(Python解释器)所必需的
+                     * 这些头部增强了Web应用的安全性
+                     */
                     res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
                     res.set_header("Cross-Origin-Opener-Policy", "same-origin");
+                    
+                    /*
+                     * 返回嵌入式HTML内容
+                     * index_html_gz是编译时嵌入的gzip压缩HTML数据
+                     */
                     res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
                 }
-                return false;
+                return false; /* 表示请求已处理完成 */
             });
         }
     }
 
-    // register API routes
-    svr->Get (params.api_prefix + "/health",              handle_health); // public endpoint (no API key check)
-    svr->Get (params.api_prefix + "/metrics",             handle_metrics);
-    svr->Get (params.api_prefix + "/props",               handle_props);
-    svr->Post(params.api_prefix + "/props",               handle_props_change);
-    svr->Post(params.api_prefix + "/api/show",            handle_api_show);
-    svr->Get (params.api_prefix + "/models",              handle_models); // public endpoint (no API key check)
-    svr->Get (params.api_prefix + "/v1/models",           handle_models); // public endpoint (no API key check)
-    svr->Get (params.api_prefix + "/api/tags",            handle_models); // ollama specific endpoint. public endpoint (no API key check)
-    svr->Post(params.api_prefix + "/completion",          handle_completions); // legacy
-    svr->Post(params.api_prefix + "/completions",         handle_completions);
-    svr->Post(params.api_prefix + "/v1/completions",      handle_completions_oai);
-    svr->Post(params.api_prefix + "/chat/completions",    handle_chat_completions);
-    svr->Post(params.api_prefix + "/v1/chat/completions", handle_chat_completions);
-    svr->Post(params.api_prefix + "/api/chat",            handle_chat_completions); // ollama specific endpoint
-    svr->Post(params.api_prefix + "/infill",              handle_infill);
-    svr->Post(params.api_prefix + "/embedding",           handle_embeddings); // legacy
-    svr->Post(params.api_prefix + "/embeddings",          handle_embeddings);
-    svr->Post(params.api_prefix + "/v1/embeddings",       handle_embeddings_oai);
-    svr->Post(params.api_prefix + "/rerank",              handle_rerank);
-    svr->Post(params.api_prefix + "/reranking",           handle_rerank);
-    svr->Post(params.api_prefix + "/v1/rerank",           handle_rerank);
-    svr->Post(params.api_prefix + "/v1/reranking",        handle_rerank);
-    svr->Post(params.api_prefix + "/tokenize",            handle_tokenize);
-    svr->Post(params.api_prefix + "/detokenize",          handle_detokenize);
-    svr->Post(params.api_prefix + "/apply-template",      handle_apply_template);
-    // LoRA adapters hotswap
-    svr->Get (params.api_prefix + "/lora-adapters",       handle_lora_adapters_list);
-    svr->Post(params.api_prefix + "/lora-adapters",       handle_lora_adapters_apply);
-    // Save & load slots
-    svr->Get (params.api_prefix + "/slots",               handle_slots);
-    svr->Post(params.api_prefix + "/slots/:id_slot",      handle_slots_action);
+    /*
+     * ================================
+     * API路由注册
+     * ================================
+     * 将HTTP端点映射到对应的处理函数
+     * 支持多种API格式：llama.cpp原生、OpenAI兼容、Ollama兼容
+     */
 
-    //
-    // Start the server
-    //
+    /*
+     * 系统状态和信息接口
+     * 用于监控服务器健康状态和获取系统信息
+     */
+    svr->Get (params.api_prefix + "/health",              handle_health);         /* 健康检查 - 公开端点(无需API密钥) */
+    svr->Get (params.api_prefix + "/metrics",             handle_metrics);        /* 性能指标监控 */
+    svr->Get (params.api_prefix + "/props",               handle_props);          /* 获取服务器属性配置 */
+    svr->Post(params.api_prefix + "/props",               handle_props_change);   /* 动态修改服务器配置 */
+    svr->Post(params.api_prefix + "/api/show",            handle_api_show);       /* 显示API详细信息 */
+
+    /*
+     * 模型信息查询接口
+     * 支持多种API格式，便于不同客户端集成
+     */
+    svr->Get (params.api_prefix + "/models",              handle_models);         /* llama.cpp原生格式 - 公开端点(无需API密钥) */
+    svr->Get (params.api_prefix + "/v1/models",           handle_models);         /* OpenAI兼容格式 - 公开端点(无需API密钥) */
+    svr->Get (params.api_prefix + "/api/tags",            handle_models);         /* Ollama特定端点 - 公开端点(无需API密钥) */
+
+    /*
+     * 文本生成接口
+     * 核心功能：文本补全和聊天对话
+     */
+    svr->Post(params.api_prefix + "/completion",          handle_completions);    /* 传统补全接口(已弃用) */
+    svr->Post(params.api_prefix + "/completions",         handle_completions);    /* llama.cpp原生补全接口 */
+    svr->Post(params.api_prefix + "/v1/completions",      handle_completions_oai); /* OpenAI兼容补全接口 */
+    svr->Post(params.api_prefix + "/chat/completions",    handle_chat_completions); /* llama.cpp聊天接口 */
+    svr->Post(params.api_prefix + "/v1/chat/completions", handle_chat_completions); /* OpenAI兼容聊天接口 */
+    svr->Post(params.api_prefix + "/api/chat",            handle_chat_completions); /* Ollama特定聊天端点 */
+
+    /*
+     * 代码补全接口
+     * 专门用于Fill-In-the-Middle(FIM)代码生成
+     */
+    svr->Post(params.api_prefix + "/infill",              handle_infill);         /* 代码填充接口 */
+
+    /*
+     * 嵌入向量生成接口
+     * 用于文本的向量化表示，支持语义搜索等任务
+     */
+    svr->Post(params.api_prefix + "/embedding",           handle_embeddings);     /* 传统嵌入接口(已弃用) */
+    svr->Post(params.api_prefix + "/embeddings",          handle_embeddings);     /* llama.cpp原生嵌入接口 */
+    svr->Post(params.api_prefix + "/v1/embeddings",       handle_embeddings_oai); /* OpenAI兼容嵌入接口 */
+
+    /*
+     * 文档重排序接口
+     * 根据查询对文档进行相关性排序，提高搜索精度
+     */
+    svr->Post(params.api_prefix + "/rerank",              handle_rerank);         /* 重排序接口 */
+    svr->Post(params.api_prefix + "/reranking",           handle_rerank);         /* 重排序接口(别名) */
+    svr->Post(params.api_prefix + "/v1/rerank",           handle_rerank);         /* v1版本重排序接口 */
+    svr->Post(params.api_prefix + "/v1/reranking",        handle_rerank);         /* v1版本重排序接口(别名) */
+
+    /*
+     * 令牌化工具接口
+     * 用于调试和分析文本的令牌化过程
+     */
+    svr->Post(params.api_prefix + "/tokenize",            handle_tokenize);       /* 文本转令牌 */
+    svr->Post(params.api_prefix + "/detokenize",          handle_detokenize);     /* 令牌转文本 */
+    svr->Post(params.api_prefix + "/apply-template",      handle_apply_template); /* 应用聊天模板 */
+
+    /*
+     * LoRA适配器热切换接口
+     * 允许在运行时动态切换模型适配器，改变模型行为
+     */
+    svr->Get (params.api_prefix + "/lora-adapters",       handle_lora_adapters_list); /* 查询可用LoRA适配器 */
+    svr->Post(params.api_prefix + "/lora-adapters",       handle_lora_adapters_apply); /* 应用LoRA适配器配置 */
+
+    /*
+     * 插槽管理接口
+     * 用于保存和加载推理状态，支持多会话管理
+     */
+    svr->Get (params.api_prefix + "/slots",               handle_slots);          /* 查询所有插槽状态 */
+    svr->Post(params.api_prefix + "/slots/:id_slot",      handle_slots_action);   /* 对特定插槽执行操作 */
+
+    /*
+     * ================================
+     * 启动HTTP服务器
+     * ================================
+     * 配置并启动HTTP服务器，开始监听客户端请求
+     */
+
+    /*
+     * 配置HTTP服务器线程池
+     * 决定服务器能够并发处理的HTTP请求数量
+     */
     if (params.n_threads_http < 1) {
-        // +2 threads for monitoring endpoints
+        /*
+         * 自动计算HTTP线程数
+         * +2线程用于监控端点
+         * 取并行推理线程数+2与硬件线程数-1的较大值
+         * 确保有足够的线程处理HTTP请求和监控任务
+         */
         params.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
     log_data["n_threads_http"] =  std::to_string(params.n_threads_http);
+    
+    /*
+     * 创建HTTP线程池工厂函数
+     * 为HTTP服务器提供线程池，用于并发处理请求
+     */
     svr->new_task_queue = [&params] { return new httplib::ThreadPool(params.n_threads_http); };
 
-    // clean up function, to be called before exit
+    /*
+     * 定义清理函数
+     * 在服务器退出前释放所有资源，确保优雅关闭
+     */
     auto clean_up = [&svr, &ctx_server]() {
         SRV_INF("%s: cleaning up before exit...\n", __func__);
-        svr->stop();
-        ctx_server.queue_results.terminate();
-        llama_backend_free();
+        svr->stop();                             /* 停止HTTP服务器 */
+        ctx_server.queue_results.terminate();   /* 终止结果队列 */
+        llama_backend_free();                   /* 释放llama后端资源 */
     };
 
-    bool was_bound = false;
-    bool is_sock = false;
+    /*
+     * 绑定网络监听地址
+     * 支持TCP Socket和Unix Domain Socket两种模式
+     */
+    bool was_bound = false;  /* 绑定成功标志 */
+    bool is_sock = false;    /* Unix Socket标志 */
+    
+    /*
+     * 检查是否使用Unix Domain Socket
+     * 如果hostname以.sock结尾，则使用Unix Socket
+     */
     if (string_ends_with(std::string(params.hostname), ".sock")) {
         is_sock = true;
         LOG_INF("%s: setting address family to AF_UNIX\n", __func__);
+        /*
+         * 配置为Unix Socket模式
+         * AF_UNIX地址族用于本地进程间通信
+         */
         svr->set_address_family(AF_UNIX);
-        // bind_to_port requires a second arg, any value other than 0 should
-        // simply get ignored
+        /*
+         * 绑定到Unix Socket文件
+         * bind_to_port需要第二个参数，但对Unix Socket会被忽略
+         */
         was_bound = svr->bind_to_port(params.hostname, 8080);
     } else {
+        /*
+         * 使用标准TCP Socket
+         * 适用于网络访问和跨机器通信
+         */
         LOG_INF("%s: binding port with default address family\n", __func__);
-        // bind HTTP listen port
+        
+        /*
+         * 绑定HTTP监听端口
+         * 支持自动端口分配和指定端口两种模式
+         */
         if (params.port == 0) {
+            /*
+             * 自动端口分配
+             * 系统自动选择一个可用端口
+             */
             int bound_port = svr->bind_to_any_port(params.hostname);
             if ((was_bound = (bound_port >= 0))) {
-                params.port = bound_port;
+                params.port = bound_port;  /* 记录实际分配的端口号 */
             }
         } else {
+            /*
+             * 绑定到指定端口
+             * 使用用户指定的端口号
+             */
             was_bound = svr->bind_to_port(params.hostname, params.port);
         }
     }
 
+    /*
+     * 检查网络绑定结果
+     * 如果绑定失败，清理资源并退出
+     */
     if (!was_bound) {
         LOG_ERR("%s: couldn't bind HTTP server socket, hostname: %s, port: %d\n", __func__, params.hostname.c_str(), params.port);
         clean_up();
         return 1;
     }
 
-    // run the HTTP server in a thread
+    /*
+     * 在独立线程中运行HTTP服务器
+     * 避免阻塞主线程，允许并发处理HTTP请求和模型推理
+     */
     std::thread t([&]() { svr->listen_after_bind(); });
-    svr->wait_until_ready();
+    svr->wait_until_ready();  /* 等待HTTP服务器完全启动 */
 
     LOG_INF("%s: HTTP server is listening, hostname: %s, port: %d, http threads: %d\n", __func__, params.hostname.c_str(), params.port, params.n_threads_http);
 
-    // load the model
+    /*
+     * ================================
+     * 加载和初始化模型
+     * ================================
+     * 这是服务器启动的关键步骤，加载AI模型并准备推理
+     */
     LOG_INF("%s: loading model\n", __func__);
 
+    /*
+     * 加载模型文件
+     * 这个过程可能需要较长时间，取决于模型大小和硬件性能
+     */
     if (!ctx_server.load_model(params)) {
+        /*
+         * 模型加载失败，清理资源并退出
+         * 这通常是由于模型文件损坏、内存不足或格式不兼容等原因
+         */
         clean_up();
-        t.join();
+        t.join();  /* 等待HTTP服务器线程结束 */
         LOG_ERR("%s: exiting due to model loading error\n", __func__);
         return 1;
     }
 
+    /*
+     * 初始化服务器上下文
+     * 设置推理参数、分配内存、准备推理状态等
+     */
     ctx_server.init();
+    
+    /*
+     * 更新服务器状态为就绪
+     * 此时服务器可以开始接受和处理推理请求
+     */
     state.store(SERVER_STATE_READY);
 
     LOG_INF("%s: model loaded\n", __func__);
 
-    // print sample chat example to make it clear which template is used
+    /*
+     * 打印聊天模板示例
+     * 帮助用户了解模型使用的聊天格式，便于正确构造请求
+     */
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
         common_chat_templates_source(ctx_server.chat_templates.get()),
         common_chat_format_example(ctx_server.chat_templates.get(), ctx_server.params_base.use_jinja, ctx_server.params_base.default_template_kwargs).c_str());
 
+    /*
+     * ================================
+     * 配置任务处理回调
+     * ================================
+     * 设置任务队列的事件处理器，实现异步任务处理
+     */
+
+    /*
+     * 注册新任务处理回调
+     * 当有新任务加入队列时，会调用此回调函数进行处理
+     */
     ctx_server.queue_tasks.on_new_task([&ctx_server](server_task && task) {
         ctx_server.process_single_task(std::move(task));
     });
 
+    /*
+     * 注册插槽更新回调
+     * 定期更新推理插槽的状态，管理并发会话
+     */
     ctx_server.queue_tasks.on_update_slots([&ctx_server]() {
         ctx_server.update_slots();
     });
 
+    /*
+     * 设置优雅关闭处理器
+     * 处理SIGINT、SIGTERM等信号，实现服务器的优雅停止
+     */
     shutdown_handler = [&](int) {
-        // this will unblock start_loop()
+        /*
+         * 终止任务队列处理循环
+         * 这会解除start_loop()的阻塞状态，让主线程继续执行
+         */
         ctx_server.queue_tasks.terminate();
     };
 
+    /*
+     * ================================
+     * 注册系统信号处理器
+     * ================================
+     * 配置跨平台的信号处理，实现优雅关闭功能
+     */
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+    /*
+     * Unix/Linux/macOS系统的信号处理
+     * 使用sigaction函数注册信号处理器
+     */
     struct sigaction sigint_action;
-    sigint_action.sa_handler = signal_handler;
-    sigemptyset (&sigint_action.sa_mask);
-    sigint_action.sa_flags = 0;
-    sigaction(SIGINT, &sigint_action, NULL);
-    sigaction(SIGTERM, &sigint_action, NULL);
+    sigint_action.sa_handler = signal_handler;        /* 设置信号处理函数 */
+    sigemptyset (&sigint_action.sa_mask);            /* 清空信号掩码 */
+    sigint_action.sa_flags = 0;                      /* 设置信号处理标志 */
+    sigaction(SIGINT, &sigint_action, NULL);         /* 注册SIGINT信号(Ctrl+C) */
+    sigaction(SIGTERM, &sigint_action, NULL);        /* 注册SIGTERM信号(终止请求) */
 #elif defined (_WIN32)
+    /*
+     * Windows系统的控制台事件处理
+     * 使用SetConsoleCtrlHandler函数注册处理器
+     */
     auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
+        /*
+         * 检查是否为Ctrl+C事件
+         * 如果是，调用信号处理器并返回true表示已处理
+         */
         return (ctrl_type == CTRL_C_EVENT) ? (signal_handler(SIGINT), true) : false;
     };
     SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
+    /*
+     * 输出服务器启动完成信息
+     * 显示监听地址，便于用户连接和测试
+     */
     LOG_INF("%s: server is listening on %s - starting the main loop\n", __func__,
-            is_sock ? string_format("unix://%s", params.hostname.c_str()).c_str() :
-                      string_format("http://%s:%d", params.hostname.c_str(), params.port).c_str());
+            is_sock ? string_format("unix://%s", params.hostname.c_str()).c_str() :      /* Unix Socket格式 */
+                      string_format("http://%s:%d", params.hostname.c_str(), params.port).c_str()); /* HTTP格式 */
 
-    // this call blocks the main thread until queue_tasks.terminate() is called
+    /*
+     * ================================
+     * 启动主事件循环
+     * ================================
+     * 进入任务处理主循环，服务器开始正式工作
+     */
+    
+    /*
+     * 启动任务队列主循环
+     * 这个调用会阻塞主线程，直到queue_tasks.terminate()被调用
+     * 在这个循环中，服务器会不断处理新的推理任务
+     */
     ctx_server.queue_tasks.start_loop();
 
+    /*
+     * ================================
+     * 服务器关闭和资源清理
+     * ================================
+     * 当主循环结束后，执行清理工作并优雅退出
+     */
+    
+    /*
+     * 执行资源清理
+     * 停止HTTP服务器、释放模型内存、清理队列等
+     */
     clean_up();
+    
+    /*
+     * 等待HTTP服务器线程结束
+     * 确保所有线程都正确终止
+     */
     t.join();
 
+    /*
+     * 程序正常退出
+     * 返回0表示服务器成功完成了所有工作
+     */
     return 0;
 }
