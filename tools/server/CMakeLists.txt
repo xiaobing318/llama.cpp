@@ -60,7 +60,7 @@ install(TARGETS ${TARGET} RUNTIME)
     2.4 错误路径被忽略：虽然target_include_directories(${TARGET} PRIVATE ../llava)指向了不存在的目录，但因为mtmd库已经通过传递性依赖提供了正确的头文件路径，编译器能找到所需的头文件。
 3、所以答案是：编译能通过是因为mtmd库通过PUBLIC包含目录传递性地提供了头文件路径，使得server即使包含了错误的../llava路径也能找到mtmd的头文件。因此这里包含 mtmd 目录所谓头文件搜索路径或者
 不包含都是可以的。
-4、TODO-PR：提交一个 PR 。
+4、TODO-PR：提交一个 PR ，该 PR 已提交成功。
 ]]
 target_include_directories(${TARGET} PRIVATE ../mtmd)
 # 添加私有头文件搜索路径：项目根目录
