@@ -3823,8 +3823,8 @@ inline void signal_handler(int signal) {
 int main(int argc, char ** argv) {
     /*
      * 步骤1: 初始化参数结构体
-     * common_params是一个结构体，用来存储服务器运行所需的所有配置参数
-     * 比如端口号、模型文件路径、线程数等等
+     * common_params是一个结构体，用来存储服务器运行所需的所有配置参数，即通过参数结构体来控制服务器运行状态，目前有一些默认的参数配置，需求解析命令行进行填充。
+     * 比如端口号、模型文件路径、线程数等等，在 server 目录中的 README.md 文件中罗列出来了所有的可用命令行参数，也是可以通过命令行打印出来。
      */
     common_params params;
 
@@ -3841,7 +3841,7 @@ int main(int argc, char ** argv) {
 
     /*
      * 步骤3: 通用初始化
-     * 执行一些基础的初始化工作，比如设置日志系统等
+     * 执行一些基础的初始化工作，比如设置日志系统
      */
     common_init();
 
@@ -3862,7 +3862,7 @@ int main(int argc, char ** argv) {
     
     /*
      * 步骤6: 初始化NUMA (Non-Uniform Memory Access) 支持
-     * NUMA是一种多处理器系统的内存架构
+     * NUMA是一种多处理器系统的内存架构，这里的处理器系统指的就是多物理CPU处理器。
      * 这个函数根据用户配置来优化内存访问性能
      * params.numa包含了NUMA相关的配置参数
      */
@@ -3893,7 +3893,7 @@ int main(int argc, char ** argv) {
     std::unique_ptr<httplib::Server> svr;
     
 /*
- * SSL支持检查: 编译时定义的宏，用来检查是否支持OpenSSL
+ * SSL支持检查: 编译时定义的宏，用来检查是否支持OpenSSL，OpenSSL 是为了 client 和 server 之间建立更安全的通信。
  */
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     /*
@@ -3924,14 +3924,14 @@ int main(int argc, char ** argv) {
         return 1;
     }
     /*
-     * 没有SSL支持且用户也没要求SSL，就创建普通的HTTP服务器
+     * 没有SSL支持且用户也没要求SSL，就创建普通的HTTP服务器，如果是内网部署的话那么不需要使用 OpenSSL 使其安全性更好，这样可以节省算力资源消耗。
      */
     svr.reset(new httplib::Server());
 #endif
 
     /*
      * 步骤9: 初始化服务器状态
-     * 使用std::atomic保证在多线程环境下状态访问的线程安全性
+     * 使用std::atomic保证在多线程环境下状态访问的线程安全性，目前还不知道为什么必须使用std::atomic
      * SERVER_STATE_LOADING_MODEL表示服务器初始状态为“正在加载模型”
      * 这个状态会在模型加载完成后改变为“就绪”状态
      */
