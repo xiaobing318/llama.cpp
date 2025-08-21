@@ -588,266 +588,599 @@ struct oaicompat_parser_options {
     bool enable_thinking = true;
 };
 
-// used by /chat/completions endpoint
+/*
+ * 🔄 OpenAI聊天参数解析器 - 核心格式转换函数
+ * 
+ * 📋 整体功能：
+ * 这个函数是整个聊天系统的"万能翻译器"，负责把OpenAI格式的聊天请求
+ * 转换成llama.cpp能理解的内部参数格式。
+ * 
+ * 🎯 主要任务：
+ * 1. 参数验证和提取：从OpenAI JSON中提取所有聊天参数
+ * 2. 多媒体处理：解码和处理图片、音频等附件
+ * 3. 消息格式转换：把对话历史转成模型能理解的prompt
+ * 4. 模板应用：使用聊天模板格式化对话内容
+ * 5. 参数映射：把OpenAI参数名转换成llama.cpp参数名
+ * 
+ * 📥 输入参数：
+ * @param body - OpenAI格式的聊天请求JSON（包含messages、model等）
+ * @param opt - 解析器配置选项（是否支持图片/音频、模板设置等）
+ * @param out_files - 输出参数：解码后的文件数据容器
+ * 
+ * 📤 返回值：
+ * @return json - llama.cpp内部格式的参数对象（包含prompt、参数等）
+ * 
+ * 🔧 应用场景：
+ * 被 /chat/completions 接口调用，让llama.cpp完美兼容ChatGPT API
+ */
 static json oaicompat_chat_params_parse(
-    json & body, /* openai api json semantics */
-    const oaicompat_parser_options & opt,
-    std::vector<raw_buffer> & out_files)
+    json & body,                              /* 输入：OpenAI格式的聊天请求JSON */
+    const oaicompat_parser_options & opt,     /* 输入：解析器配置选项 */
+    std::vector<raw_buffer> & out_files)      /* 输出：解码后的多媒体文件数据 */
 {
+    /*
+     * 🎯 第一步：初始化输出参数容器
+     * 这个JSON对象将存储所有转换后的llama.cpp格式参数
+     */
     json llama_params;
 
-    auto tools = json_value(body, "tools", json());
-    auto has_tools = tools.is_array() && !tools.empty();
-    auto stream = json_value(body, "stream", false);
-    auto tool_choice = json_value(body, "tool_choice", std::string("auto"));
+    /*
+     * 📦 提取工具相关参数 - 支持函数调用功能
+     * 
+     * tools: 用户定义的可调用函数列表（类似ChatGPT的function calling）
+     * has_tools: 布尔值，检查是否定义了工具函数
+     * stream: 是否启用流式输出（实时返回AI回复，而不是等全部生成完）
+     * tool_choice: 工具选择策略（"auto"=自动选择，"none"=不使用，或指定函数名）
+     */
+    auto tools = json_value(body, "tools", json());          // 提取工具函数定义数组
+    auto has_tools = tools.is_array() && !tools.empty();    // 检查是否真的有工具函数
+    auto stream = json_value(body, "stream", false);         // 是否使用流式输出
+    auto tool_choice = json_value(body, "tool_choice", std::string("auto")); // 工具选择策略
 
-    if (!opt.use_jinja) {
+    /*
+     * 🔒 工具功能前置检查 - 确保有必要的支持
+     * 
+     * Jinja是一个模板引擎，工具调用需要它来格式化函数调用的prompt
+     * 如果没有启用Jinja支持，就不能使用工具功能
+     * 这是一个安全检查，避免用户配置错误导致功能异常
+     */
+    if (!opt.use_jinja) {  // 如果没有启用Jinja模板支持
         if (has_tools) {
+            // 有工具但没有Jinja支持 → 抛出错误，提示用户需要启用--jinja参数
             throw std::runtime_error("tools param requires --jinja flag");
         }
         if (tool_choice != "auto") {
+            // 指定了工具选择但没有Jinja支持 → 同样抛出错误
             throw std::runtime_error("tool_choice param requires --jinja flag");
         }
     }
 
-    // Handle "stop" field
+    /*
+     * 🛑 处理停止词参数 - 告诉AI什么时候该停止生成
+     * 
+     * "stop"参数定义了停止生成的触发词/短语
+     * 当AI生成的文本中出现这些词时，会立即停止继续生成
+     * 
+     * 格式兼容性处理：
+     * - OpenAI API支持字符串或字符串数组两种格式
+     * - llama.cpp内部统一使用数组格式
+     * - 这里做格式统一化：单个字符串转换成包含一个元素的数组
+     */
     if (body.contains("stop") && body.at("stop").is_string()) {
+        // 如果stop是单个字符串，转换为数组格式 ["stop_word"]
         llama_params["stop"] = json::array({body.at("stop").get<std::string>()});
     } else {
+        // 如果stop本身就是数组或未提供，直接使用（默认为空数组）
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
+    /*
+     * 📋 处理输出格式约束参数
+     * 
+     * json_schema: JSON格式规范，用于约束AI输出特定格式的JSON
+     * grammar: 语法规则，用于约束AI输出符合特定语法的文本
+     * 
+     * 这两个参数不能同时使用，因为它们都是用来约束输出格式的
+     */
     auto json_schema = json_value(body, "json_schema", json());
-    auto grammar = json_value(body, "grammar", std::string());
+    auto grammar = json_value(body, "grammar", std::string());    // 提取语法约束规则
     if (!json_schema.is_null() && !grammar.empty()) {
+        // 互斥检查：不能同时指定JSON格式和语法规则
         throw std::runtime_error("Cannot use both json_schema and grammar");
     }
 
-    // Handle "response_format" field
+    /*
+     * 🎨 处理响应格式参数 - OpenAI标准的格式控制
+     * 
+     * response_format是OpenAI API的标准字段，用于指定AI回复的格式
+     * 支持的格式类型：
+     * - "text": 普通文本（默认）
+     * - "json_object": 简单JSON对象
+     * - "json_schema": 带有具体格式约束的JSON（更严格）
+     * 
+     * 这里需要把OpenAI的response_format转换成llama.cpp的json_schema
+     */
     if (body.contains("response_format")) {
-        json response_format      = json_value(body, "response_format", json::object());
-        std::string response_type = json_value(response_format, "type", std::string());
+        json response_format      = json_value(body, "response_format", json::object());     // 提取响应格式配置
+        std::string response_type = json_value(response_format, "type", std::string());  // 获取格式类型
+        
         if (response_type == "json_object") {
+            // 简单JSON对象模式：AI回复必须是有效的JSON格式
             json_schema = json_value(response_format, "schema", json::object());
         } else if (response_type == "json_schema") {
+            // 严格JSON格式模式：AI回复必须符合指定的JSON Schema
             auto schema_wrapper = json_value(response_format, "json_schema", json::object());
             json_schema = json_value(schema_wrapper, "schema", json::object());
         } else if (!response_type.empty() && response_type != "text") {
+            // 格式验证：只支持text、json_object、json_schema三种类型
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
     }
 
-    // get input files
+    /*
+     * 💬 第二步：处理对话消息 - 聊天系统的核心数据
+     * 
+     * messages是聊天请求的核心，包含整个对话历史
+     * 格式：[{role: "system/user/assistant", content: "..."}, ...]
+     * 
+     * 必须进行严格验证，确保数据格式正确
+     */
     if (!body.contains("messages")) {
+        // messages是必需字段，没有就无法进行聊天
         throw std::runtime_error("'messages' is required");
     }
-    json & messages = body.at("messages");
+    json & messages = body.at("messages");        // 获取消息数组的引用
     if (!messages.is_array()) {
+        // messages必须是数组格式，单个消息也不行
         throw std::runtime_error("Expected 'messages' to be an array");
     }
+    /*
+     * 🔍 遍历每条消息，进行格式验证和多媒体提取
+     * 
+     * 这个循环是整个函数最复杂的部分，需要：
+     * 1. 验证每条消息的格式是否正确
+     * 2. 提取并处理图片、音频等多媒体内容
+     * 3. 把多媒体内容替换成占位符，供后续模板处理
+     */
     for (auto & msg : messages) {
+        /*
+         * 🎭 验证消息角色和内容
+         * 
+         * 每条消息都有role字段，表示发送者身份：
+         * - "system": 系统指令（告诉AI如何行为）
+         * - "user": 用户消息（人类用户的输入）
+         * - "assistant": AI回复（之前AI的回答）
+         */
         std::string role = json_value(msg, "role", std::string());
+        
+        // 非assistant消息必须有content字段（系统指令和用户消息都需要内容）
         if (role != "assistant" && !msg.contains("content")) {
             throw std::runtime_error("All non-assistant messages must contain 'content'");
         }
+        
+        // assistant消息比较特殊，可能只有工具调用而没有文本内容
         if (role == "assistant") {
             if (!msg.contains("content") && !msg.contains("tool_calls")) {
+                // assistant消息必须至少包含内容或工具调用之一
                 throw std::runtime_error("Assistant message must contain either 'content' or 'tool_calls'!");
             }
             if (!msg.contains("content")) {
+                // 如果只有工具调用没有内容，跳过多媒体处理
                 continue; // avoid errors with no content
             }
         }
+        /*
+         * 📝 处理消息内容 - 支持文本和多媒体混合
+         * 
+         * OpenAI API支持两种content格式：
+         * 1. 简单字符串：纯文本消息
+         * 2. 复杂数组：包含文本、图片、音频等多种内容类型
+         * 
+         * 这里重点处理复杂格式，简单格式直接跳过
+         */
         json & content = msg.at("content");
         if (content.is_string() || content.is_null()) {
+            // 纯文本内容，无需特殊处理，直接跳过
             continue;
         }
 
         if (!content.is_array()) {
+            // content必须是字符串或数组，其他格式都不支持
             throw std::runtime_error("Expected 'content' to be a string or an array");
         }
 
+        /*
+         * 🎨 处理多媒体内容数组
+         * 
+         * 数组格式的content包含多个部分，每个部分可能是：
+         * - {type: "text", text: "文本内容"}
+         * - {type: "image_url", image_url: {url: "图片地址或base64"}}
+         * - {type: "input_audio", input_audio: {data: "base64音频", format: "wav/mp3"}}
+         */
         for (auto & p : content) {
-            std::string type      = json_value(p, "type", std::string());
+            std::string type = json_value(p, "type", std::string());    // 获取内容类型
+            
+            /*
+             * 🖼️ 处理图片内容
+             * 
+             * 支持两种图片输入方式：
+             * 1. HTTP/HTTPS网络图片链接（自动下载）
+             * 2. Base64编码的图片数据（data:image/jpeg;base64,xxx格式）
+             * 
+             * 处理后会把图片替换成特殊占位符，实际图片数据存储在out_files中
+             */
             if (type == "image_url") {
+                // 前置检查：确保服务器支持图片处理
                 if (!opt.allow_image) {
                     throw std::runtime_error("image input is not supported - hint: if this is unexpected, you may need to provide the mmproj");
                 }
 
-                json image_url  = json_value(p, "image_url", json::object());
-                std::string url = json_value(image_url, "url", std::string());
+                json image_url  = json_value(p, "image_url", json::object());    // 提取图片URL配置
+                std::string url = json_value(image_url, "url", std::string());   // 获取图片地址
+                
                 if (string_starts_with(url, "http")) {
-                    // download remote image
-                    // TODO @ngxson : maybe make these params configurable
+                    /*
+                     * 📥 处理网络图片：自动下载到内存
+                     * 
+                     * 对于http/https链接，需要：
+                     * 1. 设置下载参数（用户代理、大小限制、超时时间）
+                     * 2. 发起HTTP请求下载图片
+                     * 3. 验证下载结果并存储到文件容器
+                     */
+                    // 配置下载参数
+                    // TODO @ngxson : 这些参数未来可以做成可配置的
                     common_remote_params params;
-                    params.headers.push_back("User-Agent: llama.cpp/" + build_info);
-                    params.max_size = 1024 * 1024 * 10; // 10MB
-                    params.timeout  = 10; // seconds
+                    params.headers.push_back("User-Agent: llama.cpp/" + build_info);  // 设置用户代理标识
+                    params.max_size = 1024 * 1024 * 10; // 最大10MB，防止下载过大文件
+                    params.timeout  = 10; // 10秒超时，避免长时间等待
+                    
+                    // 开始下载图片
                     SRV_INF("downloading image from '%s'\n", url.c_str());
-                    auto res = common_remote_get_content(url, params);
+                    auto res = common_remote_get_content(url, params);  // res.first=HTTP状态码, res.second=文件内容
+                    
                     if (200 <= res.first && res.first < 300) {
+                        // 下载成功（HTTP 2xx状态码）
                         SRV_INF("downloaded %ld bytes\n", res.second.size());
-                        raw_buffer data;
-                        data.insert(data.end(), res.second.begin(), res.second.end());
-                        out_files.push_back(data);
+                        raw_buffer data;  // 创建文件数据容器
+                        data.insert(data.end(), res.second.begin(), res.second.end());  // 复制下载的数据
+                        out_files.push_back(data);  // 添加到输出文件列表
                     } else {
+                        // 下载失败（HTTP错误状态码）
                         throw std::runtime_error("Failed to download image");
                     }
 
                 } else {
-                    // try to decode base64 image
+                    /*
+                     * 📊 处理Base64编码图片：解码内嵌图片数据
+                     * 
+                     * Base64格式：data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...
+                     * 格式分析：
+                     * - "data:image/jpeg;base64" : 数据类型声明部分
+                     * - "/9j/4AAQSkZJRgABAQAAAQ..." : 实际的base64编码数据
+                     * 
+                     * 解码步骤：
+                     * 1. 按逗号分割URL，获得类型声明和数据两部分
+                     * 2. 验证格式是否正确（必须是data:image/xxx;base64格式）
+                     * 3. 解码base64数据为二进制图片文件
+                     */
                     std::vector<std::string> parts = string_split<std::string>(url, /*separator*/ ',');
                     if (parts.size() != 2) {
+                        // 格式错误：应该只有两部分（类型声明,数据）
                         throw std::runtime_error("Invalid image_url.url value");
                     } else if (!string_starts_with(parts[0], "data:image/")) {
+                        // 类型错误：必须是图片数据类型
                         throw std::runtime_error("Invalid image_url.url format: " + parts[0]);
                     } else if (!string_ends_with(parts[0], "base64")) {
+                        // 编码错误：目前只支持base64编码
                         throw std::runtime_error("image_url.url must be base64 encoded");
                     } else {
-                        auto base64_data = parts[1];
-                        auto decoded_data = base64_decode(base64_data);
-                        out_files.push_back(decoded_data);
+                        // 解码成功：提取并解码base64数据
+                        auto base64_data = parts[1];                      // 获取base64字符串
+                        auto decoded_data = base64_decode(base64_data);   // 解码为二进制数据
+                        out_files.push_back(decoded_data);               // 添加到输出文件列表
                     }
                 }
 
-                // replace this chunk with a marker
-                p["type"] = "text";
-                p["text"] = mtmd_default_marker();
-                p.erase("image_url");
+                /*
+                 * 🔄 图片内容替换：用占位符替代原始图片数据
+                 * 
+                 * 处理完图片后，需要把原来的图片内容替换成文本占位符：
+                 * 1. 把type改为"text"（告诉后续处理这是文本内容）
+                 * 2. 用特殊标记替代原始图片URL（模型能识别这个标记表示图片）
+                 * 3. 删除原始image_url字段（清理不需要的数据）
+                 * 
+                 * 这样做的好处是：实际图片数据单独存储，文本部分保持简洁
+                 */
+                p["type"] = "text";                    // 改变内容类型为文本
+                p["text"] = mtmd_default_marker();     // 插入图片占位符标记
+                p.erase("image_url");                  // 删除原始图片URL字段
 
             } else if (type == "input_audio") {
+                /*
+                 * 🎵 处理音频内容
+                 * 
+                 * 类似图片处理，但音频只支持base64编码格式
+                 * 支持的音频格式：WAV、MP3（与OpenAI API保持一致）
+                 * 
+                 * 处理流程：
+                 * 1. 检查是否启用音频支持
+                 * 2. 验证音频格式（只允许wav/mp3）
+                 * 3. 解码base64音频数据
+                 * 4. 用占位符替换原始音频内容
+                 */
+                // 前置检查：确保服务器支持音频处理
                 if (!opt.allow_audio) {
                     throw std::runtime_error("audio input is not supported - hint: if this is unexpected, you may need to provide the mmproj");
                 }
 
-                json input_audio   = json_value(p, "input_audio", json::object());
-                std::string data   = json_value(input_audio, "data", std::string());
-                std::string format = json_value(input_audio, "format", std::string());
-                // while we also support flac, we don't allow it here so we matches the OAI spec
+                // 提取音频配置信息
+                json input_audio   = json_value(p, "input_audio", json::object());  // 获取音频配置对象
+                std::string data   = json_value(input_audio, "data", std::string()); // 获取base64编码的音频数据
+                std::string format = json_value(input_audio, "format", std::string()); // 获取音频格式
+                
+                // 格式验证：严格按照OpenAI API规范
+                // 注意：虽然llama.cpp支持FLAC，但为了与OpenAI保持兼容，这里不允许
                 if (format != "wav" && format != "mp3") {
                     throw std::runtime_error("input_audio.format must be either 'wav' or 'mp3'");
                 }
-                auto decoded_data = base64_decode(data); // expected to be base64 encoded
-                out_files.push_back(decoded_data);
+                
+                // 解码音频数据
+                auto decoded_data = base64_decode(data); // 音频数据预期是base64编码格式
+                out_files.push_back(decoded_data);       // 添加到输出文件列表
 
-                // replace this chunk with a marker
-                p["type"] = "text";
-                p["text"] = mtmd_default_marker();
-                p.erase("input_audio");
+                /*
+                 * 🔄 音频内容替换：与图片处理相同的占位符替换逻辑
+                 * 
+                 * 把原始音频内容替换成文本占位符，保持消息结构的一致性
+                 */
+                p["type"] = "text";                    // 改变内容类型为文本
+                p["text"] = mtmd_default_marker();     // 插入音频占位符标记
+                p.erase("input_audio");                // 删除原始音频字段
 
             } else if (type != "text") {
+                // 内容类型验证：只支持text、image_url、input_audio三种类型
                 throw std::runtime_error("unsupported content[].type");
             }
         }
     }
 
+    /*
+     * 🎯 第三步：准备聊天模板输入 - 格式化对话内容
+     * 
+     * 聊天模板是AI模型理解对话的关键，不同模型有不同的对话格式：
+     * - Llama2: <s>[INST] {user_message} [/INST] {assistant_message} </s>
+     * - ChatML: <|im_start|>user\n{message}<|im_end|>
+     * - Alpaca: ### Instruction: {message} ### Response:
+     * 
+     * 这里准备所有必要的输入数据，供模板系统使用
+     */
     common_chat_templates_inputs inputs;
-    inputs.messages              = common_chat_msgs_parse_oaicompat(messages);
-    inputs.tools                 = common_chat_tools_parse_oaicompat(tools);
-    inputs.tool_choice           = common_chat_tool_choice_parse_oaicompat(tool_choice);
-    inputs.json_schema           = json_schema.is_null() ? "" : json_schema.dump();
-    inputs.grammar               = grammar;
-    inputs.use_jinja             = opt.use_jinja;
-    inputs.parallel_tool_calls   = json_value(body, "parallel_tool_calls", false);
-    inputs.add_generation_prompt = json_value(body, "add_generation_prompt", true);
-    inputs.reasoning_format      = opt.reasoning_format;
-    inputs.enable_thinking       = opt.enable_thinking;
+    
+    // 核心数据转换：把OpenAI格式转换成llama.cpp内部格式
+    inputs.messages              = common_chat_msgs_parse_oaicompat(messages);      // 消息数组格式转换
+    inputs.tools                 = common_chat_tools_parse_oaicompat(tools);        // 工具函数格式转换  
+    inputs.tool_choice           = common_chat_tool_choice_parse_oaicompat(tool_choice); // 工具选择策略转换
+    inputs.json_schema           = json_schema.is_null() ? "" : json_schema.dump(); // JSON格式约束转换
+    inputs.grammar               = grammar;                                         // 语法规则（直接传递）
+    
+    // 模板系统配置
+    inputs.use_jinja             = opt.use_jinja;                                   // 是否使用Jinja模板引擎
+    inputs.parallel_tool_calls   = json_value(body, "parallel_tool_calls", false); // 是否支持并行工具调用
+    inputs.add_generation_prompt = json_value(body, "add_generation_prompt", true); // 是否添加生成提示符
+    
+    // 高级功能配置
+    inputs.reasoning_format      = opt.reasoning_format;                            // 推理格式（用于思维链等）
+    inputs.enable_thinking       = opt.enable_thinking;                             // 是否启用思考模式
+    /*
+     * 🛠️ 工具调用相关配置
+     * 
+     * 当启用工具调用时，需要特殊处理：
+     * 1. 工具调用与自定义语法规则互斥（避免冲突）
+     * 2. 启用工具调用解析标志（让模型知道需要解析函数调用）
+     */
     if (!inputs.tools.empty() && inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE) {
         if (body.contains("grammar")) {
+            // 冲突检查：不能同时使用工具调用和自定义语法
             throw std::runtime_error("Cannot use custom grammar constraints with tools.");
         }
-        llama_params["parse_tool_calls"] = true;
+        llama_params["parse_tool_calls"] = true;  // 告诉引擎需要解析工具调用
     }
 
-    // merge the template args provided from command line with the args provided in the user request
-    auto chat_template_kwargs_object = json_value(body, "chat_template_kwargs", json::object());
-    inputs.chat_template_kwargs = opt.chat_template_kwargs;
+    /*
+     * 🔗 合并聊天模板参数
+     * 
+     * 模板参数来源有两个：
+     * 1. 命令行参数（服务器启动时指定）
+     * 2. 用户请求参数（chat_template_kwargs字段）
+     * 
+     * 用户请求的参数优先级更高，可以覆盖命令行参数
+     */
+    auto chat_template_kwargs_object = json_value(body, "chat_template_kwargs", json::object()); // 提取用户请求的模板参数
+    inputs.chat_template_kwargs = opt.chat_template_kwargs;  // 先使用命令行参数作为基础
     for (const auto & item : chat_template_kwargs_object.items()) {
+        // 用户请求的参数覆盖命令行参数（用户优先）
         inputs.chat_template_kwargs[item.key()] = item.value().dump();
     }
 
-    // if the assistant message appears at the end of list, we do not add end-of-turn token
-    // for ex. this can be useful to modify the reasoning process in reasoning models
-    bool prefill_assistant_message = !inputs.messages.empty() && inputs.messages.back().role == "assistant" && opt.prefill_assistant;
-    common_chat_msg last_message;
+    /*
+     * 🎭 Assistant消息预填充处理 - 高级推理功能
+     * 
+     * 这是一个高级功能，用于：
+     * 1. 继续之前未完成的Assistant回复
+     * 2. 引导模型按特定方式开始回答
+     * 3. 修改推理模型的思维过程
+     * 
+     * 例如：如果最后一条消息是Assistant说了"我认为答案是"，
+     * 那么AI会继续这句话，而不是重新开始一个完整回复
+     */
+    bool prefill_assistant_message = !inputs.messages.empty() && 
+                                     inputs.messages.back().role == "assistant" && 
+                                     opt.prefill_assistant;
+    common_chat_msg last_message;  // 保存要预填充的消息
+    
     if (prefill_assistant_message) {
+        // 提取最后的Assistant消息作为预填充内容
         last_message = inputs.messages.back();
-        inputs.messages.pop_back();
+        inputs.messages.pop_back();  // 从消息列表中移除，稍后会特殊处理
 
-        /* sanity check, max one assistant message at the end of the list */
+        /* 安全检查：确保最多只有一个Assistant消息在末尾 */
         if (!inputs.messages.empty() && inputs.messages.back().role == "assistant"){
             throw std::runtime_error("Cannot have 2 or more assistant messages at the end of the list.");
         }
 
-        /* TODO: test this properly */
+        /* 功能限制：预填充与推理格式不兼容 */
+        /* TODO: 这个功能需要更充分的测试 */
         inputs.reasoning_format = COMMON_REASONING_FORMAT_NONE;
 
+        /* 兼容性检查：预填充与思考模式不兼容 */
         if ( (!inputs.enable_thinking) || inputs.chat_template_kwargs.find("enable_thinking") != inputs.chat_template_kwargs.end()) {
             throw std::runtime_error("Assistant response prefill is incompatible with enable_thinking.");
         }
 
-        inputs.add_generation_prompt = true;
+        inputs.add_generation_prompt = true;  // 确保添加生成提示符
     }
 
-    // Apply chat template to the list of messages
+    /*
+     * 🎨 第四步：应用聊天模板 - 生成最终prompt
+     * 
+     * 这是整个转换过程的核心步骤：
+     * 1. 使用模型专用的聊天模板
+     * 2. 把对话历史格式化成模型能理解的prompt
+     * 3. 添加必要的特殊标记（开始符、结束符、角色标识等）
+     * 
+     * 输出的chat_params包含：
+     * - prompt: 格式化后的完整对话文本
+     * - grammar: 语法约束规则
+     * - format: 聊天格式类型
+     * - 其他模板相关参数
+     */
     auto chat_params = common_chat_templates_apply(opt.tmpls, inputs);
 
-    /* Append assistant prefilled message */
+    /*
+     * 🔄 附加预填充内容
+     * 
+     * 如果启用了Assistant消息预填充，需要把预填充内容
+     * 直接附加到生成的prompt末尾，这样AI就会从这里继续生成
+     */
     if (prefill_assistant_message) {
         if (!last_message.content_parts.empty()) {
+            // 多部分内容：遍历所有文本部分并拼接
             for (auto & p : last_message.content_parts) {
                 chat_params.prompt += p.text;
             }
         } else {
+            // 简单文本内容：直接附加到prompt
             chat_params.prompt += last_message.content;
         }
     }
 
-    llama_params["chat_format"]      = static_cast<int>(chat_params.format);
-    llama_params["prompt"]           = chat_params.prompt;
+    /*
+     * 🏗️ 第五步：构建llama.cpp内部参数 - 最终格式转换
+     * 
+     * 把聊天模板的输出转换成llama.cpp推理引擎能直接使用的参数格式
+     * 这些参数将直接传递给AI推理引擎进行文本生成
+     */
+    
+    // 基础聊天参数
+    llama_params["chat_format"]      = static_cast<int>(chat_params.format);  // 聊天格式类型（枚举转整数）
+    llama_params["prompt"]           = chat_params.prompt;                    // 最终的完整prompt文本
+    
+    // 语法约束参数（可选）
     if (!chat_params.grammar.empty()) {
-        llama_params["grammar"] = chat_params.grammar;
+        llama_params["grammar"] = chat_params.grammar;  // 语法规则字符串
     }
-    llama_params["grammar_lazy"]     = chat_params.grammar_lazy;
+    llama_params["grammar_lazy"]     = chat_params.grammar_lazy;             // 懒加载语法规则
+    
+    // 语法触发器配置（高级功能）
     auto grammar_triggers = json::array();
     for (const auto & trigger : chat_params.grammar_triggers) {
-        server_grammar_trigger ct(trigger);
+        server_grammar_trigger ct(trigger);  // 转换为服务器格式
         grammar_triggers.push_back(ct.to_json());
     }
-    llama_params["grammar_triggers"] = grammar_triggers;
-    llama_params["preserved_tokens"] = chat_params.preserved_tokens;
-    llama_params["thinking_forced_open"]     = chat_params.thinking_forced_open;
+    llama_params["grammar_triggers"] = grammar_triggers;                     // 语法触发器列表
+    
+    // 特殊token处理
+    llama_params["preserved_tokens"] = chat_params.preserved_tokens;         // 保留的特殊token
+    llama_params["thinking_forced_open"] = chat_params.thinking_forced_open; // 强制开启思考模式
+    
+    // 附加停止词（来自聊天模板）
     for (const auto & stop : chat_params.additional_stops) {
-        llama_params["stop"].push_back(stop);
+        llama_params["stop"].push_back(stop);  // 追加到现有停止词列表
     }
 
-    // Handle "n" field
-    int n_choices = json_value(body, "n", 1);
+    /*
+     * 🎯 处理生成选择数量参数
+     * 
+     * OpenAI API支持生成多个不同的回复选项（n参数）
+     * 但llama.cpp目前只支持单个回复，所以这里做限制检查
+     */
+    int n_choices = json_value(body, "n", 1);  // 获取生成选择数量，默认1
     if (n_choices != 1) {
+        // 目前只支持生成1个回复，多选择功能尚未实现
         throw std::runtime_error("Only one completion choice is allowed");
     }
 
-    // Handle "logprobs" field
-    // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
-    if (json_value(body, "logprobs", false)) {
+    /*
+     * 📊 处理日志概率参数 - 用于分析AI的"确信度"
+     * 
+     * logprobs功能可以显示AI对每个生成token的概率分布
+     * 这对调试和理解AI的决策过程很有用
+     * 
+     * TODO: 当前的响应格式还不完全兼容OpenAI，但使用者较少，未来可能需要修复
+     */
+    if (json_value(body, "logprobs", false)) {  // 是否启用概率日志
         if (has_tools && stream) {
+            // 功能冲突：工具调用+流式输出+概率日志三者不兼容
             throw std::runtime_error("logprobs is not supported with tools + stream");
         }
-        llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
+        llama_params["n_probs"] = json_value(body, "top_logprobs", 20);  // 设置显示概率的token数量
     } else if (body.contains("top_logprobs") && !body.at("top_logprobs").is_null()) {
+        // 参数依赖检查：top_logprobs需要logprobs为true才有效
         throw std::runtime_error("top_logprobs requires logprobs to be set to true");
     }
 
-    // Copy remaining properties to llama_params
-    // This allows user to use llama.cpp-specific params like "mirostat", ... via OAI endpoint.
-    // See "launch_slot_with_task()" for a complete list of params supported by llama.cpp
+    /*
+     * 🔄 第六步：复制剩余参数 - 实现完全兼容
+     * 
+     * 这是整个函数的最后一步：把用户请求中所有剩余的参数
+     * 直接复制到llama.cpp参数中。
+     * 
+     * 这个设计很巧妙：
+     * 1. 优先处理特殊的OpenAI参数（上面已处理）
+     * 2. 然后允许用户直接使用llama.cpp专有参数
+     * 3. 实现了OpenAI API的完全兼容 + llama.cpp的扩展功能
+     * 
+     * 用户可以通过OpenAI接口使用llama.cpp专有功能，如：
+     * - mirostat: 动态温度调节算法
+     * - repeat_penalty: 重复惩罚系数
+     * - tfs_z: 尾部自由采样参数
+     * 等等...
+     * 
+     * 参考 "launch_slot_with_task()" 函数可以看到完整的支持参数列表
+     */
     for (const auto & item : body.items()) {
-        // Exception: if "n_predict" is present, we overwrite the value specified earlier by "max_tokens"
+        /*
+         * 参数覆盖逻辑：
+         * - 如果llama_params中没有这个参数，直接添加
+         * - 特殊例外：n_predict参数始终以用户请求为准
+         *   (n_predict是llama.cpp的原生参数，对应OpenAI的max_tokens)
+         */
         if (!llama_params.contains(item.key()) || item.key() == "n_predict") {
             llama_params[item.key()] = item.value();
         }
     }
 
+    /*
+     * 🎉 转换完成：返回llama.cpp格式的完整参数对象
+     * 
+     * 这个返回的JSON包含了：
+     * 1. 转换后的聊天参数（prompt、chat_format等）
+     * 2. 处理后的生成参数（stop、temperature等）
+     * 3. 用户指定的所有其他参数
+     * 4. 多媒体文件数据（通过out_files参数输出）
+     * 
+     * 接下来这些参数会被传递给AI推理引擎进行文本生成
+     */
     return llama_params;
 }
 

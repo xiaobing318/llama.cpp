@@ -5837,58 +5837,102 @@ int main(int argc, char ** argv) {
     };
 
     /*
-     * OpenAI兼容聊天补全接口处理器
-     * 处理 /v1/chat/completions 端点，兼容OpenAI Chat API格式
-     * 支持多轮对话、角色扮演、多模态输入(图片、音频等)
+     * 🤖 OpenAI兼容聊天补全接口处理器 - 这是AI聊天的"总接待员"
+     * 
+     * 功能简介：
+     * - 处理 /v1/chat/completions 端点请求（就像ChatGPT的聊天接口）
+     * - 兼容OpenAI Chat API格式，让其他应用可以无缝切换到llama.cpp
+     * - 支持多轮对话：记住之前的对话内容，像真人聊天一样
+     * - 支持角色扮演：可以让AI扮演不同角色（助手、用户、系统等）
+     * - 支持多模态输入：不仅可以发文字，还可以发图片、音频等
+     * 
+     * 工作流程（就像餐厅服务）：
+     * 1. 接收客户点餐单（聊天请求JSON）
+     * 2. 把点餐单翻译成厨房语言（转换为内部格式）
+     * 3. 交给厨房制作（调用AI生成文本）
+     * 4. 把做好的菜端给客户（返回AI回复）
      */
     const auto handle_chat_completions = [&ctx_server, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
         /*
-         * 记录调试信息 - 打印完整的请求体
-         * 这有助于调试聊天请求的格式和内容
-         * 注意：生产环境中可能包含敏感信息，需要谨慎记录
+         * 📝 记录调试信息 - 就像服务员记录客户的完整订单
+         * 打印完整的请求体JSON，方便开发者查看客户到底发送了什么内容
+         * ⚠️ 注意：生产环境中可能包含用户隐私信息，需要谨慎记录
          */
         LOG_DBG("request: %s\n", req.body.c_str());
 
         /*
-         * 解析请求体JSON数据
-         * 聊天请求通常包含messages数组、模型名称、生成参数等
+         * 📖 解析请求体JSON数据 - 就像服务员理解客户的点餐单
+         * 聊天请求通常包含：
+         * - messages数组：对话历史（用户说了什么，AI回复了什么）
+         * - model：要使用的AI模型名称
+         * - temperature：AI回复的"创意度"（0=很死板，1=很有创意）
+         * - max_tokens：AI最多能回复多少字
+         * 等等其他参数...
          */
         auto body = json::parse(req.body);
         
         /*
-         * 用于存储解析出的文件数据
-         * 聊天接口支持多模态输入，如图片、音频等附件
+         * 🗃️ 用于存储解析出的文件数据 - 就像准备一个文件夹放客户的附件
+         * 现代聊天不仅有文字，还可能有图片、音频等多媒体内容
+         * 这个容器用来存放所有解码后的文件数据
          */
         std::vector<raw_buffer> files;
         
         /*
-         * 解析并转换OpenAI聊天格式
-         * oaicompat_chat_params_parse函数负责：
-         * - 将messages数组转换为单一的prompt字符串
-         * - 处理system、user、assistant角色的消息
-         * - 提取并解码base64编码的图片/音频数据
-         * - 应用聊天模板格式化对话历史
-         * - 转换OpenAI参数到llama.cpp内部格式
+         * 🔄 核心格式转换器 - 就像餐厅的菜单翻译官
+         * 
+         * oaicompat_chat_params_parse函数是整个聊天系统的关键，它负责：
+         * 
+         * 1. 📝 消息格式转换：
+         *    把OpenAI格式的messages数组（一问一答的对话）转换成
+         *    llama.cpp能理解的单一prompt字符串
+         * 
+         * 2. 👥 角色处理：
+         *    - system: 系统指令（告诉AI应该如何行为）
+         *    - user: 用户消息（普通用户的提问）
+         *    - assistant: AI回复（之前AI的回答，用于多轮对话）
+         * 
+         * 3. 🖼️ 多媒体处理：
+         *    - 解码base64编码的图片数据（data:image/jpeg;base64,xxx）
+         *    - 解码base64编码的音频数据（支持wav、mp3格式）
+         *    - 从网络下载图片（支持http/https链接）
+         * 
+         * 4. 📋 模板应用：
+         *    使用聊天模板把对话格式化成模型专用的格式
+         *    （比如Llama需要特殊的<|start_header_id|>等标记）
+         * 
+         * 5. ⚙️ 参数转换：
+         *    把OpenAI的参数名转换成llama.cpp的参数名
+         *    （比如max_tokens -> n_predict）
          */
         json data = oaicompat_chat_params_parse(
-            body,                        /* 原始请求JSON */
-            ctx_server.oai_parser_opt,   /* OpenAI解析器选项 */
-            files                        /* 输出：解析出的文件数据 */
+            body,                        /* 输入：客户的原始点餐单(OpenAI格式JSON) */
+            ctx_server.oai_parser_opt,   /* 输入：解析器配置选项 */
+            files                        /* 输出：解码后的图片/音频文件数据 */
         );
 
         /*
-         * 调用通用补全实现函数
-         * SERVER_TASK_TYPE_COMPLETION: 聊天最终也是文本补全任务
-         * OAICOMPAT_TYPE_CHAT: 启用OpenAI聊天兼容模式
-         * 响应格式会符合OpenAI Chat API规范
+         * 🚀 交给厨房制作 - 调用AI文本生成引擎
+         * 
+         * 现在所有准备工作都完成了，把处理好的订单交给真正的AI引擎：
+         * 
+         * 参数说明：
+         * - SERVER_TASK_TYPE_COMPLETION: 任务类型（聊天本质上就是文本补全）
+         * - data: 转换后的llama.cpp格式参数（包含prompt和所有设置）
+         * - files: 处理好的图片/音频文件数据
+         * - req.is_connection_closed: 检查客户端是否还在等待
+         * - res: HTTP响应对象（用来发送AI回复给客户）
+         * - OAICOMPAT_TYPE_CHAT: 告诉引擎用OpenAI聊天格式返回结果
+         * 
+         * 最终AI会生成回复，并以OpenAI Chat API的标准格式返回给客户端
          */
         handle_completions_impl(
-            SERVER_TASK_TYPE_COMPLETION,
-            data,
-            files,
-            req.is_connection_closed,
-            res,
-            OAICOMPAT_TYPE_CHAT);
+            SERVER_TASK_TYPE_COMPLETION,  /* 任务类型：文本补全 */
+            data,                        /* 处理后的参数和prompt */
+            files,                       /* 图片/音频文件 */
+            req.is_connection_closed,    /* 连接状态检查 */
+            res,                         /* HTTP响应对象 */
+            OAICOMPAT_TYPE_CHAT);        /* 返回OpenAI聊天格式 */
     };
 
     /*
