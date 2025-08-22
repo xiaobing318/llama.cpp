@@ -5875,6 +5875,7 @@ int main(int argc, char ** argv) {
          * 🗃️ 用于存储解析出的文件数据 - 就像准备一个文件夹放客户的附件
          * 现代聊天不仅有文字，还可能有图片、音频等多媒体内容
          * 这个容器用来存放所有解码后的文件数据
+         * TODO:是否包含 messages 和上传的文件数据？
          */
         std::vector<raw_buffer> files;
         
