@@ -5837,7 +5837,7 @@ int main(int argc, char ** argv) {
     };
 
     /*
-     * 🤖 OpenAI兼容聊天补全接口处理器 - 这是AI聊天的"总接待员"
+     * 🤖 OpenAI兼容聊天补全接口处理器(OpenAI-compatible chat completion handler) - 这是AI聊天的"总接待员"
      * 
      * 功能简介：
      * - 处理 /v1/chat/completions 端点请求（就像ChatGPT的聊天接口）
