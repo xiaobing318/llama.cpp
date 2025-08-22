@@ -5191,9 +5191,9 @@ int main(int argc, char ** argv) {
      * - 自动连接断开检测
      */
     const auto handle_completions_impl = [&ctx_server, &res_error, &res_ok](
-            server_task_type type,                                      /* 任务类型: 补全或填充 */
-            json & data,                                               /* 请求参数JSON数据 */
-            const std::vector<raw_buffer> & files,                     /* 上传的文件数据(图片等) */
+            server_task_type type,                                     /* 任务类型: 补全或填充 */
+            json & data,                                               /* llama.cpp 内部使用的请求参数JSON数据 */
+            const std::vector<raw_buffer> & files,                     /* llama.cpp 内容使用上传的文件数据(图片等) */
             const std::function<bool()> & is_connection_closed,        /* 连接断开检测函数 */
             httplib::Response & res,                                   /* HTTP响应对象 */
             oaicompat_type oaicompat                                   /* OpenAI兼容模式 */
@@ -5207,14 +5207,47 @@ int main(int argc, char ** argv) {
 
         /*
          * 生成唯一的补全ID
-         * 用于跟踪和标识这次请求，方便日志记录和调试
-         * 格式通常为 "chatcmpl-" + 随机字符串
+         * 
+         * 作用说明:
+         * 1. 请求级别标识: 每个独立的API请求都会生成一个唯一的补全ID
+         *    - 无论是两个不同用户还是同一用户的两次请求，都会有不同的补全ID
+         *    - 即使请求参数完全相同，补全ID也不会重复
+         * 
+         * 2. 与会话管理的区别:
+         *    - 补全ID: 标识单次API调用 (服务器级别，瞬时)
+         *    - conversation_id: 标识用户会话 (前端级别，持久化在浏览器中)
+         *    - llama-server本身是无状态的，不维护会话概念
+         *    - 会话管理完全由WebUI前端负责 (通过IndexedDB存储conversation和message)
+         * 
+         * 3. 具体用途:
+         *    - API响应中的"id"字段，符合OpenAI API标准
+         *    - 日志记录和调试时关联请求和响应
+         *    - 在流式输出时标识数据属于哪个请求
+         *    - 客户端可用于验证响应对应的请求
+         * 
+         * 格式: "chatcmpl-" + 32位随机字符串 (兼容OpenAI API格式)
          */
         auto completion_id = gen_chatcmplid();
         
         /*
-         * 任务ID集合 - 用于跟踪此请求创建的所有子任务
-         * 在请求取消或失败时，需要清理所有相关任务
+         * 任务ID集合 - 跟踪当前API请求创建的所有并行任务
+         * 
+         * 为什么需要多个任务ID？
+         * 1. 批处理支持: 一个API请求可能包含多个提示(prompt)，每个提示对应一个独立任务
+         *    例如: 客户端一次发送3个不同问题，服务器创建3个并行任务同时处理，这里的“批处理（batch）”就是指 一个 API 请求里包含多个输入，需要一次性得到多个输出。
+         * 
+         * 2. 资源管理: 无论请求正常完成、异常中断还是客户端断开连接，都需要清理所有相关任务
+         *    - 正常完成: 从等待队列中移除所有任务ID
+         *    - 异常情况: 取消所有未完成的任务，释放占用的计算插槽
+         *    - 连接断开: 避免无用任务继续消耗服务器资源
+         * 
+         * 3. 流式输出跟踪: 在Server-Sent Events模式下，需要知道哪些任务的结果属于当前请求
+         *    - 多个任务的输出可能交错到达
+         *    - task_ids帮助过滤和组织属于同一请求的数据流
+         * 
+         * 4. 并发安全: 在多线程环境下准确跟踪和管理任务状态
+         *    - 防止任务泄漏导致的内存和计算资源浪费
+         *    - 确保每个任务都有明确的生命周期管理
          */
         std::unordered_set<int> task_ids;
         
@@ -5297,7 +5330,7 @@ int main(int argc, char ** argv) {
 
             /*
              * 处理提示词 - 这是文本生成的核心步骤
-             * 将用户输入的文本转换为模型可以理解的令牌序列
+             * 将用户输入的文本转换为模型可以理解的 tokens 
              */
             std::vector<server_tokens> inputs;
 
@@ -5352,48 +5385,108 @@ int main(int argc, char ** argv) {
                 inputs.push_back(std::move(tmp));
             } else {
                 /*
-                 * 纯文本处理分支 - 只处理文本输入
-                 * 这是更简单、更快速的处理方式
+                 * 纯文本处理分支 - 只处理文本输入，不涉及图片等多模态数据
+                 * 这是标准的文本生成流程，相比多模态处理更简单、更高效
+                 */
+                
+                /*
+                 * 步骤1: 文本令牌化(Tokenization)
+                 * 将用户输入的自然语言文本转换为模型可以理解的数字token序列
+                 * 
+                 * tokenize_input_prompts参数说明:
+                 * - ctx_server.vocab: 模型的词汇表，定义了text->token的映射规则
+                 * - prompt: 用户输入的原始文本
+                 * - true(add_special): 添加特殊标记如<BOS>(开始)、<EOS>(结束)等
+                 * - true(parse_special): 解析文本中的特殊标记语法
+                 * 
+                 * 返回值: std::vector<llama_tokens> - 可能包含多个独立的token序列，多个独立的 token 序列是在批处理中出现的。
+                 * 例如: ["Hello world", "How are you?"] -> [[1,2,3,4], [5,6,7,8]]
                  */
                 auto tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
                 
                 /*
-                 * 将每个令牌化的提示转换为server_tokens格式
-                 * 一个请求可能包含多个子提示(如批处理请求)
+                 * 步骤2: 转换为内部数据格式
+                 * 将llama_tokens转换为server_tokens格式，添加服务器需要的元数据
+                 * 
+                 * 为什么需要这个转换？
+                 * - llama_tokens: 原始的token数组，只包含基本的数字序列
+                 * - server_tokens: 增强版本，包含多模态信息、缓存优化等服务器特性
+                 * 
+                 * inputs变量的作用:
+                 * - 统一存储所有待处理的输入(无论是文本还是多模态)
+                 * - 为后续的任务创建提供标准化的数据源
+                 * - 支持批处理: 一个API请求可以包含多个独立的prompt
                  */
                 for (auto & p : tokenized_prompts) {
+                    /*
+                     * server_tokens构造参数:
+                     * - p: 单个令牌序列 (llama_tokens类型)
+                     * - ctx_server.mctx != nullptr: 是否启用多模态上下文
+                     *   即使在纯文本分支，也需要传递这个标志以保证兼容性
+                     */
                     auto tmp = server_tokens(p, ctx_server.mctx != nullptr);
+                    /*
+                     * 使用移动语义避免大数据的复制开销
+                     * token序列可能很长(几千个token)，移动比复制更高效
+                     */
                     inputs.push_back(std::move(tmp));
                 }
             }
 
             /*
-             * 为任务列表预分配内存空间
-             * 这有助于避免动态内存分配的开销，提高性能
+             * 步骤3: 准备任务创建
+             * 为任务列表预分配内存空间，避免动态扩容的性能开销
+             * inputs.size()表示需要创建的任务数量(每个input对应一个task)
              */
             tasks.reserve(inputs.size());
             
             /*
-             * 为每个输入创建一个对应的任务
-             * 这支持批处理请求，一次可以处理多个提示
+             * 步骤4: 从inputs创建并行任务
+             * 将标准化的输入数据转换为可执行的任务对象
+             * 
+             * 为什么是一对一映射？
+             * - 每个input代表一个独立的推理请求
+             * - 每个task可以在不同的GPU插槽上并行执行
+             * - 批处理的本质就是将多个独立请求同时处理
              */
             for (size_t i = 0; i < inputs.size(); i++) {
                 /*
-                 * 创建一个新的服务器任务
-                 * type可以是补全(COMPLETION)或填充(INFILL)
+                 * 创建新的服务器任务实例
+                 * type参数决定任务类型:
+                 * - SERVER_TASK_TYPE_COMPLETION: 标准文本补全(续写)
+                 * - SERVER_TASK_TYPE_INFILL: 代码填充(根据上下文生成中间部分)
                  */
                 server_task task = server_task(type);
 
-                /* 设置任务的唯一标识符，用于跟踪和管理 */
+                /*
+                 * 分配全局唯一的任务ID
+                 * get_new_id()确保在整个服务器生命周期内ID不重复
+                 * 用途: 日志记录、任务跟踪、结果匹配
+                 */
                 task.id    = ctx_server.queue_tasks.get_new_id();
-                /* 设置任务在批处理中的索引位置 */
+                
+                /*
+                 * 设置任务在当前请求批次中的索引
+                 * 用于: 
+                 * - 维护请求内部的顺序关系
+                 * - 在批处理结果中找到对应位置
+                 * - 调试时识别具体是哪个子请求
+                 */
                 task.index = i;
 
                 /*
-                 * 设置任务的令牌化提示
-                 * std::move用于移动语义，避免复制大量数据
+                 * 将处理好的tokens数据移动到任务中
+                 * 这是任务的核心输入数据，包含了:
+                 * - 令牌化后的文本序列
+                 * - 多模态标记(如果有的话)
+                 * - 缓存优化信息
+                 * 
+                 * 使用std::move的原因:
+                 * - inputs[i]的数据很大(可能数千个token)
+                 * - 移动避免深拷贝，提高性能
+                 * - 移动后inputs[i]变为空，但这里不再需要它
                  */
-                task.prompt_tokens    = std::move(inputs[i]);
+                task.prompt_tokens = std::move(inputs[i]);
                 
                 /*
                  * 从请求JSON中解析生成参数
@@ -5451,115 +5544,292 @@ int main(int argc, char ** argv) {
         }
 
         /*
-         * 检查是否启用流式响应模式
-         * stream=true: 边生成边发送，类似ChatGPT的打字机效果
-         * stream=false: 等待完整生成后一次性返回所有内容
+         * ==================== 响应模式选择 ====================
+         * 检查客户端请求的响应模式，决定采用哪种数据传输策略
+         * 
+         * stream=false (默认): 非流式模式 - 批量响应
+         * - 等待所有内容生成完毕后一次性返回
+         * - 适用场景: API集成、批量处理、完整内容需求
+         * - 优点: 完整结果、简单处理、适合自动化
+         * - 缺点: 延迟较高、用户等待时间长
+         * 
+         * stream=true: 流式模式 - 实时响应  
+         * - 边生成边发送，类似ChatGPT的打字机效果
+         * - 适用场景: 交互式对话、实时展示、长文本生成
+         * - 优点: 低延迟、实时反馈、更好的用户体验
+         * - 缺点: 实现复杂、需要SSE支持、连接管理困难
          */
         bool stream = json_value(data, "stream", false);
 
         /*
-         * 非流式响应处理分支
-         * 等待所有任务完成后统一返回结果
+         * ==================== 非流式响应处理分支 ====================
+         * 采用"请求-等待-批量响应"模式
+         * 
+         * 核心流程:
+         * 1. 提交所有任务到处理队列
+         * 2. 阻塞等待直到所有任务完成 
+         * 3. 收集所有结果并打包成JSON
+         * 4. 一次性返回完整响应给客户端
+         * 
+         * 为什么需要这种模式？
+         * - API稳定性: 传统REST API的标准做法，客户端容易处理
+         * - 批处理效率: 避免频繁的网络通信开销
+         * - 错误处理: 可以在返回前进行完整的错误检查和处理
+         * - 缓存友好: 完整结果便于缓存，提高系统性能
          */
         if (!stream) {
             /*
-             * 等待并接收所有任务的完整结果
-             * 这是一个阻塞操作，会等到所有任务都完成
+             * 核心API调用: receive_multi_results - 等待多任务完成
+             * 
+             * 参数解析:
+             * - task_ids: 要等待的任务ID集合，确保只处理本请求的任务
+             * - success_callback: 所有任务成功完成后的处理函数
+             * - error_callback: 任何任务出错时的处理函数  
+             * - is_connection_closed: 连接状态检查，避免客户端断开后继续处理
+             * 
+             * 为什么是阻塞操作？
+             * - 非流式模式要求完整结果，必须等待所有任务完成
+             * - HTTP请求-响应模型本身就是同步的
+             * - 简化错误处理逻辑，要么全部成功要么全部失败
              */
-            ctx_server.receive_multi_results(task_ids, [&](std::vector<server_task_result_ptr> & results) {
+            ctx_server.receive_multi_results(task_ids, 
                 /*
-                 * 成功回调函数 - 处理任务完成的结果
-                 * 根据结果数量决定返回格式
+                 * ========== 成功回调: 处理完成的任务结果 ==========
+                 * 当所有任务都成功完成时被调用
+                 * results: 包含每个任务结果的指针向量，按任务index排序
                  */
-                if (results.size() == 1) {
+                [&](std::vector<server_task_result_ptr> & results) {
                     /*
-                     * 单个结果 - 直接返回JSON对象
-                     * 这是最常见的情况(单个提示请求)
+                     * 根据结果数量决定响应格式
+                     * 这个判断解决了API一致性问题：
+                     * - 单个请求返回对象 vs 批处理请求返回数组
+                     * - 保持与OpenAI API格式的兼容性
                      */
-                    res_ok(res, results[0]->to_json());
-                } else {
-                    /*
-                     * 多个结果 - 包装成JSON数组返回
-                     * 这发生在批处理请求中(一次提交多个提示)
-                     */
-                    json arr = json::array();
-                    for (auto & res : results) {
-                        /* 将每个结果转换为JSON并添加到数组 */
-                        arr.push_back(res->to_json());
+                    if (results.size() == 1) {
+                        /*
+                         * 单一结果处理 - 最常见的情况
+                         * 直接返回JSON对象，避免不必要的数组包装
+                         * 
+                         * 解决的问题:
+                         * - 保持API简洁性，单个请求不需要数组格式
+                         * - 与传统聊天API保持一致的响应结构
+                         * - 减少客户端解析复杂度
+                         */
+                        res_ok(res, results[0]->to_json());
+                    } else {
+                        /*
+                         * 批处理结果处理 - 多个请求的情况
+                         * 将多个结果包装成JSON数组统一返回
+                         * 
+                         * 解决的问题:
+                         * - 支持批量API调用，提高处理效率
+                         * - 保持结果顺序与请求顺序一致
+                         * - 允许客户端一次性获取多个结果
+                         */
+                        json arr = json::array();
+                        for (auto & result_ptr : results) {
+                            /*
+                             * 逐个转换结果为JSON格式
+                             * to_json()包含所有必要信息：生成的文本、tokens统计、时间等
+                             */
+                            arr.push_back(result_ptr->to_json());
+                        }
+                        res_ok(res, arr);
                     }
-                    res_ok(res, arr);
-                }
-            }, [&](const json & error_data) {
+                }, 
                 /*
-                 * 错误回调函数 - 处理任务执行过程中的错误
-                 * 例如模型加载失败、内存不足、参数错误等
+                 * ========== 错误回调: 处理任务执行失败 ==========
+                 * 当任何一个任务失败时被调用
+                 * 
+                 * 可能的错误场景:
+                 * - 模型加载失败或崩溃
+                 * - GPU内存不足
+                 * - 推理参数无效(温度超范围等)
+                 * - 请求超时或被取消
+                 * - 系统资源耗尽
                  */
-                res_error(res, error_data);
-            }, is_connection_closed);
+                [&](const json & error_data) {
+                    /*
+                     * 统一错误响应格式
+                     * error_data包含错误码、描述、可能的建议等
+                     * 确保客户端能够理解和处理错误情况
+                     */
+                    res_error(res, error_data);
+                }, 
+                /*
+                 * ========== 连接状态检查 ==========
+                 * 用于检测客户端是否提前断开连接
+                 * 
+                 * 解决的问题:
+                 * - 避免客户端断开后服务器继续无用的计算
+                 * - 及时释放计算资源给其他请求
+                 * - 防止僵尸任务积累影响系统性能
+                 */
+                is_connection_closed
+            );
 
             /*
-             * 清理等待列表中的任务ID
-             * 无论成功还是失败，都需要从等待队列中移除这些任务
-             * 防止内存泄漏和资源占用
+             * ========== 资源清理 ==========
+             * 无论请求成功、失败还是被取消，都必须清理任务追踪信息
+             * 
+             * 为什么必须清理？
+             * - 防止内存泄漏: task_ids占用内存空间
+             * - 避免任务积累: 等待队列无限增长会影响性能
+             * - 确保系统稳定: 清理不完整会导致状态不一致
+             * 
+             * remove_waiting_task_ids具体做了什么？
+             * - 从全局等待队列中移除这些task_ids
+             * - 释放相关的内部数据结构
+             * - 通知任务管理器这些任务已处理完毕
              */
             ctx_server.queue_results.remove_waiting_task_ids(task_ids);
         } else {
             /*
-             * 流式响应处理分支
-             * 实时发送生成的内容，边生成边传输
-             * 使用Server-Sent Events(SSE)协议进行实时通信
+             * ==================== 流式响应处理分支 ====================
+             * 采用"边生成边发送"的实时响应模式
+             * 
+             * 核心流程:
+             * 1. 立即返回HTTP 200 + SSE头部，建立流式连接
+             * 2. 监听任务队列，一有新内容就推送给客户端
+             * 3. 直到所有任务完成，发送结束标记
+             * 4. 关闭连接并清理资源
+             * 
+             * 为什么需要流式模式？
+             * - 用户体验: 实时反馈，减少perceived延迟
+             * - 长文本生成: 避免HTTP超时，支持几分钟的生成任务
+             * - 交互性: 用户可以提前看到结果，决定是否继续
+             * - 网络效率: 避免大量数据的一次性传输
+             */
+            
+            /*
+             * ========== 分块内容提供器 ==========
+             * Lambda函数，负责持续生成和发送SSE数据流
+             * 
+             * 参数说明:
+             * - size_t: httplib传入的建议缓冲区大小(通常忽略)
+             * - DataSink & sink: 数据输出接口，用于向客户端写入数据
+             * 
+             * 捕获变量:
+             * - task_ids: 本请求相关的任务ID，确保数据对应关系
+             * - ctx_server: 服务器上下文，用于获取生成结果
+             * - oaicompat: OpenAI兼容模式，影响输出格式
              */
             const auto chunked_content_provider = [task_ids, &ctx_server, oaicompat](size_t, httplib::DataSink & sink) {
                 /*
-                 * 开始接收流式结果
-                 * 每当有新内容生成时就立即发送给客户端
+                 * 核心API调用: receive_cmpl_results_stream - 接收流式结果
+                 * 与非流式的receive_multi_results不同，这个函数会:
+                 * - 立即返回，不等待任务完成
+                 * - 每当有新内容生成时就调用数据回调
+                 * - 支持增量式内容传输
                  */
-                ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result_ptr & result) -> bool {
+                ctx_server.receive_cmpl_results_stream(task_ids, 
                     /*
-                     * 数据回调函数 - 处理每个生成的数据块
-                     * 返回true继续接收，返回false停止生成
+                     * ========== 数据回调: 处理每个生成的内容片段 ==========
+                     * 每当模型生成新的token或一段文本时被调用
+                     * 
+                     * 调用频率: 高频调用，可能每秒数十次
+                     * 返回值: true=继续生成，false=停止生成
                      */
-                    json res_json = result->to_json();
-                    if (res_json.is_array()) {
+                    [&](server_task_result_ptr & result) -> bool {
                         /*
-                         * 批处理结果 - 遍历数组中的每个元素
-                         * 为每个结果单独发送一个SSE事件
+                         * 将服务器内部结果转换为JSON格式
+                         * result包含: 新生成的文本、累计统计、状态信息等
                          */
-                        for (const auto & res : res_json) {
-                            if (!server_sent_event(sink, "data", res)) {
+                        json res_json = result->to_json();
+                        
+                        /*
+                         * 处理批处理场景的结果分发
+                         * 判断是单个结果还是批处理结果数组
+                         */
+                        if (res_json.is_array()) {
+                            /*
+                             * 批处理结果处理 - 需要为每个子任务单独发送事件
+                             * 为什么要分别发送？
+                             * - SSE协议要求每个事件独立发送
+                             * - 客户端可能需要分别处理不同任务的结果
+                             * - 保持与单个请求的行为一致性
+                             */
+                            for (const auto & individual_result : res_json) {
                                 /*
-                                 * 发送失败 - 通常是HTTP连接已关闭
-                                 * 立即取消生成，避免浪费计算资源
+                                 * 发送单个SSE事件
+                                 * server_sent_event格式: "data: {...}\n\n"
+                                 * 
+                                 * 返回值检查的重要性:
+                                 * - false表示连接已断开或写入失败
+                                 * - 必须立即停止生成，避免资源浪费
+                                 * - 客户端断开后继续生成是无意义的
                                  */
-                                return false;
+                                if (!server_sent_event(sink, "data", individual_result)) {
+                                    /*
+                                     * 连接断开处理 - 立即停止所有生成任务
+                                     * 常见原因:
+                                     * - 用户关闭浏览器标签页
+                                     * - 网络连接中断
+                                     * - 客户端程序崩溃
+                                     * - HTTP代理超时
+                                     */
+                                    return false;  // 停止生成
+                                }
                             }
+                            return true;  // 继续生成
+                        } else {
+                            /*
+                             * 单个结果处理 - 直接发送SSE事件
+                             * 这是最常见的情况，大多数请求都是单个提示
+                             * 
+                             * SSE数据格式示例:
+                             * data: {"choices":[{"delta":{"content":"Hello"}}],"id":"chatcmpl-123"}\n\n
+                             */
+                            return server_sent_event(sink, "data", res_json);
                         }
-                        return true;
-                    } else {
+                    }, 
+                    /*
+                     * ========== 错误回调: 处理生成过程中的错误 ==========
+                     * 当任务执行失败或遇到异常时被调用
+                     * 
+                     * 与非流式模式的区别:
+                     * - 非流式: 错误发生时返回HTTP错误状态码
+                     * - 流式: 连接已建立，只能通过SSE发送错误事件
+                     */
+                    [&](const json & error_data) {
                         /*
-                         * 单个结果 - 直接发送SSE事件
-                         * 包含生成的文本片段和相关元数据
+                         * 通过SSE发送错误事件
+                         * 使用"error"事件类型，符合SSE标准
+                         * 
+                         * 客户端识别方法:
+                         * - 监听'error'类型事件
+                         * - 解析error_data中的错误信息
+                         * - 根据错误类型决定是否重试
                          */
-                        return server_sent_event(sink, "data", res_json);
+                        server_sent_event(sink, "error", error_data);
+                    }, 
+                    /*
+                     * ========== 连接检查回调: 检测客户端连接状态 ==========
+                     * 定期被调用，用于检测客户端是否仍然连接
+                     * 
+                     * 为什么需要这个检查？
+                     * - 生成可能需要几分钟，客户端可能中途断开
+                     * - 避免服务器对断开的连接继续计算
+                     * - 及时释放GPU资源给其他请求
+                     * 
+                     * 技术细节:
+                     * - 不能使用req.is_connection_closed()，因为req对象已销毁
+                     * - 使用sink.is_writable()来判断连接状态
+                     * - 返回true表示连接已断开，应停止生成
+                     */
+                    [&sink]() {
+                        return !sink.is_writable();  // 连接不可写 = 连接断开
                     }
-                }, [&](const json & error_data) {
-                    /*
-                     * 错误回调函数 - 发送错误信息给客户端
-                     * 使用SSE的error事件类型通知前端发生了错误
-                     */
-                    server_sent_event(sink, "error", error_data);
-                }, [&sink]() {
-                    /*
-                     * 连接检查回调函数 - 检测客户端是否断开连接
-                     * 注意：这里不能使用req.is_connection_closed，因为req对象已被销毁
-                     * 通过sink的可写状态来判断连接是否还有效
-                     */
-                    return !sink.is_writable();
-                });
+                );
                 
                 /*
-                 * OpenAI兼容性处理
+                 * ========== OpenAI兼容性处理 ==========
                  * 发送流式响应结束标记，符合OpenAI API规范
+                 * 
+                 * OpenAI标准要求:
+                 * - 流式响应必须以"data: [DONE]"结束
+                 * - 表示所有内容已生成完毕，客户端可以关闭连接
+                 * - 某些OpenAI客户端SDK依赖此标记来判断结束
                  */
                 if (oaicompat != OAICOMPAT_TYPE_NONE) {
                     static const std::string ev_done = "data: [DONE]\n\n";
@@ -5567,32 +5837,59 @@ int main(int argc, char ** argv) {
                 }
                 
                 /*
-                 * 完成响应传输
+                 * ========== 完成响应传输 ==========
                  * 通知HTTP库响应已完成，可以关闭连接
+                 * 
+                 * sink.done()的作用:
+                 * - 标记数据传输完毕
+                 * - 触发TCP连接的优雅关闭
+                 * - 通知客户端不会有更多数据
                  */
                 sink.done();
-                return false;  /* 表示内容提供器已完成工作 */
+                return false;  /* 返回false表示内容提供器已完成工作 */
             };
 
             /*
-             * 响应完成回调函数
-             * 无论流式传输成功还是失败都会被调用
-             * 用于清理资源和移除等待中的任务
+             * ========== 响应完成回调函数 ==========
+             * 无论流式传输成功、失败还是被客户端中断都会被调用
+             * 这是资源清理的最后机会
+             * 
+             * 调用时机:
+             * - 正常完成: 所有数据发送完毕，连接正常关闭
+             * - 异常中断: 网络错误、客户端断开、服务器错误
+             * - 主动取消: 用户或系统主动取消请求
              */
-            auto on_complete = [task_ids, &ctx_server] (bool) {
+            auto on_complete = [task_ids, &ctx_server] (bool success) {
                 /*
-                 * 从等待结果队列中移除任务ID
-                 * 释放相关资源，防止内存泄漏
-                 * bool参数表示是否成功完成，但这里我们不关心
+                 * 强制清理所有相关任务ID
+                 * 
+                 * 为什么success参数被忽略？
+                 * - 无论成功失败，都必须清理资源
+                 * - 任务可能处于各种中间状态，统一清理更安全
+                 * - 避免因状态判断错误导致的资源泄漏
+                 * 
+                 * 清理操作包括:
+                 * - 从全局等待队列移除task_ids
+                 * - 释放任务相关内存
+                 * - 更新服务器内部统计信息
                  */
                 ctx_server.queue_results.remove_waiting_task_ids(task_ids);
             };
 
             /*
-             * 设置HTTP响应为分块传输模式
-             * Content-Type: text/event-stream 表示这是SSE流
-             * chunked_content_provider: 内容提供器，负责生成和发送数据
-             * on_complete: 完成回调，用于资源清理
+             * ========== 启动分块传输模式 ==========
+             * 这是HTTP流式响应的核心设置
+             * 
+             * 参数解析:
+             * - "text/event-stream": SSE标准的Content-Type
+             * - chunked_content_provider: 数据生成器函数
+             * - on_complete: 完成后的清理回调
+             * 
+             * 此调用的效果:
+             * - 立即向客户端发送HTTP 200 + SSE头部
+             * - 建立持久连接，准备接收流式数据
+             * - 启动后台数据生成和传输流程
+             * - 当前函数返回，但连接保持打开状态
              */
             res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         }
