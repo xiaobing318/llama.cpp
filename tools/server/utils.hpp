@@ -589,29 +589,26 @@ struct oaicompat_parser_options {
 };
 
 /*
- * 🔄 OpenAI聊天参数解析器 - 核心格式转换函数
+ * ========================================================================
+ * 📚 oaicompat_chat_params_parse - OpenAI ChatCompletion API兼容层核心函数
+ * ========================================================================
  * 
- * 📋 整体功能：
- * 这个函数是整个聊天系统的"万能翻译器"，负责把OpenAI格式的聊天请求
- * 转换成llama.cpp能理解的内部参数格式。
+ * 🎯 核心作用：
+ * 这是llama.cpp服务器的"万能翻译器"，专门负责实现OpenAI ChatCompletion API的完全兼容。
+ * 它将客户端发送的标准OpenAI格式聊天请求转换为llama.cpp内部能够处理的参数格式。
  * 
- * 🎯 主要任务：
- * 1. 参数验证和提取：从OpenAI JSON中提取所有聊天参数
- * 2. 多媒体处理：解码和处理图片、音频等附件
- * 3. 消息格式转换：把对话历史转成模型能理解的prompt
- * 4. 模板应用：使用聊天模板格式化对话内容
- * 5. 参数映射：把OpenAI参数名转换成llama.cpp参数名
+ * 💡 为什么需要这个函数？
+ * 1. API兼容性：让现有使用ChatGPT API的应用无需修改即可切换到llama.cpp
+ * 2. 格式差异：OpenAI使用messages数组格式，llama.cpp使用prompt字符串格式
+ * 3. 参数映射：OpenAI的max_tokens对应llama.cpp的n_predict等参数名差异
+ * 4. 特殊功能：处理多模态输入（图片/音频）、工具调用、聊天模板等高级功能
  * 
- * 📥 输入参数：
- * @param body - OpenAI格式的聊天请求JSON（包含messages、model等）
- * @param opt - 解析器配置选项（是否支持图片/音频、模板设置等）
- * @param out_files - 输出参数：解码后的文件数据容器
- * 
- * 📤 返回值：
- * @return json - llama.cpp内部格式的参数对象（包含prompt、参数等）
- * 
- * 🔧 应用场景：
- * 被 /chat/completions 接口调用，让llama.cpp完美兼容ChatGPT API
+ * 🚨 如果没有这个函数会怎样？
+ * 1. 无法兼容OpenAI API，现有应用无法直接迁移到llama.cpp
+ * 2. 客户端需要学习llama.cpp专有的API格式，增加使用门槛
+ * 3. 多模态数据无法正确解析，图片/音频功能失效
+ * 4. 聊天模板无法应用，生成质量严重下降
+ * 5. 工具调用功能完全无法使用
  */
 static json oaicompat_chat_params_parse(
     json & body,                              /* 输入：OpenAI格式的聊天请求JSON */
