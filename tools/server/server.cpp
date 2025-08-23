@@ -3859,7 +3859,7 @@ int main(int argc, char ** argv) {
      * 为后续的模型加载和推理做准备
      */
     llama_backend_init();
-    
+
     /*
      * 步骤6: 初始化NUMA (Non-Uniform Memory Access) 支持
      * NUMA是一种多处理器系统的内存架构，这里的处理器系统指的就是多物理CPU处理器。
@@ -3872,12 +3872,12 @@ int main(int argc, char ** argv) {
      * 步骤7: 打印系统信息到日志
      * 这些信息对于调试和性能优化非常有用:
      * - n_threads: 用于推理的线程数
-     * - n_threads_batch: 用于批处理的线程数  
+     * - n_threads_batch: 用于批处理的线程数
      * - total_threads: 系统总的可用CPU线程数
      */
     LOG_INF("system info: n_threads = %d, n_threads_batch = %d, total_threads = %d\n", params.cpuparams.n_threads, params.cpuparams_batch.n_threads, std::thread::hardware_concurrency());
     LOG_INF("\n");
-    
+
     /*
      * 打印详细的系统信息，包括CPU型号、内存大小等
      * 这些信息有助于用户了解服务器运行环境
@@ -3891,7 +3891,7 @@ int main(int argc, char ** argv) {
      * 这里需要判断是否启用SSL加密
      */
     std::unique_ptr<httplib::Server> svr;
-    
+
 /*
  * SSL支持检查: 编译时定义的宏，用来检查是否支持OpenSSL，OpenSSL 是为了 client 和 server 之间建立更安全的通信。
  */
@@ -3943,7 +3943,7 @@ int main(int argc, char ** argv) {
      * 这有助于客户端识别服务器类型和版本
      */
     svr->set_default_headers({{"Server", "llama.cpp"}});
-    
+
     /*
      * 设置请求日志记录器
      * log_server_request函数会记录所有进入的HTTP请求
@@ -4101,7 +4101,7 @@ int main(int argc, char ** argv) {
      * 步骤18: 定义API密钥验证中间件
      * 这个中间件负责验证客户端提供的API密钥是否有效
      * 它会在每个需要身份验证的请求之前被调用
-     * 
+     *
      * 参数:
      * - params: 包含服务器配置的参数对象(包括允许的API密钥列表)
      * - res_error: 错误响应处理函数
@@ -4180,7 +4180,7 @@ int main(int argc, char ** argv) {
      * 步骤19: 定义服务器状态检查中间件
      * 这个中间件负责检查服务器当前的状态
      * 在模型加载期间，大部分请求都会被拒绝或返回特殊页面
-     * 
+     *
      * 参数:
      * - res_error: 错误响应处理函数
      * - state: 服务器当前状态的原子变量引用
@@ -4192,7 +4192,7 @@ int main(int argc, char ** argv) {
          * load()是原子操作，保证在多线程环境下安全读取
          */
         server_state current_state = state.load();
-        
+
         /*
          * 如果服务器正在加载模型，需要特殊处理
          * 在这个状态下，服务器还不能提供正常的AI服务
@@ -4204,7 +4204,7 @@ int main(int argc, char ** argv) {
              * 这样可以判断请求的是静态文件还是API接口
              */
             auto tmp = string_split<std::string>(req.path, '.');
-            
+
             /*
              * 对于首页或HTML文件请求，返回加载页面
              * 这是一个特殊的等待页面，告诉用户模型正在加载
@@ -4252,7 +4252,7 @@ int main(int argc, char ** argv) {
      * 步骤20: 注册中间件到HTTP服务器
      * set_pre_routing_handler设置一个在路由匹配之前执行的处理器
      * 所有进入的HTTP请求都会先经过这个处理器
-     * 
+     *
      * 处理器的执行顺序:
      * 1. CORS跨域处理
      * 2. 服务器状态检查
@@ -4265,7 +4265,7 @@ int main(int argc, char ** argv) {
          * 这对于Web应用的前后端分离非常重要
          */
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        
+
         /*
          * 特殊处理OPTIONS请求(预检请求)
          * 浏览器在发送实际的CORS请求之前会发送OPTIONS请求
@@ -4286,7 +4286,7 @@ int main(int argc, char ** argv) {
              */
             return httplib::Server::HandlerResponse::Handled;
         }
-        
+
         /*
          * 步骤22: 执行服务器状态检查中间件
          * 如果服务器正在加载模型或其他不可用状态
@@ -4296,7 +4296,7 @@ int main(int argc, char ** argv) {
             /* 如果中间件返回false，说明请求已处理，不需继续 */
             return httplib::Server::HandlerResponse::Handled;
         }
-        
+
         /*
          * 步骤23: 执行API密钥验证中间件
          * 如果启用了API密钥验证，会在这里检查请求的授权信息
@@ -4306,7 +4306,7 @@ int main(int argc, char ** argv) {
             /* 如果API密钥验证失败，请求被拒绝 */
             return httplib::Server::HandlerResponse::Handled;
         }
-        
+
         /*
          * 所有中间件检查都通过了
          * 返回Unhandled表示请求可以继续传递给路由处理器
@@ -4327,7 +4327,7 @@ int main(int argc, char ** argv) {
      * 步骤24: 定义健康检查处理器
      * 这个处理器提供一个简单的健康检查端点
      * 通常用于负载均衡器、监控系统或容器编排器检查服务器状态
-     * 
+     *
      * API端点: GET /health
      * 响应格式: {"status": "ok"}
      * 特点: 不需要API密钥，在模型加载期间也可访问
@@ -4347,7 +4347,7 @@ int main(int argc, char ** argv) {
      * 插槽(Slot)是服务器用来并发处理多个推理请求的机制
      * 每个插槽可以独立处理一个对话或推理任务
      * 这个端点提供插槽的实时状态信息，用于监控和调试
-     * 
+     *
      * API端点: GET /slots
      * 可选参数: fail_on_no_slot=true (如果没有空闲插槽就返回错误)
      * 响应格式: 插槽状态数据的JSON数组
@@ -4444,7 +4444,7 @@ int main(int argc, char ** argv) {
      * 这个处理器提供服务器的详细性能指标
      * 主要用于监控系统(Prometheus)和性能分析
      * 返回的数据包括处理速度、令牌数量、请求状态等
-     * 
+     *
      * API端点: GET /metrics
      * 响应格式: Prometheus格式的文本数据
      * 特点: 需要在启动时使用--metrics参数才能开启
@@ -4513,7 +4513,7 @@ int main(int argc, char ** argv) {
          * 定义所有指标的结构和数据
          * 按照Prometheus标准进行命名和分类
          * 参考: https://prometheus.io/docs/practices/naming/#metric-names
-         * 
+         *
          * 指标类型说明:
          * - counter: 计数器，只增不减的指标(如总请求数)
          * - gauge: 仪表，可以上下波动的指标(如当前连接数)
@@ -4650,7 +4650,7 @@ int main(int argc, char ** argv) {
                  * json_value函数提供默认值，避免缺失字段时的错误
                  */
                 auto value = json_value(metric_def, "value", 0.);
-                
+
                 /*
                  * 按照Prometheus标准格式输出每个指标:
                  * 1. # HELP 行: 描述指标的作用
@@ -4686,7 +4686,7 @@ int main(int argc, char ** argv) {
      * 这个处理器允许将某个插槽的当前状态保存到文件
      * 主要用于保存对话上下文、中间状态等，方便后续恢复
      * 这对于长期对话或服务器重启可恢复性非常有用
-     * 
+     *
      * API端点: POST /slots/{id}/save
      * 请求参数: {"filename": "文件名"}
      * 响应格式: 保存操作的结果信息
@@ -4699,7 +4699,7 @@ int main(int argc, char ** argv) {
         json request_data = json::parse(req.body);
         /* 提取文件名参数 */
         std::string filename = request_data.at("filename");
-        
+
         /*
          * 验证文件名的安全性
          * fs_validate_filename函数检查文件名是否包含非法字符
@@ -4709,7 +4709,7 @@ int main(int argc, char ** argv) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
-        
+
         /*
          * 构建完整的文件路径
          * params.slot_save_path是管理员配置的保存目录
@@ -4767,7 +4767,7 @@ int main(int argc, char ** argv) {
      * 这个处理器允许从之前保存的文件中恢复插槽的状态
      * 主要用于恢复对话上下文、继续中断的对话等
      * 这对于提供稳定的长期对话服务非常重要
-     * 
+     *
      * API端点: POST /slots/{id}/restore
      * 请求参数: {"filename": "要恢复的文件名"}
      * 响应格式: 恢复操作的结果信息
@@ -4780,7 +4780,7 @@ int main(int argc, char ** argv) {
         json request_data = json::parse(req.body);
         /* 获取要恢复的文件名 */
         std::string filename = request_data.at("filename");
-        
+
         /*
          * 验证文件名的合法性和安全性
          * 防止恶意文件访问，保护系统安全
@@ -4789,7 +4789,7 @@ int main(int argc, char ** argv) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
-        
+
         /*
          * 构建完整的文件路径
          * 确保文件只能从指定的保存目录中读取
@@ -4851,7 +4851,7 @@ int main(int argc, char ** argv) {
      * 这个处理器用于清空指定插槽的所有状态和数据
      * 包括对话上下文、生成历史、缓存数据等
      * 这对于释放内存和重置插槽状态非常有用
-     * 
+     *
      * API端点: POST /slots/{id}/erase
      * 请求参数: 无(只需要插槽ID)
      * 响应格式: 擦除操作的结果信息
@@ -4909,7 +4909,7 @@ int main(int argc, char ** argv) {
      * 这个处理器是插槽管理功能的统一入口
      * 根据请求参数中的action字段来路由到具体的操作
      * 支持save(保存)、restore(恢复)、erase(擦除)三种操作
-     * 
+     *
      * API端点: POST /slots/{id}?action=save|restore|erase
      * 路径参数: id - 插槽ID
      * 查询参数: action - 要执行的动作
@@ -4978,7 +4978,7 @@ int main(int argc, char ** argv) {
      * 这个处理器提供服务器的基本信息和配置
      * 主要用于客户端发现服务器的能力和限制
      * 这个端点是公开的，不需要API密钥验证
-     * 
+     *
      * API端点: GET /props
      * 响应格式: 包含服务器配置信息的JSON对象
      * 特点: 只返回安全的、允许公开的信息
@@ -4995,19 +4995,19 @@ int main(int argc, char ** argv) {
              * 包括温度、top-p、最大令牌数等推理参数
              */
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
-            
+
             /*
              * 插槽总数 - 服务器可以同时处理的最大请求数
              * 客户端可以根据这个信息来控制并发数
              */
             { "total_slots",                 ctx_server.params_base.n_parallel },
-            
+
             /*
              * 模型文件路径 - 当前加载的模型文件位置
              * 帮助客户端确认正在使用的模型
              */
             { "model_path",                  ctx_server.params_base.model.path },
-            
+
             /*
              * 模型支持的模态 - 指明模型的能力范围
              * vision: 是否支持图像处理(多模态模型)
@@ -5017,32 +5017,32 @@ int main(int argc, char ** argv) {
                 {"vision", ctx_server.oai_parser_opt.allow_image},
                 {"audio",  ctx_server.oai_parser_opt.allow_audio},
             } },
-            
+
             /*
              * 聊天模板 - 用于格式化对话的模板字符串
              * 不同模型可能有不同的对话格式要求
              */
             { "chat_template",               common_chat_templates_source(ctx_server.chat_templates.get()) },
-            
+
             /*
              * BOS令牌 - Begin Of Sequence，序列开始令牌
              * 用于标记文本的开始，对于正确的令牌化非常重要
              */
             { "bos_token",                   common_token_to_piece(ctx_server.ctx, llama_vocab_bos(ctx_server.vocab), /* special= */ true)},
-            
+
             /*
              * EOS令牌 - End Of Sequence，序列结束令牌
              * 用于标记文本的结束，告诉模型停止生成
              */
             { "eos_token",                   common_token_to_piece(ctx_server.ctx, llama_vocab_eos(ctx_server.vocab), /* special= */ true)},
-            
+
             /*
              * 构建信息 - 服务器的版本和编译信息
              * 用于调试和版本兼容性检查
              */
             { "build_info",                  build_info },
         };
-        
+
         /*
          * 条件性添加工具使用模板
          * 只有在启用Jinja模板引擎时才会可用
@@ -5063,7 +5063,7 @@ int main(int argc, char ** argv) {
      * 这个处理器允许动态修改服务器的全局属性
      * 主要用于运行时调整服务器参数，而无需重启
      * 这是一个高级功能，需要特殊权限才能使用
-     * 
+     *
      * API端点: POST /props
      * 请求参数: 要修改的属性JSON对象
      * 响应格式: {"success": true} 或错误信息
@@ -5110,7 +5110,7 @@ int main(int argc, char ** argv) {
      * 这个处理器提供详细的模型和API信息
      * 主要用于客户端发现和展示服务器的详细能力
      * 格式与Ollama API兼容，方便集成已有工具
-     * 
+     *
      * API端点: GET /api/show
      * 响应格式: 包含模型详细信息的JSON对象
      * 特点: 公开端点，不需要身份验证
@@ -5134,17 +5134,17 @@ int main(int argc, char ** argv) {
                     { "llama.context_length", ctx_server.slots.back().n_ctx, },
                 }
             },
-            
+
             /*
              * Ollama兼容字段 - 为了与Ollama API保持兼容
              * 这些字段在llama.cpp中可能不适用，所以留空
              */
             {"modelfile", ""},    /* 模型文件内容，在llama.cpp中不适用 */
             {"parameters", ""},   /* 模型参数，已在其他地方提供 */
-            
+
             /* 聊天模板(重复，可能是历史原因) */
             {"template", common_chat_templates_source(ctx_server.chat_templates.get())},
-            
+
             /*
              * 模型详细信息 - 描述模型的技术细节
              * 这些信息在llama.cpp中大部分都是空的或固定的
@@ -5157,13 +5157,13 @@ int main(int argc, char ** argv) {
                 {"parameter_size", ""},      /* 模型参数数量(如7B、8B等) */
                 {"quantization_level", ""}  /* 量化级别(如Q4_0、Q8_0等) */
             }},
-            
+
             /*
              * 额外的模型信息字段(空的，可能是为了兼容性)
              * 具体信息已在上面的model_info字段中提供
              */
             {"model_info", ""},
-            
+
             /*
              * API能力列表 - 显示服务器支持的功能
              * completion: 支持文本补全功能
@@ -5183,7 +5183,7 @@ int main(int argc, char ** argv) {
      * - completion: 文本补全(给定提示，生成继续内容)
      * - chat: 对话式交互(基于聊天模板的对话)
      * - infill: 代码填充(基于上下文生成中间内容)
-     * 
+     *
      * 特色:
      * - 支持流式输出(边生成边返回)
      * - 支持多模态输入(文本+图片)
@@ -5207,50 +5207,50 @@ int main(int argc, char ** argv) {
 
         /*
          * 生成唯一的补全ID
-         * 
+         *
          * 作用说明:
          * 1. 请求级别标识: 每个独立的API请求都会生成一个唯一的补全ID
          *    - 无论是两个不同用户还是同一用户的两次请求，都会有不同的补全ID
          *    - 即使请求参数完全相同，补全ID也不会重复
-         * 
+         *
          * 2. 与会话管理的区别:
          *    - 补全ID: 标识单次API调用 (服务器级别，瞬时)
          *    - conversation_id: 标识用户会话 (前端级别，持久化在浏览器中)
          *    - llama-server本身是无状态的，不维护会话概念
          *    - 会话管理完全由WebUI前端负责 (通过IndexedDB存储conversation和message)
-         * 
+         *
          * 3. 具体用途:
          *    - API响应中的"id"字段，符合OpenAI API标准
          *    - 日志记录和调试时关联请求和响应
          *    - 在流式输出时标识数据属于哪个请求
          *    - 客户端可用于验证响应对应的请求
-         * 
+         *
          * 格式: "chatcmpl-" + 32位随机字符串 (兼容OpenAI API格式)
          */
         auto completion_id = gen_chatcmplid();
-        
+
         /*
          * 任务ID集合 - 跟踪当前API请求创建的所有并行任务
-         * 
+         *
          * 为什么需要多个任务ID？
          * 1. 批处理支持: 一个API请求可能包含多个提示(prompt)，每个提示对应一个独立任务
          *    例如: 客户端一次发送3个不同问题，服务器创建3个并行任务同时处理，这里的“批处理（batch）”就是指 一个 API 请求里包含多个输入，需要一次性得到多个输出。
-         * 
+         *
          * 2. 资源管理: 无论请求正常完成、异常中断还是客户端断开连接，都需要清理所有相关任务
          *    - 正常完成: 从等待队列中移除所有任务ID
          *    - 异常情况: 取消所有未完成的任务，释放占用的计算插槽
          *    - 连接断开: 避免无用任务继续消耗服务器资源
-         * 
+         *
          * 3. 流式输出跟踪: 在Server-Sent Events模式下，需要知道哪些任务的结果属于当前请求
          *    - 多个任务的输出可能交错到达
          *    - task_ids帮助过滤和组织属于同一请求的数据流
-         * 
+         *
          * 4. 并发安全: 在多线程环境下准确跟踪和管理任务状态
          *    - 防止任务泄漏导致的内存和计算资源浪费
          *    - 确保每个任务都有明确的生命周期管理
          */
         std::unordered_set<int> task_ids;
-        
+
         /*
          * 使用try-catch捕获处理过程中的各种异常
          * 包括参数错误、资源不足、网络断开等
@@ -5290,7 +5290,7 @@ int main(int argc, char ** argv) {
                 if (!has_mtmd && !files.empty()) {
                     throw std::runtime_error("This server does not support multimodal");
                 }
-                
+
                 /*
                  * 遍历所有上传的文件
                  * 将它们转换为模型可以理解的位图格式
@@ -5309,7 +5309,7 @@ int main(int argc, char ** argv) {
                     if (!bmp.ptr) {
                         throw std::runtime_error("Failed to load image or audio file");
                     }
-                    
+
                     /*
                      * 计算位图的哈希值(用于KV缓存)
                      * KV缓存是一个重要的优化技术，可以:
@@ -5319,7 +5319,7 @@ int main(int argc, char ** argv) {
                      */
                     std::string hash = fnv_hash(bmp.data(), bmp.n_bytes());
                     bmp.set_id(hash.c_str());  /* 设置位图的唯一标识符 */
-                    
+
                     /*
                      * 将处理好的位图添加到集合中
                      * std::move用于移动语义，避免不必要的内存复制
@@ -5330,7 +5330,7 @@ int main(int argc, char ** argv) {
 
             /*
              * 处理提示词 - 这是文本生成的核心步骤
-             * 将用户输入的文本转换为模型可以理解的 tokens 
+             * 将用户输入的文本转换为模型可以理解的 tokens
              */
             std::vector<server_tokens> inputs;
 
@@ -5344,7 +5344,7 @@ int main(int argc, char ** argv) {
                  * 这是更复杂的处理流程，需要特殊的令牌化方式
                  */
                 std::string prompt_str = prompt.get<std::string>();
-                
+
                 /*
                  * 多模态输入文本结构
                  * add_special: 是否添加特殊令牌(如BOS/EOS)
@@ -5355,14 +5355,14 @@ int main(int argc, char ** argv) {
                     /* add_special */   true,
                     /* parse_special */ true,
                 };
-                
+
                 /*
                  * 初始化多模态输入块结构
                  * chunks用于存储混合了文本和图片的令牌序列
                  */
                 mtmd::input_chunks chunks(mtmd_input_chunks_init());
                 auto bitmaps_c_ptr = bitmaps.c_ptr();  /* 获取C风格指针以兼容C API */
-                
+
                 /*
                  * 执行多模态令牌化
                  * 这个函数会将文本和图片结合成一个统一的令牌序列
@@ -5388,30 +5388,30 @@ int main(int argc, char ** argv) {
                  * 纯文本处理分支 - 只处理文本输入，不涉及图片等多模态数据
                  * 这是标准的文本生成流程，相比多模态处理更简单、更高效
                  */
-                
+
                 /*
                  * 步骤1: 文本令牌化(Tokenization)
                  * 将用户输入的自然语言文本转换为模型可以理解的数字token序列
-                 * 
+                 *
                  * tokenize_input_prompts参数说明:
                  * - ctx_server.vocab: 模型的词汇表，定义了text->token的映射规则
                  * - prompt: 用户输入的原始文本
                  * - true(add_special): 添加特殊标记如<BOS>(开始)、<EOS>(结束)等
                  * - true(parse_special): 解析文本中的特殊标记语法
-                 * 
+                 *
                  * 返回值: std::vector<llama_tokens> - 可能包含多个独立的token序列，多个独立的 token 序列是在批处理中出现的。
                  * 例如: ["Hello world", "How are you?"] -> [[1,2,3,4], [5,6,7,8]]
                  */
                 auto tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
-                
+
                 /*
                  * 步骤2: 转换为内部数据格式
                  * 将llama_tokens转换为server_tokens格式，添加服务器需要的元数据
-                 * 
+                 *
                  * 为什么需要这个转换？
                  * - llama_tokens: 原始的token数组，只包含基本的数字序列
                  * - server_tokens: 增强版本，包含多模态信息、缓存优化等服务器特性
-                 * 
+                 *
                  * inputs变量的作用:
                  * - 统一存储所有待处理的输入(无论是文本还是多模态)
                  * - 为后续的任务创建提供标准化的数据源
@@ -5439,11 +5439,11 @@ int main(int argc, char ** argv) {
              * inputs.size()表示需要创建的任务数量(每个input对应一个task)
              */
             tasks.reserve(inputs.size());
-            
+
             /*
              * 步骤4: 从inputs创建并行任务
              * 将标准化的输入数据转换为可执行的任务对象
-             * 
+             *
              * 为什么是一对一映射？
              * - 每个input代表一个独立的推理请求
              * - 每个task可以在不同的GPU插槽上并行执行
@@ -5464,10 +5464,10 @@ int main(int argc, char ** argv) {
                  * 用途: 日志记录、任务跟踪、结果匹配
                  */
                 task.id    = ctx_server.queue_tasks.get_new_id();
-                
+
                 /*
                  * 设置任务在当前请求批次中的索引
-                 * 用于: 
+                 * 用于:
                  * - 维护请求内部的顺序关系
                  * - 在批处理结果中找到对应位置
                  * - 调试时识别具体是哪个子请求
@@ -5480,14 +5480,14 @@ int main(int argc, char ** argv) {
                  * - 令牌化后的文本序列
                  * - 多模态标记(如果有的话)
                  * - 缓存优化信息
-                 * 
+                 *
                  * 使用std::move的原因:
                  * - inputs[i]的数据很大(可能数千个token)
                  * - 移动避免深拷贝，提高性能
                  * - 移动后inputs[i]变为空，但这里不再需要它
                  */
                 task.prompt_tokens = std::move(inputs[i]);
-                
+
                 /*
                  * 从请求JSON中解析生成参数
                  * 包括温度、top-p、最大令牌数等所有推理参数
@@ -5497,7 +5497,7 @@ int main(int argc, char ** argv) {
                         ctx_server.params_base,  /* 基础参数 */
                         data                 /* 请求数据 */
                 );
-                
+
                 /*
                  * 设置指定的插槽 ID(可选)
                  * 如果用户指定了-1以外的值，就会尝试使用指定插槽
@@ -5525,13 +5525,13 @@ int main(int argc, char ** argv) {
              * 用于后续的任务管理和清理工作
              */
             task_ids = server_task::get_list_id(tasks);
-            
+
             /*
              * 将任务添加到等待结果的列表中
              * 这样当任务完成时，可以通知请求处理器
              */
             ctx_server.queue_results.add_waiting_tasks(tasks);
-            
+
             /*
              * 将任务提交到任务队列
              * 从这里开始，任务就会被工作线程异步处理
@@ -5546,14 +5546,14 @@ int main(int argc, char ** argv) {
         /*
          * ==================== 响应模式选择 ====================
          * 检查客户端请求的响应模式，决定采用哪种数据传输策略
-         * 
+         *
          * stream=false (默认): 非流式模式 - 批量响应
          * - 等待所有内容生成完毕后一次性返回
          * - 适用场景: API集成、批量处理、完整内容需求
          * - 优点: 完整结果、简单处理、适合自动化
          * - 缺点: 延迟较高、用户等待时间长
-         * 
-         * stream=true: 流式模式 - 实时响应  
+         *
+         * stream=true: 流式模式 - 实时响应
          * - 边生成边发送，类似ChatGPT的打字机效果
          * - 适用场景: 交互式对话、实时展示、长文本生成
          * - 优点: 低延迟、实时反馈、更好的用户体验
@@ -5564,13 +5564,13 @@ int main(int argc, char ** argv) {
         /*
          * ==================== 非流式响应处理分支 ====================
          * 采用"请求-等待-批量响应"模式
-         * 
+         *
          * 核心流程:
          * 1. 提交所有任务到处理队列
-         * 2. 阻塞等待直到所有任务完成 
+         * 2. 阻塞等待直到所有任务完成
          * 3. 收集所有结果并打包成JSON
          * 4. 一次性返回完整响应给客户端
-         * 
+         *
          * 为什么需要这种模式？
          * - API稳定性: 传统REST API的标准做法，客户端容易处理
          * - 批处理效率: 避免频繁的网络通信开销
@@ -5580,19 +5580,19 @@ int main(int argc, char ** argv) {
         if (!stream) {
             /*
              * 核心API调用: receive_multi_results - 等待多任务完成
-             * 
+             *
              * 参数解析:
              * - task_ids: 要等待的任务ID集合，确保只处理本请求的任务
              * - success_callback: 所有任务成功完成后的处理函数
-             * - error_callback: 任何任务出错时的处理函数  
+             * - error_callback: 任何任务出错时的处理函数
              * - is_connection_closed: 连接状态检查，避免客户端断开后继续处理
-             * 
+             *
              * 为什么是阻塞操作？
              * - 非流式模式要求完整结果，必须等待所有任务完成
              * - HTTP请求-响应模型本身就是同步的
              * - 简化错误处理逻辑，要么全部成功要么全部失败
              */
-            ctx_server.receive_multi_results(task_ids, 
+            ctx_server.receive_multi_results(task_ids,
                 /*
                  * ========== 成功回调: 处理完成的任务结果 ==========
                  * 当所有任务都成功完成时被调用
@@ -5609,7 +5609,7 @@ int main(int argc, char ** argv) {
                         /*
                          * 单一结果处理 - 最常见的情况
                          * 直接返回JSON对象，避免不必要的数组包装
-                         * 
+                         *
                          * 解决的问题:
                          * - 保持API简洁性，单个请求不需要数组格式
                          * - 与传统聊天API保持一致的响应结构
@@ -5620,7 +5620,7 @@ int main(int argc, char ** argv) {
                         /*
                          * 批处理结果处理 - 多个请求的情况
                          * 将多个结果包装成JSON数组统一返回
-                         * 
+                         *
                          * 解决的问题:
                          * - 支持批量API调用，提高处理效率
                          * - 保持结果顺序与请求顺序一致
@@ -5636,11 +5636,11 @@ int main(int argc, char ** argv) {
                         }
                         res_ok(res, arr);
                     }
-                }, 
+                },
                 /*
                  * ========== 错误回调: 处理任务执行失败 ==========
                  * 当任何一个任务失败时被调用
-                 * 
+                 *
                  * 可能的错误场景:
                  * - 模型加载失败或崩溃
                  * - GPU内存不足
@@ -5655,11 +5655,11 @@ int main(int argc, char ** argv) {
                      * 确保客户端能够理解和处理错误情况
                      */
                     res_error(res, error_data);
-                }, 
+                },
                 /*
                  * ========== 连接状态检查 ==========
                  * 用于检测客户端是否提前断开连接
-                 * 
+                 *
                  * 解决的问题:
                  * - 避免客户端断开后服务器继续无用的计算
                  * - 及时释放计算资源给其他请求
@@ -5671,12 +5671,12 @@ int main(int argc, char ** argv) {
             /*
              * ========== 资源清理 ==========
              * 无论请求成功、失败还是被取消，都必须清理任务追踪信息
-             * 
+             *
              * 为什么必须清理？
              * - 防止内存泄漏: task_ids占用内存空间
              * - 避免任务积累: 等待队列无限增长会影响性能
              * - 确保系统稳定: 清理不完整会导致状态不一致
-             * 
+             *
              * remove_waiting_task_ids具体做了什么？
              * - 从全局等待队列中移除这些task_ids
              * - 释放相关的内部数据结构
@@ -5687,28 +5687,28 @@ int main(int argc, char ** argv) {
             /*
              * ==================== 流式响应处理分支 ====================
              * 采用"边生成边发送"的实时响应模式
-             * 
+             *
              * 核心流程:
              * 1. 立即返回HTTP 200 + SSE头部，建立流式连接
              * 2. 监听任务队列，一有新内容就推送给客户端
              * 3. 直到所有任务完成，发送结束标记
              * 4. 关闭连接并清理资源
-             * 
+             *
              * 为什么需要流式模式？
              * - 用户体验: 实时反馈，减少perceived延迟
              * - 长文本生成: 避免HTTP超时，支持几分钟的生成任务
              * - 交互性: 用户可以提前看到结果，决定是否继续
              * - 网络效率: 避免大量数据的一次性传输
              */
-            
+
             /*
              * ========== 分块内容提供器 ==========
              * Lambda函数，负责持续生成和发送SSE数据流
-             * 
+             *
              * 参数说明:
              * - size_t: httplib传入的建议缓冲区大小(通常忽略)
              * - DataSink & sink: 数据输出接口，用于向客户端写入数据
-             * 
+             *
              * 捕获变量:
              * - task_ids: 本请求相关的任务ID，确保数据对应关系
              * - ctx_server: 服务器上下文，用于获取生成结果
@@ -5722,11 +5722,11 @@ int main(int argc, char ** argv) {
                  * - 每当有新内容生成时就调用数据回调
                  * - 支持增量式内容传输
                  */
-                ctx_server.receive_cmpl_results_stream(task_ids, 
+                ctx_server.receive_cmpl_results_stream(task_ids,
                     /*
                      * ========== 数据回调: 处理每个生成的内容片段 ==========
                      * 每当模型生成新的token或一段文本时被调用
-                     * 
+                     *
                      * 调用频率: 高频调用，可能每秒数十次
                      * 返回值: true=继续生成，false=停止生成
                      */
@@ -5736,7 +5736,7 @@ int main(int argc, char ** argv) {
                          * result包含: 新生成的文本、累计统计、状态信息等
                          */
                         json res_json = result->to_json();
-                        
+
                         /*
                          * 处理批处理场景的结果分发
                          * 判断是单个结果还是批处理结果数组
@@ -5753,7 +5753,7 @@ int main(int argc, char ** argv) {
                                 /*
                                  * 发送单个SSE事件
                                  * server_sent_event格式: "data: {...}\n\n"
-                                 * 
+                                 *
                                  * 返回值检查的重要性:
                                  * - false表示连接已断开或写入失败
                                  * - 必须立即停止生成，避免资源浪费
@@ -5776,17 +5776,17 @@ int main(int argc, char ** argv) {
                             /*
                              * 单个结果处理 - 直接发送SSE事件
                              * 这是最常见的情况，大多数请求都是单个提示
-                             * 
+                             *
                              * SSE数据格式示例:
                              * data: {"choices":[{"delta":{"content":"Hello"}}],"id":"chatcmpl-123"}\n\n
                              */
                             return server_sent_event(sink, "data", res_json);
                         }
-                    }, 
+                    },
                     /*
                      * ========== 错误回调: 处理生成过程中的错误 ==========
                      * 当任务执行失败或遇到异常时被调用
-                     * 
+                     *
                      * 与非流式模式的区别:
                      * - 非流式: 错误发生时返回HTTP错误状态码
                      * - 流式: 连接已建立，只能通过SSE发送错误事件
@@ -5795,23 +5795,23 @@ int main(int argc, char ** argv) {
                         /*
                          * 通过SSE发送错误事件
                          * 使用"error"事件类型，符合SSE标准
-                         * 
+                         *
                          * 客户端识别方法:
                          * - 监听'error'类型事件
                          * - 解析error_data中的错误信息
                          * - 根据错误类型决定是否重试
                          */
                         server_sent_event(sink, "error", error_data);
-                    }, 
+                    },
                     /*
                      * ========== 连接检查回调: 检测客户端连接状态 ==========
                      * 定期被调用，用于检测客户端是否仍然连接
-                     * 
+                     *
                      * 为什么需要这个检查？
                      * - 生成可能需要几分钟，客户端可能中途断开
                      * - 避免服务器对断开的连接继续计算
                      * - 及时释放GPU资源给其他请求
-                     * 
+                     *
                      * 技术细节:
                      * - 不能使用req.is_connection_closed()，因为req对象已销毁
                      * - 使用sink.is_writable()来判断连接状态
@@ -5821,11 +5821,11 @@ int main(int argc, char ** argv) {
                         return !sink.is_writable();  // 连接不可写 = 连接断开
                     }
                 );
-                
+
                 /*
                  * ========== OpenAI兼容性处理 ==========
                  * 发送流式响应结束标记，符合OpenAI API规范
-                 * 
+                 *
                  * OpenAI标准要求:
                  * - 流式响应必须以"data: [DONE]"结束
                  * - 表示所有内容已生成完毕，客户端可以关闭连接
@@ -5835,11 +5835,11 @@ int main(int argc, char ** argv) {
                     static const std::string ev_done = "data: [DONE]\n\n";
                     sink.write(ev_done.data(), ev_done.size());
                 }
-                
+
                 /*
                  * ========== 完成响应传输 ==========
                  * 通知HTTP库响应已完成，可以关闭连接
-                 * 
+                 *
                  * sink.done()的作用:
                  * - 标记数据传输完毕
                  * - 触发TCP连接的优雅关闭
@@ -5853,7 +5853,7 @@ int main(int argc, char ** argv) {
              * ========== 响应完成回调函数 ==========
              * 无论流式传输成功、失败还是被客户端中断都会被调用
              * 这是资源清理的最后机会
-             * 
+             *
              * 调用时机:
              * - 正常完成: 所有数据发送完毕，连接正常关闭
              * - 异常中断: 网络错误、客户端断开、服务器错误
@@ -5862,12 +5862,12 @@ int main(int argc, char ** argv) {
             auto on_complete = [task_ids, &ctx_server] (bool success) {
                 /*
                  * 强制清理所有相关任务ID
-                 * 
+                 *
                  * 为什么success参数被忽略？
                  * - 无论成功失败，都必须清理资源
                  * - 任务可能处于各种中间状态，统一清理更安全
                  * - 避免因状态判断错误导致的资源泄漏
-                 * 
+                 *
                  * 清理操作包括:
                  * - 从全局等待队列移除task_ids
                  * - 释放任务相关内存
@@ -5879,12 +5879,12 @@ int main(int argc, char ** argv) {
             /*
              * ========== 启动分块传输模式 ==========
              * 这是HTTP流式响应的核心设置
-             * 
+             *
              * 参数解析:
              * - "text/event-stream": SSE标准的Content-Type
              * - chunked_content_provider: 数据生成器函数
              * - on_complete: 完成后的清理回调
-             * 
+             *
              * 此调用的效果:
              * - 立即向客户端发送HTTP 200 + SSE头部
              * - 建立持久连接，准备接收流式数据
@@ -5906,13 +5906,13 @@ int main(int argc, char ** argv) {
          * 包含提示文本、生成参数等所有必要信息
          */
         json data = json::parse(req.body);
-        
+
         /*
          * 创建空的文件数组
          * 标准补全接口不支持文件上传，所以这里是空的
          */
         std::vector<raw_buffer> files; // dummy
-        
+
         /*
          * 调用通用补全实现函数
          * SERVER_TASK_TYPE_COMPLETION: 指定任务类型为文本补全
@@ -5941,13 +5941,13 @@ int main(int argc, char ** argv) {
          * - 添加默认值和参数验证
          */
         json data = oaicompat_completion_params_parse(json::parse(req.body));
-        
+
         /*
          * 创建空的文件数组
          * OpenAI补全接口不支持文件上传(文件上传在chat接口中支持)
          */
         std::vector<raw_buffer> files; // dummy
-        
+
         /*
          * 调用通用补全实现函数
          * SERVER_TASK_TYPE_COMPLETION: 指定任务类型为文本补全
@@ -5974,7 +5974,7 @@ int main(int argc, char ** argv) {
          * FIM需要特殊的词汇表令牌来标记前缀、后缀和中间部分
          */
         std::string err;
-        
+
         /*
          * 检查前缀令牌 - 标记代码前部分的特殊token
          * 如果模型词汇表中没有这个token，就无法进行填充操作
@@ -5982,7 +5982,7 @@ int main(int argc, char ** argv) {
         if (llama_vocab_fim_pre(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "prefix token is missing. ";
         }
-        
+
         /*
          * 检查后缀令牌 - 标记代码后部分的特殊token
          * 用于告诉模型在哪里结束填充内容
@@ -5990,7 +5990,7 @@ int main(int argc, char ** argv) {
         if (llama_vocab_fim_suf(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "suffix token is missing. ";
         }
-        
+
         /*
          * 检查中间令牌 - 标记需要填充位置的特殊token
          * 这是FIM的关键token，告诉模型在此处生成内容
@@ -5998,7 +5998,7 @@ int main(int argc, char ** argv) {
         if (llama_vocab_fim_mid(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "middle token is missing. ";
         }
-        
+
         /*
          * 如果缺少任何必要的FIM令牌，返回不支持错误
          * 避免用户尝试使用不兼容的模型进行填充操作
@@ -6018,7 +6018,7 @@ int main(int argc, char ** argv) {
          * 输入参数验证 - 确保请求格式正确
          * 严格的参数验证可以避免后续处理中的错误
          */
-        
+
         /*
          * 验证可选的prompt参数
          * prompt用于提供额外的指导信息，如编程语言类型、代码风格等
@@ -6067,7 +6067,7 @@ int main(int argc, char ** argv) {
                 res_error(res, format_error_response("extra_context chunk must contain a \"text\" field with a string value", ERROR_TYPE_INVALID_REQUEST));
                 return;
             }
-            
+
             /*
              * 验证可选的filename字段
              * 如果提供了filename，它必须是字符串类型
@@ -6077,7 +6077,7 @@ int main(int argc, char ** argv) {
                 return;
             }
         }
-        
+
         /*
          * 确保input_extra字段存在
          * 如果请求中没有提供，就设置为空数组
@@ -6092,7 +6092,7 @@ int main(int argc, char ** argv) {
         std::string prompt = json_value(data, "prompt", std::string());
         std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, false, true);
         SRV_DBG("creating infill tasks, n_prompts = %d\n", (int) tokenized_prompts.size());
-        
+
         /*
          * 格式化填充提示 - 这是FIM的核心步骤
          * format_infill函数会：
@@ -6118,7 +6118,7 @@ int main(int argc, char ** argv) {
          * 填充接口不支持文件上传，只处理纯文本代码
          */
         std::vector<raw_buffer> files; // dummy
-        
+
         /*
          * 调用通用补全实现函数
          * SERVER_TASK_TYPE_INFILL: 指定任务类型为代码填充
@@ -6135,14 +6135,14 @@ int main(int argc, char ** argv) {
 
     /*
      * 🤖 OpenAI兼容聊天补全接口处理器(OpenAI-compatible chat completion handler) - 这是AI聊天的"总接待员"
-     * 
+     *
      * 功能简介：
      * - 处理 /v1/chat/completions 端点请求（就像ChatGPT的聊天接口）
      * - 兼容OpenAI Chat API格式，让其他应用可以无缝切换到llama.cpp
      * - 支持多轮对话：记住之前的对话内容，像真人聊天一样
      * - 支持角色扮演：可以让AI扮演不同角色（助手、用户、系统等）
      * - 支持多模态输入：不仅可以发文字，还可以发图片、音频等
-     * 
+     *
      * 工作流程（就像餐厅服务）：
      * 1. 接收客户点餐单（聊天请求JSON）
      * 2. 把点餐单翻译成厨房语言（转换为内部格式）
@@ -6167,7 +6167,7 @@ int main(int argc, char ** argv) {
          * 等等其他参数...
          */
         auto body = json::parse(req.body);
-        
+
         /*
          * 🗃️ 用于存储解析出的文件数据 - 就像准备一个文件夹放客户的附件
          * 现代聊天不仅有文字，还可能有图片、音频等多媒体内容
@@ -6175,23 +6175,23 @@ int main(int argc, char ** argv) {
          * TODO:是否包含 messages 和上传的文件数据？
          */
         std::vector<raw_buffer> files;
-        
+
         /*
          * 🔄 oaicompat_chat_params_parse函数 - OpenAI格式到llama.cpp内部格式的核心转换器
-         * 
+         *
          * 函数作用：
          * 将标准OpenAI Chat Completions API格式的请求转换为llama.cpp引擎能够理解和处理的内部参数格式
-         * 
+         *
          * 使用的输入数据：
          * - body: HTTP请求体中的原始JSON数据(OpenAI格式)，包含messages、model、temperature、max_tokens等参数
          * - ctx_server.oai_parser_opt: 服务器解析器配置选项，包含聊天模板、参数映射规则、模型配置等
-         * 
+         *
          * 修改的输出数据：
          * - files: std::vector<raw_buffer>引用，函数会将多媒体内容(base64图片、音频)解码后存入此容器
          * - 返回值data: 转换后的JSON对象，包含llama.cpp内部使用的参数格式
-         * 
+         *
          * 详细转换示例：
-         * 
+         *
          * 输入 - OpenAI格式：
          * {
          *   "model": "gpt-3.5-turbo",
@@ -6206,7 +6206,7 @@ int main(int argc, char ** argv) {
          *   "stream": true,
          *   "stop": ["Human:", "AI:"]
          * }
-         * 
+         *
          * 输出 - llama.cpp内部格式：
          * {
          *   "prompt": "<|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHello, how are you?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nI'm doing well, thank you!<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat's the weather like?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
@@ -6215,7 +6215,7 @@ int main(int argc, char ** argv) {
          *   "stream": true,
          *   "stop": ["Human:", "AI:", "<|eot_id|>"]
          * }
-         * 
+         *
          * 关键转换过程：
          * 1. messages数组 -> 单一prompt字符串(应用聊天模板格式化)
          * 2. max_tokens -> n_predict
@@ -6231,18 +6231,18 @@ int main(int argc, char ** argv) {
 
         /*
          * 🚀 handle_completions_impl函数 - 统一的AI文本生成核心引擎
-         * 
+         *
          * 函数作用：
          * 这是llama.cpp服务器的核心文本生成函数，负责将经过预处理的请求参数提交给AI模型进行文本生成，
          * 支持普通补全、聊天对话、代码填充等多种模式，并处理流式输出、多模态输入和连接管理。
-         * 
+         *
          * 参数详解：
-         * 
+         *
          * 1. SERVER_TASK_TYPE_COMPLETION - 任务类型枚举：
          *    - 指定当前请求的处理模式为文本补全
          *    - 聊天对话在此阶段已被转换为补全任务(通过prompt模板)
          *    - 其他可选值: SERVER_TASK_TYPE_INFILL(代码填充)
-         * 
+         *
          * 2. data - 处理后的请求参数JSON对象：
          *    包含llama.cpp内部格式的所有生成参数，例如：
          *    {
@@ -6253,19 +6253,19 @@ int main(int argc, char ** argv) {
          *      "stream": true,                // 是否流式输出
          *      "stop": ["<|eot_id|>"]        // 停止生成的标记
          *    }
-         * 
+         *
          * 3. files - 多媒体文件数据容器：
          *    std::vector<raw_buffer>类型，包含已解码的图片/音频二进制数据
          *    例如用户上传的PNG/JPEG图片会被解码为像素数据存储在此容器中
-         * 
+         *
          * 4. req.is_connection_closed - 连接状态检查函数：
          *    std::function<bool()>类型的回调函数，用于检测客户端是否断开连接
          *    在长时间生成过程中定期调用，如果连接断开则及时停止生成避免资源浪费
-         * 
+         *
          * 5. res - HTTP响应对象引用：
          *    httplib::Response类型，用于向客户端发送生成的文本内容
          *    支持分块传输编码(chunked)实现流式输出
-         * 
+         *
          * 6. OAICOMPAT_TYPE_CHAT - OpenAI兼容模式：
          *    指定响应格式为OpenAI Chat Completions API标准格式
          *    输出示例：
@@ -6283,7 +6283,7 @@ int main(int argc, char ** argv) {
          *        "finish_reason": "stop"
          *      }]
          *    }
-         * 
+         *
          * 函数内部处理流程：
          * 1. 创建任务队列和补全ID
          * 2. 处理多模态文件数据
@@ -6312,13 +6312,13 @@ int main(int argc, char ** argv) {
          * 包含与聊天接口相同的messages数组和参数
          */
         auto body = json::parse(req.body);
-        
+
         /*
          * 创建空的文件数组(此接口不使用文件功能)
          * 只是为了满足解析函数的参数要求
          */
         std::vector<raw_buffer> files; // dummy, unused
-        
+
         /*
          * 使用与聊天接口相同的解析逻辑
          * 将messages转换为格式化的prompt字符串
@@ -6329,7 +6329,7 @@ int main(int argc, char ** argv) {
             ctx_server.oai_parser_opt,   /* OpenAI解析器选项 */
             files                        /* 未使用的文件数组 */
         );
-        
+
         /*
          * 返回处理后的prompt
          * 这让开发者可以预览最终发送给模型的prompt内容
@@ -6349,7 +6349,7 @@ int main(int argc, char ** argv) {
          * 使用原子操作确保状态读取的线程安全性
          */
         server_state current_state = state.load();
-        
+
         /*
          * 模型元数据初始化
          * 只有在服务器就绪状态下才能获取模型信息
@@ -6377,19 +6377,19 @@ int main(int argc, char ** argv) {
                     /* 模型名称，优先使用别名，否则使用文件路径 */
                     {"name", params.model_alias.empty() ? params.model.path : params.model_alias},
                     {"model", params.model_alias.empty() ? params.model.path : params.model_alias},
-                    
+
                     /* 模型文件信息(这些字段为占位符，llama.cpp目前不支持) */
                     {"modified_at", ""},           /* 修改时间 */
                     {"size", ""},                  /* 文件大小 */
                     {"digest", ""},               /* 文件哈希值 - llama.cpp不支持管理模型文件哈希 */
-                    
+
                     /* 模型基本属性 */
                     {"type", "model"},            /* 类型：模型 */
                     {"description", ""},          /* 描述信息 */
                     {"tags", {""}},              /* 标签列表 */
                     {"capabilities", {"completion"}}, /* 支持的功能：文本补全 */
                     {"parameters", ""},           /* 参数信息 */
-                    
+
                     /* 详细信息 */
                     {"details", {
                         {"parent_model", ""},            /* 父模型 */
@@ -6401,7 +6401,7 @@ int main(int argc, char ** argv) {
                     }}
                 }
             }},
-            
+
             /*
              * OpenAI API兼容格式
              * 符合OpenAI /v1/models 端点的响应格式
@@ -6443,7 +6443,7 @@ int main(int argc, char ** argv) {
          * 将存储令牌ID和对应的文本片段
          */
         json tokens_response = json::array();
-        
+
         /*
          * 检查是否提供了content字段
          * content包含需要令牌化的文本内容
@@ -6547,7 +6547,7 @@ int main(int argc, char ** argv) {
          * 将存储从token序列重建的文本
          */
         std::string content;
-        
+
         /*
          * 检查是否提供了tokens字段
          * tokens包含需要转换的token ID数组
@@ -6558,7 +6558,7 @@ int main(int argc, char ** argv) {
              * 从JSON中提取llama_tokens类型的token序列
              */
             const llama_tokens tokens = body.at("tokens");
-            
+
             /*
              * 执行反向令牌化操作
              * tokens_to_str函数将token ID序列转换为连续的文本字符串
@@ -6908,19 +6908,19 @@ int main(int argc, char ** argv) {
              * 限制tasks变量的作用域，及时释放内存
              */
             std::vector<server_task> tasks;
-            
+
             /*
              * 令牌化所有文档
              * 不添加特殊token，保持文档的原始语义
              */
             auto tokenized_docs = tokenize_input_prompts(ctx_server.vocab, documents, /* add_special */ false, true);
-            
+
             /*
              * 预分配任务容器空间
              * 提高性能，避免动态扩容
              */
             tasks.reserve(tokenized_docs.size());
-            
+
             /*
              * 为每个文档创建重排序任务
              * 每个任务计算一个文档与查询的相关性得分
@@ -6932,13 +6932,13 @@ int main(int argc, char ** argv) {
                  * 通常是 [查询] [分隔符] [文档] 的形式
                  */
                 auto tmp = format_rerank(ctx_server.vocab, tokenized_query, tokenized_docs[i]);
-                
+
                 /* 创建重排序任务 */
                 server_task task   = server_task(SERVER_TASK_TYPE_RERANK);
                 task.id            = ctx_server.queue_tasks.get_new_id(); /* 获取唯一任务ID */
                 task.index         = i;                                   /* 文档在批处理中的索引 */
                 task.prompt_tokens = server_tokens(tmp, ctx_server.mctx != nullptr); /* 格式化后的令牌序列 */
-                
+
                 /* 将任务添加到批处理列表 */
                 tasks.push_back(std::move(task));
             }
@@ -7011,13 +7011,13 @@ int main(int argc, char ** argv) {
          * 用于存储所有LoRA适配器的信息
          */
         json result = json::array();
-        
+
         /*
          * 获取服务器配置的LoRA适配器列表
          * 这些适配器在服务器启动时通过命令行参数配置
          */
         const auto & loras = ctx_server.params_base.lora_adapters;
-        
+
         /*
          * 遍历所有LoRA适配器
          * 将每个适配器的信息转换为JSON对象
@@ -7034,7 +7034,7 @@ int main(int argc, char ** argv) {
                 {"scale", lora.scale},  /* 适配器的缩放因子(影响强度) */
             });
         }
-        
+
         /*
          * 返回成功响应
          * 包含所有可用的LoRA适配器信息
@@ -7054,7 +7054,7 @@ int main(int argc, char ** argv) {
          * 应包含要应用的LoRA适配器配置数组
          */
         const json body = json::parse(req.body);
-        
+
         /*
          * 验证请求体格式
          * 必须是JSON数组，每个元素描述一个适配器的应用配置
@@ -7082,7 +7082,7 @@ int main(int argc, char ** argv) {
              * 检查适配器ID的有效性、缩放因子的合理性等
              */
             task.set_lora = parse_lora_request(ctx_server.params_base.lora_adapters, body);
-            
+
             /*
              * 提交任务并等待结果
              * LoRA切换需要修改模型权重，是一个相对重要的操作
@@ -7138,7 +7138,7 @@ int main(int argc, char ** argv) {
          * Web UI已启用
          * 配置静态文件服务或嵌入式Web界面
          */
-        
+
         /*
          * 静态文件路由注册
          * 检查是否指定了自定义的静态文件目录
@@ -7179,7 +7179,7 @@ int main(int argc, char ** argv) {
                      * 告诉浏览器内容是gzip压缩的
                      */
                     res.set_header("Content-Encoding", "gzip");
-                    
+
                     /*
                      * 设置跨域安全策略头
                      * COEP和COOP头部是pyodide(Python解释器)所必需的
@@ -7187,7 +7187,7 @@ int main(int argc, char ** argv) {
                      */
                     res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
                     res.set_header("Cross-Origin-Opener-Policy", "same-origin");
-                    
+
                     /*
                      * 返回嵌入式HTML内容
                      * index_html_gz是编译时嵌入的gzip压缩HTML数据
@@ -7302,7 +7302,7 @@ int main(int argc, char ** argv) {
         params.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
     log_data["n_threads_http"] =  std::to_string(params.n_threads_http);
-    
+
     /*
      * 创建HTTP线程池工厂函数
      * 为HTTP服务器提供线程池，用于并发处理请求
@@ -7326,7 +7326,7 @@ int main(int argc, char ** argv) {
      */
     bool was_bound = false;  /* 绑定成功标志 */
     bool is_sock = false;    /* Unix Socket标志 */
-    
+
     /*
      * 检查是否使用Unix Domain Socket
      * 如果hostname以.sock结尾，则使用Unix Socket
@@ -7350,7 +7350,7 @@ int main(int argc, char ** argv) {
          * 适用于网络访问和跨机器通信
          */
         LOG_INF("%s: binding port with default address family\n", __func__);
-        
+
         /*
          * 绑定HTTP监听端口
          * 支持自动端口分配和指定端口两种模式
@@ -7420,7 +7420,7 @@ int main(int argc, char ** argv) {
      * 设置推理参数、分配内存、准备推理状态等
      */
     ctx_server.init();
-    
+
     /*
      * 更新服务器状态为就绪
      * 此时服务器可以开始接受和处理推理请求
@@ -7518,7 +7518,7 @@ int main(int argc, char ** argv) {
      * ================================
      * 进入任务处理主循环，服务器开始正式工作
      */
-    
+
     /*
      * 启动任务队列主循环
      * 这个调用会阻塞主线程，直到queue_tasks.terminate()被调用
@@ -7532,13 +7532,13 @@ int main(int argc, char ** argv) {
      * ================================
      * 当主循环结束后，执行清理工作并优雅退出
      */
-    
+
     /*
      * 执行资源清理
      * 停止HTTP服务器、释放模型内存、清理队列等
      */
     clean_up();
-    
+
     /*
      * 等待HTTP服务器线程结束
      * 确保所有线程都正确终止
