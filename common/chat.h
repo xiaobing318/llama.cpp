@@ -30,15 +30,139 @@ struct common_chat_msg_content_part {
     }
 };
 
+/*
+ * ========== OpenAI兼容聊天消息结构定义 ==========
+ * 
+ * 这个结构体定义了符合OpenAI Chat Completions API标准的消息格式。
+ * 用于在llama.cpp内部表示和处理聊天对话消息，支持多模态内容和工具调用。
+ *
+ * 设计原理:
+ * - 完全兼容OpenAI Chat API的消息格式规范
+ * - 支持角色系统(system/user/assistant/tool)
+ * - 支持多模态内容(文本+图片等)
+ * - 支持工具调用和函数功能
+ * - 提供与OpenAI API的无缝互操作性
+ *
+ * 应用场景:
+ * - 聊天机器人和对话系统的消息存储
+ * - HTTP请求解析后的内部数据表示  
+ * - 模板渲染和提示词构建
+ * - 工具调用和函数执行的参数传递
+ */
 struct common_chat_msg {
+    /*
+     * role - 消息角色标识
+     * 
+     * 符合OpenAI标准的角色类型:
+     * - "system": 系统提示消息，定义AI的行为和规则
+     * - "user": 用户输入消息，包含用户的问题或请求
+     * - "assistant": AI助手回复消息，包含模型生成的响应
+     * - "tool": 工具执行结果消息，包含函数调用的返回值
+     * 
+     * 作用:
+     * - 区分对话中不同参与者的消息
+     * - 为模型提供上下文理解的角色信息
+     * - 支持多轮对话和角色扮演场景
+     */
     std::string role;
+    
+    /*
+     * content - 消息文本内容
+     * 
+     * 包含消息的主要文本信息:
+     * - 用户的问题或指令(role="user"时)
+     * - AI的回复内容(role="assistant"时)  
+     * - 系统提示信息(role="system"时)
+     * - 工具执行结果(role="tool"时)
+     * 
+     * 注意: 当使用content_parts多模态内容时，此字段应为空
+     */
     std::string content;
+    
+    /*
+     * content_parts - 多模态内容部分数组
+     * 
+     * 支持包含多种类型内容的复杂消息:
+     * - 文本片段 (type="text")
+     * - 图片内容 (type="image_url")  
+     * - 音频内容 (type="audio")
+     * 
+     * 应用场景:
+     * - 图文混合的多模态对话
+     * - 需要同时处理文本和媒体内容的应用
+     * - 复杂的结构化输入消息
+     * 
+     * 注意: 与content字段互斥，不能同时使用
+     */
     std::vector<common_chat_msg_content_part> content_parts = {};
+    
+    /*
+     * tool_calls - 工具调用请求数组
+     * 
+     * 当AI需要调用外部函数或工具时使用:
+     * - 函数名称和参数信息
+     * - 调用ID用于结果匹配
+     * - 支持并行多个工具调用
+     * 
+     * 应用场景:
+     * - 函数调用和API集成
+     * - 外部数据查询和计算
+     * - 工具增强的AI助手功能
+     * 
+     * 对应OpenAI的tool_calls字段
+     */
     std::vector<common_chat_tool_call> tool_calls = {};
+    
+    /*
+     * reasoning_content - 推理过程内容
+     * 
+     * 用于支持思维链(Chain of Thought)和推理展示:
+     * - 存储AI的内部思考过程
+     * - 支持可解释的AI推理
+     * - 类似OpenAI o1模型的thinking过程
+     * 
+     * 应用场景:
+     * - 需要展示推理过程的应用
+     * - 教育和解释性AI系统
+     * - 调试和分析AI的决策逻辑
+     */
     std::string reasoning_content;
+    
+    /*
+     * tool_name - 工具名称
+     * 
+     * 当消息类型为"tool"时使用:
+     * - 标识执行结果来自哪个工具
+     * - 用于工具调用的结果回传
+     * - 对应OpenAI API中的name字段
+     */
     std::string tool_name;
+    
+    /*
+     * tool_call_id - 工具调用标识
+     * 
+     * 用于关联工具调用请求和响应:
+     * - 唯一标识一次工具调用
+     * - 支持异步和并行工具执行
+     * - 确保结果正确匹配到相应的调用请求
+     * 
+     * 对应OpenAI API中的tool_call_id字段
+     */
     std::string tool_call_id;
 
+    /*
+     * to_json_oaicompat() - OpenAI兼容JSON序列化方法
+     * 
+     * 将内部消息结构转换为符合OpenAI API标准的JSON格式。
+     * 根据模板参数T的类型，生成对应的JSON对象。
+     * 
+     * 实现位置: common/chat.cpp:260-326
+     * 转换逻辑: 
+     * - 处理role和content的基本映射
+     * - 转换content_parts为OpenAI格式的内容数组
+     * - 处理tool_calls的函数调用格式
+     * - 支持reasoning_content的推理内容展示
+     */
     template <class T> T to_json_oaicompat() const;
 
     bool empty() const {

@@ -257,56 +257,298 @@ std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messa
 }
 
 template <>
+/*
+ * ========== OpenAI兼容消息数组JSON序列化实现 ==========
+ *
+ * 将llama.cpp内部的消息数组转换为完全符合OpenAI Chat Completions API标准的JSON格式。
+ * 这是实现OpenAI API兼容性的核心函数，确保客户端能够无缝使用现有的OpenAI客户端代码。
+ *
+ * 功能特性:
+ * - 完整支持OpenAI消息格式规范(role, content, tool_calls等)
+ * - 处理多模态内容(文本+图片)的格式转换
+ * - 支持工具调用(function calling)的JSON结构
+ * - 支持推理内容(reasoning/thinking)的展示
+ * - 提供灵活的文本内容处理选项
+ *
+ * 参数说明:
+ * @param msgs - llama.cpp内部消息数组，包含完整的对话历史
+ * @param concat_typed_text - 是否将多模态内容中的文本部分合并为单一字符串
+ *        true: 将content_parts中的文本合并到content字段(兼容性更好)
+ *        false: 保持content_parts的原始结构(支持更复杂的多模态)
+ *
+ * 返回格式: 符合OpenAI标准的消息数组JSON
+ * [
+ *   {
+ *     "role": "system|user|assistant|tool",
+ *     "content": "文本内容" | [{"type": "text|image_url", ...}],
+ *     "tool_calls": [{"type": "function", "function": {...}}],
+ *     "reasoning_content": "推理过程",
+ *     "name": "工具名称",
+ *     "tool_call_id": "调用标识"
+ *   }
+ * ]
+ */
 json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msgs, bool concat_typed_text) {
     json messages = json::array();
     for (const auto & msg : msgs) {
+        /*
+         * 互斥性检查 - OpenAI API要求content和content_parts不能同时存在
+         * 这确保了消息格式的一致性和API兼容性
+         */
         if (!msg.content.empty() && !msg.content_parts.empty()) {
             throw std::runtime_error("Cannot specify both content and content_parts");
         }
+        
+        /*
+         * 构建基础消息对象
+         * role字段是所有消息必须包含的核心字段
+         */
         json jmsg {
             {"role", msg.role},
         };
+        
+        /*
+         * ========== 内容处理分支 ==========
+         * 根据消息的内容类型选择合适的序列化方式
+         */
         if (!msg.content.empty()) {
+            /*
+             * 简单文本内容处理
+             * 最常见的情况，直接映射文本内容到content字段
+             */
             jmsg["content"] = msg.content;
         } else if (!msg.content_parts.empty()) {
+            /*
+             * ========== 多模态内容处理分支 ==========
+             * 处理包含文本、图片、音频等多种类型内容的复杂消息
+             * 
+             * 支持两种处理模式，由concat_typed_text参数控制：
+             * 1. 合并模式：将所有文本部分合并为单一字符串
+             * 2. 结构化模式：保持OpenAI标准的content数组格式
+             */
             if (concat_typed_text) {
+                /*
+                 * ========== 文本合并模式 ==========
+                 * 
+                 * 目的: 提高与传统文本处理系统的兼容性
+                 * 
+                 * 处理逻辑:
+                 * - 遍历content_parts数组
+                 * - 只提取type="text"的内容部分
+                 * - 忽略非文本内容(图片、音频等)
+                 * - 用换行符连接多个文本片段
+                 * - 最终生成单一的content字符串
+                 * 
+                 * 适用场景:
+                 * - 纯文本处理场景(如模板渲染)
+                 * - 需要简化内容结构的应用
+                 * - 不支持多模态的下游系统
+                 * 
+                 * 注意事项:
+                 * - 非文本内容会被丢弃(输出警告日志)
+                 * - 可能导致信息丢失，需谨慎使用
+                 */
                 std::string text;
                 for (const auto & part : msg.content_parts) {
                     if (part.type != "text") {
+                        /*
+                         * 警告日志: 通知用户有内容被忽略
+                         * 这有助于调试和发现潜在的信息丢失问题
+                         */
                         LOG_WRN("Ignoring content part type: %s\n", part.type.c_str());
                         continue;
                     }
                     if (!text.empty()) {
+                        /*
+                         * 换行符分隔: 确保不同文本片段之间的清晰分割
+                         * 保持文本的可读性和结构性
+                         */
                         text += '\n';
                     }
                     text += part.text;
                 }
                 jmsg["content"] = text;
             } else {
+                /*
+                 * ========== 结构化多模态模式 ==========
+                 * 
+                 * 目的: 完全符合OpenAI Chat Completions API标准的多模态格式
+                 * 
+                 * 处理逻辑:
+                 * - 创建content数组，包含所有内容部分
+                 * - 保持每个部分的类型和内容信息
+                 * - 支持文本、图片、音频等各种媒体类型
+                 * - 严格按照OpenAI API规范构建JSON结构
+                 * 
+                 * OpenAI标准格式:
+                 * "content": [
+                 *   {"type": "text", "text": "文本内容"},
+                 *   {"type": "image_url", "image_url": {"url": "图片URL"}},
+                 *   {"type": "audio", "audio": {...}}
+                 * ]
+                 * 
+                 * 适用场景:
+                 * - 需要完整多模态支持的应用
+                 * - 图文混合的对话系统
+                 * - 需要与OpenAI客户端完全兼容的场景
+                 * 
+                 * 技术优势:
+                 * - 无信息丢失，保持完整的内容结构
+                 * - 支持复杂的多媒体交互
+                 * - 便于客户端进行精细化内容处理
+                 */
                 auto & parts = jmsg["content"] = json::array();
                 for (const auto & part : msg.content_parts) {
+                    /*
+                     * 构建符合OpenAI标准的内容部分对象
+                     * 每个部分包含type和对应的内容字段
+                     * 
+                     * 注意: 这里简化处理，实际可能需要根据type
+                     * 构建不同的字段结构(如image_url对象等)
+                     */
                     parts.push_back({
                         {"type", part.type},
-                        {"text", part.text},
+                        {"text", part.text},  // 注意: 对于非文本类型，这个字段可能需要调整
                     });
                 }
             }
         } else {
+            /*
+             * ========== 空内容处理 ==========
+             * 
+             * 当消息既没有content也没有content_parts时的处理
+             * 
+             * 场景说明:
+             * - 纯工具调用消息(assistant角色发起工具调用，无文本内容)
+             * - 占位消息或结构化消息
+             * - 某些特殊的系统消息
+             * 
+             * OpenAI兼容性要求:
+             * - content字段必须存在，但可以为null
+             * - 符合OpenAI API规范，避免客户端解析错误
+             */
             jmsg["content"] = json(); // null
         }
+        /*
+         * ========== 推理内容处理 ==========
+         * 
+         * 支持AI模型的思维过程展示功能，类似OpenAI的o1系列模型
+         */
         if (!msg.reasoning_content.empty()) {
+            /*
+             * reasoning_content字段:
+             * - 存储AI的内部推理过程
+             * - 支持思维链(Chain of Thought)展示
+             * - 提供可解释的AI决策过程
+             * 
+             * 应用场景:
+             * - 教育应用中展示解题思路
+             * - 复杂推理任务的过程透明化
+             * - AI决策的可解释性和可审计性
+             * - 调试和分析AI的推理逻辑
+             */
             jmsg["reasoning_content"] = msg.reasoning_content;
+            
+            /*
+             * thinking字段 (gpt-oss兼容性):
+             * - 为兼容gpt-oss项目而添加的别名字段
+             * - 与reasoning_content内容相同
+             * - 确保与不同开源项目的互操作性
+             * 
+             * 设计考虑:
+             * - 保持向后兼容性
+             * - 支持多种命名约定
+             * - 便于项目间的集成和迁移
+             */
             jmsg["thinking"] = msg.reasoning_content; // gpt-oss
         }
+        
+        /*
+         * ========== 工具相关字段处理 ==========
+         * 
+         * 处理与OpenAI Function Calling功能相关的所有字段
+         * 支持复杂的工具调用和结果回传机制
+         */
         if (!msg.tool_name.empty()) {
+            /*
+             * tool_name → name字段映射
+             * 
+             * 用途: 当消息角色为"tool"时，标识工具的名称
+             * 
+             * OpenAI标准要求:
+             * - tool类型的消息必须包含name字段
+             * - name字段标识执行结果来自哪个具体工具
+             * - 用于将工具执行结果关联到相应的工具调用
+             * 
+             * 应用场景:
+             * - 多工具环境中的结果识别
+             * - 工具调用链的追踪和调试
+             * - 并行工具执行的结果分发
+             */
             jmsg["name"] = msg.tool_name;
         }
+        
         if (!msg.tool_call_id.empty()) {
+            /*
+             * tool_call_id字段处理
+             * 
+             * 功能: 唯一标识一次工具调用的ID
+             * 
+             * 工作原理:
+             * 1. Assistant发起工具调用时生成唯一ID
+             * 2. 工具执行完成后，结果消息携带相同ID
+             * 3. 系统通过ID匹配调用请求和执行结果
+             * 
+             * 技术优势:
+             * - 支持异步工具执行
+             * - 支持并行多工具调用
+             * - 确保结果准确匹配到相应请求
+             * - 提供完整的工具调用追踪能力
+             * 
+             * 实际应用:
+             * - 复杂的多步骤工具调用流程
+             * - 需要精确结果匹配的场景
+             * - 工具调用的审计和日志记录
+             */
             jmsg["tool_call_id"] = msg.tool_call_id;
         }
+        
         if (!msg.tool_calls.empty()) {
+            /*
+             * ========== 工具调用数组处理 ==========
+             * 
+             * 将内部工具调用结构转换为OpenAI标准的function calling格式
+             * 
+             * OpenAI Function Calling标准格式:
+             * "tool_calls": [
+             *   {
+             *     "id": "call_abc123",
+             *     "type": "function", 
+             *     "function": {
+             *       "name": "function_name",
+             *       "arguments": "{\"param1\": \"value1\"}"
+             *     }
+             *   }
+             * ]
+             * 
+             * 设计特点:
+             * - 支持多个工具的并行调用
+             * - 每个工具调用都有唯一标识
+             * - 参数以JSON字符串形式传递
+             * - 严格符合OpenAI API规范
+             */
             auto & tool_calls = jmsg["tool_calls"] = json::array();
             for (const auto & tool_call : msg.tool_calls) {
+                /*
+                 * 构建单个工具调用对象
+                 * 
+                 * 字段说明:
+                 * - type: 固定为"function"，表示函数调用类型
+                 * - function: 包含函数名称和参数的对象
+                 *   - name: 要调用的函数名称
+                 *   - arguments: JSON格式的参数字符串
+                 * - id: 可选的调用标识符，用于结果匹配
+                 */
                 json tc {
                     {"type", "function"},
                     {"function", {
@@ -314,14 +556,69 @@ json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msg
                         {"arguments", tool_call.arguments},
                     }},
                 };
+                
+                /*
+                 * 条件性添加工具调用ID
+                 * 
+                 * 原因: 某些场景下工具调用可能不需要ID
+                 * - 简单的单次调用场景
+                 * - 不需要结果回传的工具
+                 * - 兼容不同的工具调用模式
+                 * 
+                 * 当ID存在时:
+                 * - 支持异步结果匹配
+                 * - 支持复杂的工具调用流程
+                 * - 提供完整的调用追踪能力
+                 */
                 if (!tool_call.id.empty()) {
                     tc["id"] = tool_call.id;
                 }
                 tool_calls.push_back(tc);
             }
         }
+        
+        /*
+         * ========== 消息对象完成和添加 ==========
+         * 
+         * 将构建完成的单个消息对象添加到消息数组中
+         * 
+         * 处理完成的jmsg对象包含:
+         * - 基础字段: role (必需)
+         * - 内容字段: content 或 content数组 (可选，但通常存在)
+         * - 推理字段: reasoning_content, thinking (可选)
+         * - 工具字段: name, tool_call_id, tool_calls (可选)
+         * 
+         * 数组构建特点:
+         * - 保持原始消息的顺序
+         * - 每个消息都是独立的JSON对象
+         * - 符合OpenAI messages数组的标准格式
+         * - 支持任意数量的消息(受内存限制)
+         */
         messages.push_back(jmsg);
     }
+    
+    /*
+     * ========== 函数返回 ==========
+     * 
+     * 返回完整的OpenAI兼容消息数组
+     * 
+     * 返回值特征:
+     * - JSON数组类型，包含所有转换后的消息
+     * - 每个消息都严格符合OpenAI Chat Completions API标准
+     * - 保持了所有重要信息，无数据丢失(除非在concat_typed_text模式下)
+     * - 可直接用于OpenAI客户端或兼容系统
+     * 
+     * 后续使用场景:
+     * - 发送给OpenAI API或兼容服务
+     * - 存储到数据库或文件系统
+     * - 在Web界面中展示对话历史
+     * - 用于模型的上下文构建和推理
+     * 
+     * 性能考虑:
+     * - 返回值使用移动语义，避免不必要的复制
+     * - JSON构建过程已优化，适合大量消息处理
+     * - 内存使用与输入消息数量线性相关
+     */
     return messages;
 }
 

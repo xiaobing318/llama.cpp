@@ -70,10 +70,119 @@ enum server_task_type {
     SERVER_TASK_TYPE_SET_LORA,
 };
 
+/*
+ * ========== OpenAI API 兼容模式枚举定义 ==========
+ * 
+ * 这个枚举定义了服务器支持的不同响应格式类型，用于与OpenAI API保持兼容性。
+ * 每种模式对应不同的JSON响应结构，满足不同客户端的需求。
+ *
+ * 设计目的:
+ * 1. API兼容性 - 确保现有的OpenAI客户端代码可以无缝迁移到llama.cpp服务器
+ * 2. 格式标准化 - 提供统一的响应格式规范，便于客户端解析和处理
+ * 3. 生态系统支持 - 兼容各种基于OpenAI API的工具、库和框架
+ * 4. 渐进式迁移 - 允许用户在保持现有代码的同时逐步迁移到本地模型
+ *
+ * 技术实现原理:
+ * - 每个枚举值对应server_task_result中不同的to_json()方法分支
+ * - 根据HTTP请求的URL路径和参数自动推断兼容模式
+ * - 在response生成时动态选择合适的JSON序列化格式
+ */
 enum oaicompat_type {
+    /*
+     * OAICOMPAT_TYPE_NONE - 非兼容模式(llama.cpp原生格式)
+     * 
+     * 用途: llama.cpp的原生响应格式，包含最详细的内部信息
+     * 适用场景: 
+     * - 需要访问llama.cpp特有功能的高级用户
+     * - 性能调试和分析场景
+     * - 需要完整token序列和详细统计信息的应用
+     * 
+     * 响应格式特点:
+     * - 包含完整的tokens数组
+     * - 详细的性能统计信息(timings)
+     * - llama.cpp特有的字段如stop_type、tokens_cached等
+     * - 不受OpenAI API格式限制，可以包含更多调试信息
+     * 
+     * 示例字段: content, tokens, id_slot, stop_type, timings等
+     */
     OAICOMPAT_TYPE_NONE,
+    
+    /*
+     * OAICOMPAT_TYPE_CHAT - OpenAI聊天补全兼容模式
+     * 
+     * 用途: 兼容OpenAI Chat Completions API格式
+     * 对应OpenAI API: POST /v1/chat/completions
+     * 
+     * 适用场景:
+     * - 聊天机器人和对话系统
+     * - 多轮对话和上下文理解
+     * - 工具调用和函数功能
+     * - 角色扮演和系统提示
+     * 
+     * 响应格式特点(符合OpenAI标准):
+     * - 使用choices数组结构
+     * - message对象包含role和content字段
+     * - 支持tool_calls工具调用
+     * - finish_reason字段标识结束原因
+     * - 流式模式下使用delta增量更新
+     * 
+     * JSON结构: 
+     * {
+     *   "choices": [{"message": {"role": "assistant", "content": "..."}}],
+     *   "object": "chat.completion",
+     *   "usage": {...}
+     * }
+     */
     OAICOMPAT_TYPE_CHAT,
+    
+    /*
+     * OAICOMPAT_TYPE_COMPLETION - OpenAI文本补全兼容模式
+     * 
+     * 用途: 兼容OpenAI Legacy Completions API格式  
+     * 对应OpenAI API: POST /v1/completions (已弃用但仍支持)
+     * 
+     * 适用场景:
+     * - 文本续写和补全任务
+     * - 代码生成和自动完成
+     * - 传统的prompt-completion模式
+     * - 需要兼容旧版OpenAI客户端的应用
+     * 
+     * 响应格式特点(符合OpenAI标准):
+     * - 使用choices数组结构
+     * - 直接的text字段包含生成内容
+     * - 支持logprobs概率信息
+     * - 更简洁的响应结构，无message包装
+     * 
+     * JSON结构:
+     * {
+     *   "choices": [{"text": "生成的文本", "index": 0}],
+     *   "object": "text_completion", 
+     *   "usage": {...}
+     * }
+     */
     OAICOMPAT_TYPE_COMPLETION,
+    
+    /*
+     * OAICOMPAT_TYPE_EMBEDDING - OpenAI嵌入兼容模式
+     * 
+     * 用途: 兼容OpenAI Embeddings API格式
+     * 对应OpenAI API: POST /v1/embeddings
+     * 
+     * 适用场景:
+     * - 文本向量化和语义搜索
+     * - 相似度计算和聚类分析
+     * - RAG(检索增强生成)系统
+     * - 文本分类和推荐系统
+     * 
+     * 响应格式特点(符合OpenAI标准):
+     * - data数组包含向量数据
+     * - embedding字段是浮点数数组
+     * - 支持批量文本向量化
+     * - usage字段包含token使用统计
+     * 
+     * 注意: 此模式主要用于embedding相关的任务，
+     * 不适用于文本生成的handle_completions_impl函数
+     */
     OAICOMPAT_TYPE_EMBEDDING,
 };
 
@@ -5607,30 +5716,178 @@ int main(int argc, char ** argv) {
                      */
                     if (results.size() == 1) {
                         /*
-                         * 单一结果处理 - 最常见的情况
+                         * ========== 单一结果处理 - 最常见的情况 ==========
                          * 直接返回JSON对象，避免不必要的数组包装
                          *
-                         * 解决的问题:
+                         * 目的: 
                          * - 保持API简洁性，单个请求不需要数组格式
-                         * - 与传统聊天API保持一致的响应结构
+                         * - 与传统聊天API保持一致的响应结构  
                          * - 减少客户端解析复杂度
+                         *
+                         * results[0]->to_json() 返回的具体JSON格式取决于兼容模式:
+                         *
+                         * 1. 非OpenAI兼容模式 (OAICOMPAT_TYPE_NONE):
+                         * {
+                         *   "index": 0,                    // 任务在批次中的索引
+                         *   "content": "生成的文本内容",      // 完整的生成文本
+                         *   "tokens": [1, 2, 3, ...],     // 对应的token序列 
+                         *   "id_slot": 0,                  // 使用的处理插槽ID
+                         *   "stop": true,                  // 是否为最终结果
+                         *   "model": "model-name",         // 使用的模型名称
+                         *   "tokens_predicted": 50,        // 生成的token数量
+                         *   "tokens_evaluated": 20,        // 评估的prompt token数量
+                         *   "generation_settings": {...},  // 生成参数配置
+                         *   "prompt": "用户输入的提示",      // 原始提示内容
+                         *   "has_new_line": false,         // 是否包含换行符
+                         *   "truncated": false,            // 是否被截断
+                         *   "stop_type": "eos",            // 停止原因类型
+                         *   "stopping_word": "",           // 触发停止的词汇
+                         *   "tokens_cached": 10,           // 缓存的token数量
+                         *   "timings": {                   // 性能统计信息
+                         *     "prompt_n": 20,
+                         *     "prompt_ms": 100.5,
+                         *     "prompt_per_token_ms": 5.0,
+                         *     "predict_n": 50, 
+                         *     "predict_ms": 250.0,
+                         *     "predict_per_token_ms": 5.0
+                         *   },
+                         *   "completion_probabilities": [...] // token概率信息(可选)
+                         * }
+                         *
+                         * 2. OpenAI文本补全兼容模式 (OAICOMPAT_TYPE_COMPLETION):
+                         * {
+                         *   "choices": [                   // choices数组格式
+                         *     {
+                         *       "text": "生成的文本内容",    // 生成的文本
+                         *       "index": 0,               // 选择项索引
+                         *       "logprobs": {...},        // 概率信息(可选)
+                         *       "finish_reason": "stop"   // 结束原因: stop/length
+                         *     }
+                         *   ],
+                         *   "created": 1673027315,        // Unix时间戳
+                         *   "model": "model-name",        // 模型名称
+                         *   "system_fingerprint": "...",  // 系统指纹
+                         *   "object": "text_completion",  // 对象类型
+                         *   "usage": {                    // token使用统计
+                         *     "completion_tokens": 50,    // 生成token数
+                         *     "prompt_tokens": 20,        // 提示token数
+                         *     "total_tokens": 70          // 总token数
+                         *   },
+                         *   "id": "chatcmpl-xyz123",      // 请求唯一ID
+                         *   "timings": {...}              // 性能统计(可选)
+                         * }
+                         *
+                         * 3. OpenAI聊天兼容模式 (OAICOMPAT_TYPE_CHAT):
+                         * {
+                         *   "choices": [                  // choices数组格式
+                         *     {
+                         *       "finish_reason": "stop",  // 结束原因
+                         *       "index": 0,               // 选择项索引
+                         *       "message": {              // 消息对象
+                         *         "role": "assistant",    // 角色
+                         *         "content": "回复内容",   // 消息内容
+                         *         "tool_calls": [...]     // 工具调用(可选)
+                         *       },
+                         *       "logprobs": {...}         // 概率信息(可选)
+                         *     }
+                         *   ],
+                         *   "created": 1673027315,        // Unix时间戳
+                         *   "model": "model-name",        // 模型名称
+                         *   "system_fingerprint": "...",  // 系统指纹
+                         *   "object": "chat.completion",  // 对象类型
+                         *   "usage": {                    // token使用统计
+                         *     "completion_tokens": 50,
+                         *     "prompt_tokens": 20,
+                         *     "total_tokens": 70
+                         *   },
+                         *   "id": "chatcmpl-xyz123",      // 请求唯一ID
+                         *   "timings": {...}              // 性能统计(可选)
+                         * }
+                         *
+                         * 原因: 不同的兼容模式服务于不同的客户端需求
+                         * - 非兼容模式: llama.cpp原生格式，包含最详细的内部信息
+                         * - OpenAI兼容模式: 确保与OpenAI API客户端的无缝集成
+                         *
+                         * 效果: 
+                         * - 客户端收到的是单个JSON对象，直接解析即可
+                         * - 格式统一性保证了API的可预测性和易用性
                          */
                         res_ok(res, results[0]->to_json());
                     } else {
                         /*
-                         * 批处理结果处理 - 多个请求的情况
+                         * ========== 批处理结果处理 - 多个请求的情况 ==========
                          * 将多个结果包装成JSON数组统一返回
                          *
-                         * 解决的问题:
+                         * 目的:
                          * - 支持批量API调用，提高处理效率
                          * - 保持结果顺序与请求顺序一致
                          * - 允许客户端一次性获取多个结果
+                         *
+                         * 批处理场景示例:
+                         * 客户端发送: {"prompt": ["问题1", "问题2", "问题3"]}
+                         * 服务器创建3个并行任务处理，最终返回3个结果的数组
+                         *
+                         * arr 最终返回的JSON数组格式:
+                         * [
+                         *   {
+                         *     // 第一个任务的完整结果 (与单一结果格式相同)
+                         *     "index": 0,
+                         *     "content": "对问题1的回答",
+                         *     "tokens": [...],
+                         *     "tokens_predicted": 30,
+                         *     // ... 其他字段同单一结果格式
+                         *   },
+                         *   {
+                         *     // 第二个任务的完整结果
+                         *     "index": 1,
+                         *     "content": "对问题2的回答",
+                         *     "tokens": [...],
+                         *     "tokens_predicted": 25,
+                         *     // ... 其他字段同单一结果格式
+                         *   },
+                         *   {
+                         *     // 第三个任务的完整结果
+                         *     "index": 2,
+                         *     "content": "对问题3的回答",
+                         *     "tokens": [...],
+                         *     "tokens_predicted": 40,
+                         *     // ... 其他字段同单一结果格式
+                         *   }
+                         * ]
+                         *
+                         * 重要特性:
+                         * - 数组中每个元素的格式与单一结果完全相同
+                         * - index字段确保客户端能正确匹配请求和响应的对应关系
+                         * - 所有结果都是最终完整结果(非流式模式下)
+                         * - 支持不同兼容模式的混合使用(理论上，实际通常统一)
+                         *
+                         * 原因: 批处理提高了系统吞吐量
+                         * - 减少HTTP请求开销
+                         * - 利用GPU并行处理能力
+                         * - 简化客户端的请求管理逻辑
+                         *
+                         * 效果:
+                         * - 客户端收到JSON数组，需要遍历处理每个结果
+                         * - 保证了批处理和单一请求API的一致性
+                         * - 便于批量数据处理和分析场景的使用
                          */
                         json arr = json::array();
                         for (auto & result_ptr : results) {
                             /*
                              * 逐个转换结果为JSON格式
-                             * to_json()包含所有必要信息：生成的文本、tokens统计、时间等
+                             * 
+                             * result_ptr->to_json() 调用过程:
+                             * 1. 根据 oaicompat 字段选择对应的格式化方法
+                             * 2. 将内部C++对象转换为标准JSON格式
+                             * 3. 包含完整的生成信息: 文本内容、token统计、性能数据等
+                             * 4. 确保每个结果都是自包含的完整响应
+                             *
+                             * 数据完整性保证:
+                             * - 生成的文本内容 (content字段)
+                             * - Token序列和统计信息 (tokens, tokens_predicted等)
+                             * - 生成参数和配置信息 (generation_settings等)
+                             * - 性能和时间统计信息 (timings字段)
+                             * - 停止原因和状态信息 (stop_type, finish_reason等)
                              */
                             arr.push_back(result_ptr->to_json());
                         }
@@ -5732,8 +5989,84 @@ int main(int argc, char ** argv) {
                      */
                     [&](server_task_result_ptr & result) -> bool {
                         /*
+                         * ========== 流式响应JSON格式转换 ==========
                          * 将服务器内部结果转换为JSON格式
-                         * result包含: 新生成的文本、累计统计、状态信息等
+                         *
+                         * result的类型说明:
+                         * - server_task_result_cmpl_partial: 中间生成结果(流式过程中)
+                         * - server_task_result_cmpl_final: 最终完整结果(流式结束时)
+                         *
+                         * 流式响应中result->to_json()返回的JSON格式详解:
+                         *
+                         * 1. 非OpenAI兼容模式的中间结果 (server_task_result_cmpl_partial):
+                         * {
+                         *   "index": 0,                      // 任务索引
+                         *   "content": "新生成的文本片段",      // 增量文本内容
+                         *   "tokens": [123, 456],            // 新生成的token序列
+                         *   "stop": false,                   // 是否为最终结果(中间结果总是false)
+                         *   "id_slot": 0,                    // 处理插槽ID
+                         *   "tokens_predicted": 15,          // 已生成的总token数
+                         *   "tokens_evaluated": 20,          // 已处理的prompt token数
+                         *   "timings": {...}                 // 性能统计(可选)
+                         * }
+                         *
+                         * 2. OpenAI兼容聊天模式的中间结果 (流式):
+                         * [
+                         *   {
+                         *     "choices": [
+                         *       {
+                         *         "finish_reason": null,     // 中间结果总是null
+                         *         "index": 0,
+                         *         "delta": {                 // 增量内容对象
+                         *           "content": "新文本"      // 新生成的内容片段
+                         *         }
+                         *       }
+                         *     ],
+                         *     "created": 1673027315,         // Unix时间戳
+                         *     "id": "chatcmpl-xyz123",       // 请求ID
+                         *     "model": "model-name",         // 模型名称
+                         *     "system_fingerprint": "...",   // 系统指纹
+                         *     "object": "chat.completion.chunk" // 对象类型标识流式块
+                         *   }
+                         * ]
+                         *
+                         * 3. OpenAI兼容文本补全模式的中间结果 (流式):
+                         * {
+                         *   "choices": [
+                         *     {
+                         *       "text": "新生成的文本片段",    // 增量文本
+                         *       "index": 0,
+                         *       "logprobs": {...},           // 概率信息(可选)
+                         *       "finish_reason": null        // 中间结果为null
+                         *     }
+                         *   ],
+                         *   "created": 1673027315,
+                         *   "model": "model-name",
+                         *   "system_fingerprint": "...",
+                         *   "object": "text_completion",     // 文本补全对象类型
+                         *   "id": "chatcmpl-xyz123"
+                         * }
+                         *
+                         * 4. 流式响应的最终结果 (server_task_result_cmpl_final):
+                         * - 格式与非流式的最终结果类似，但content通常为空(内容已在中间结果中发送)
+                         * - finish_reason不再为null，而是"stop"、"length"等
+                         * - 包含完整的统计信息和时间数据
+                         *
+                         * 流式vs非流式的关键区别:
+                         * - 流式: content字段包含增量内容，逐步构建完整响应
+                         * - 非流式: content字段包含完整内容，一次性返回
+                         * - 流式: 多次调用to_json()，每次返回部分数据
+                         * - 非流式: 单次调用to_json()，返回完整数据
+                         *
+                         * 原因: 流式响应提供实时用户体验
+                         * - 用户可以立即看到生成开始
+                         * - 长文本生成时不会出现长时间等待
+                         * - 支持打字机效果的用户界面
+                         *
+                         * 效果: 
+                         * - 客户端需要缓存并合并多个增量结果
+                         * - 网络传输更加平滑，避免大数据包的传输延迟
+                         * - 提高用户感知的响应速度和交互性
                          */
                         json res_json = result->to_json();
 
