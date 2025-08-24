@@ -808,37 +808,49 @@ struct swa_checkpoint {
     std::vector<uint8_t> data;
 };
 
+/*
+ * 文本生成任务的最终完整结果结构体
+ * 使用场景：在send_final_response()函数中创建，用于表示文本生成任务的最终完成状态
+ * 触发时机：无论是流式(stream=true)还是非流式(stream=false)模式，当生成任务结束时都会发送此结果
+ * 
+ * 具体例子：
+ * 1. 非流式模式：用户发送"写一首诗"请求，模型生成完整诗歌后，一次性返回包含完整内容的final结果
+ * 2. 流式模式：用户发送同样请求，在所有partial结果发送完毕后，最后发送一个final结果作为结束标志
+ *    此时final结果的content通常为空，主要包含完整的统计信息和停止原因
+ * 
+ * 与partial的区别：final结果的is_stop()总是返回true，表示生成结束，包含完整的元数据和统计信息
+ */
 struct server_task_result_cmpl_final : server_task_result {
-    int index = 0;
+    int index = 0; // 结果索引号，用于标识批处理中的结果位置，默认为0表示单一结果
 
-    std::string content;
-    llama_tokens tokens;
+    std::string content; // 非流式模式：包含完整生成文本；流式模式：通常为空（内容已在partial中发送）
+    llama_tokens tokens; // 生成内容对应的token ID序列，用于调试和分析
 
-    bool stream;
-    result_timings timings;
-    std::string prompt;
+    bool stream; // 流式生成标志，true表示使用流式输出模式，false表示一次性生成
+    result_timings timings; // 性能计时统计结构体，记录各阶段的耗时信息
+    std::string prompt; // 原始输入提示词文本，保存用于日志和调试
 
-    bool truncated;
-    int32_t n_decoded;
-    int32_t n_prompt_tokens;
-    int32_t n_tokens_cached;
-    bool has_new_line;
-    std::string stopping_word;
-    stop_type stop = STOP_TYPE_NONE;
+    bool truncated; // 截断标志，true表示由于长度限制导致输出被截断
+    int32_t n_decoded; // 实际解码生成的token数量，不包含输入提示词部分
+    int32_t n_prompt_tokens; // 输入提示词的token数量，用于计算上下文使用量
+    int32_t n_tokens_cached; // 缓存复用的token数量，用于优化性能统计
+    bool has_new_line; // 换行符检测标志，指示生成内容是否包含换行符
+    std::string stopping_word; // 触发停止的具体词汇，记录导致生成结束的停止词
+    stop_type stop = STOP_TYPE_NONE; // 停止原因类型枚举，默认STOP_TYPE_NONE表示自然结束
 
-    bool post_sampling_probs;
-    std::vector<completion_token_output> probs_output;
-    std::vector<std::string>  response_fields;
+    bool post_sampling_probs; // 概率输出开关，控制是否包含token生成概率信息
+    std::vector<completion_token_output> probs_output; // token概率详情向量，包含每个token的概率分布
+    std::vector<std::string>  response_fields; // 自定义响应字段列表，控制JSON输出格式
 
-    slot_params generation_params;
+    slot_params generation_params; // 生成参数配置，包含温度、top-p等采样参数
 
-    // OAI-compat fields
-    bool               verbose                  = false;
-    oaicompat_type     oaicompat                = OAICOMPAT_TYPE_NONE;
-    std::string        oaicompat_model;
-    std::string        oaicompat_cmpl_id;
-    common_chat_msg    oaicompat_msg;
-    std::vector<common_chat_msg_diff> oaicompat_msg_diffs;
+    // OAI-compat fields - OpenAI API兼容性字段集合
+    bool               verbose                  = false; // 详细输出模式，控制调试信息的包含
+    oaicompat_type     oaicompat                = OAICOMPAT_TYPE_NONE; // 兼容性模式类型枚举
+    std::string        oaicompat_model; // OpenAI兼容模式下的模型标识符
+    std::string        oaicompat_cmpl_id; // OpenAI兼容模式下的请求完成ID
+    common_chat_msg    oaicompat_msg; // 聊天消息对象，用于聊天API兼容性
+    std::vector<common_chat_msg_diff> oaicompat_msg_diffs; // 消息增量差异，用于流式聊天响应
 
     virtual int get_index() override {
         return index;
@@ -1040,25 +1052,41 @@ struct server_task_result_cmpl_final : server_task_result {
     }
 };
 
+/*
+ * 文本生成任务的部分结果结构体
+ * 使用场景：仅在流式模式(stream=true)下使用，在send_partial_response()函数中创建
+ * 触发时机：每当模型生成一个新token时，如果开启了流式模式，就会发送一个partial结果
+ * 
+ * 具体例子：
+ * 用户请求"解释什么是AI"，在流式模式下：
+ * - partial结果1: content="人工", tokens=[123], n_decoded=1
+ * - partial结果2: content="智能", tokens=[456], n_decoded=2  
+ * - partial结果3: content="是", tokens=[789], n_decoded=3
+ * - ... (继续发送每个新生成token的partial结果)
+ * - 最后发送final结果标记生成结束
+ * 
+ * 与final的区别：partial结果的is_stop()总是返回false，表示生成还在继续，只包含当前token的信息
+ * 注意：非流式模式下永远不会创建partial结果，只有final结果
+ */
 struct server_task_result_cmpl_partial : server_task_result {
-    int index = 0;
+    int index = 0; // 结果索引号，标识当前部分结果在序列中的位置
 
-    std::string  content;
-    llama_tokens tokens;
+    std::string  content; // 当前新生成的token对应的文本片段，例如单个字词或字符（来自tkn.text_to_send）
+    llama_tokens tokens; // 当前新生成token的ID，通常只包含一个元素{ tkn.tok }
 
-    int32_t n_decoded;
-    int32_t n_prompt_tokens;
+    int32_t n_decoded; // 到目前为止已解码生成的总token数量
+    int32_t n_prompt_tokens; // 输入提示词的token数量，用于上下文计算
 
-    bool post_sampling_probs;
-    completion_token_output prob_output;
-    result_timings timings;
+    bool post_sampling_probs; // 概率信息输出标志，控制是否包含当前token的概率
+    completion_token_output prob_output; // 当前token的概率输出详情，包含概率值和候选项
+    result_timings timings; // 当前阶段的性能计时信息
 
-    // OAI-compat fields
-    bool            verbose   = false;
-    oaicompat_type  oaicompat = OAICOMPAT_TYPE_NONE;
-    std::string     oaicompat_model;
-    std::string     oaicompat_cmpl_id;
-    std::vector<common_chat_msg_diff> oaicompat_msg_diffs;
+    // OAI-compat fields - OpenAI API兼容性字段
+    bool            verbose   = false; // 详细模式标志，控制额外调试信息的输出
+    oaicompat_type  oaicompat = OAICOMPAT_TYPE_NONE; // 兼容性模式类型，默认为原生模式
+    std::string     oaicompat_model; // OpenAI兼容模式下的模型名称标识
+    std::string     oaicompat_cmpl_id; // OpenAI兼容模式下的完成请求唯一标识符
+    std::vector<common_chat_msg_diff> oaicompat_msg_diffs; // 聊天消息的增量变化，用于流式聊天API
 
     virtual int get_index() override {
         return index;
