@@ -134,8 +134,27 @@ export async function* getSSEStreamAsync(fetchResponse: Response) {
        * JSON.parse(): {choices: [{delta: {content: "你好"}}]}
        * yield: 返回解析后的对象给generateMessage函数
        */
+      /* 
+       * 解析JSON数据并产出给调用方：
+       * 1. line.slice(5): 移除 'data: ' 前缀，获取纯JSON字符串
+       * 2. JSON.parse(): 将JSON字符串转换为JavaScript对象
+       * 3. yield: 关键字，将解析后的对象返回给外部调用方
+       * 
+       * 【yield的核心作用】
+       * - 这是异步生成器的核心机制，不同于return
+       * - yield会暂停函数执行，返回当前数据块
+       * - 外部可通过for await循环立即获取并处理这个数据
+       * - 处理完后函数会从yield处继续执行，处理下一行数据
+       * - 这样实现了流式数据的实时处理：边接收边处理边显示
+       * 
+       * 【数据流转过程】
+       * 服务器发送: "data: {"choices":[{"delta":{"content":"你好"}}]}"
+       * slice(5)后: "{"choices":[{"delta":{"content":"你好"}}]}"
+       * JSON.parse: {choices: [{delta: {content: "你好"}}]}
+       * yield产出: 立即返回给generateMessage函数进行UI更新
+       */
       const data = JSON.parse(line.slice(5));
-      yield data;  // 产出解析后的数据块，供外部for await循环使用
+      yield data;
     } 
     /* 
      * ========== 处理服务器错误信息 ==========
