@@ -4,9 +4,23 @@ import { isNumeric } from './utils/misc';
 export const isDev = import.meta.env.MODE === 'development';
 
 // constants
+
+/*
 export const BASE_URL = new URL('.', document.baseURI).href
   .toString()
   .replace(/\/$/, '');
+*/
+
+// 构建前端代码的时候会使用 eslint 检查工具对代码进行分析（编译器在挑刺）
+export const BASE_URL = (() => {
+  try {
+    const v = localStorage.getItem('base');
+    if (v && v.trim()) return v.replace(/\/$/, '');
+  } catch {
+    // ignore: localStorage might not be available
+  }
+  return new URL('.', document.baseURI).href.toString().replace(/\/$/, '');
+})();
 
 export const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.

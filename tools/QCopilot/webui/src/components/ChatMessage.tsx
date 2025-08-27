@@ -55,32 +55,110 @@ export default function ChatMessage({
   const nextSibling = siblingLeafNodeIds[siblingCurrIdx + 1];
   const prevSibling = siblingLeafNodeIds[siblingCurrIdx - 1];
 
-  // for reasoning model, we split the message into content and thought
-  // TODO: implement this as remark/rehype plugin in the future
+  // 使用正则表达式循环处理，原来的代码存在一个逻辑缺陷，只能正确的处理单个思考块，但是存在多个思考块的时候会出现错误，带轮次标记的消息分割逻辑
   const { content, thought, isThinking }: SplitMessage = useMemo(() => {
     if (msg.content === null || msg.role !== 'assistant') {
       return { content: msg.content };
     }
-    const REGEX_THINK_OPEN = /<think>|<\|channel\|>analysis<\|message\|>/;
-    const REGEX_THINK_CLOSE = /<\/think>|<\|end\|>/;
+
+    const REGEX_THINK_OPEN = /<think>|<\|channel\|>analysis<\|message\|>/g;
+    const REGEX_THINK_CLOSE = /<\/think>|<\|end\|>/g;
+
     let actualContent = '';
     let thought = '';
     let isThinking = false;
-    let thinkSplit = msg.content.split(REGEX_THINK_OPEN, 2);
-    actualContent += thinkSplit[0];
-    while (thinkSplit[1] !== undefined) {
-      // <think> tag found
-      thinkSplit = thinkSplit[1].split(REGEX_THINK_CLOSE, 2);
-      thought += thinkSplit[0];
-      isThinking = true;
-      if (thinkSplit[1] !== undefined) {
-        // </think> closing tag found
-        isThinking = false;
-        thinkSplit = thinkSplit[1].split(REGEX_THINK_OPEN, 2);
-        actualContent += thinkSplit[0];
+
+    // 用于追踪轮次
+    let thoughtRound = 0;
+    const contentSegments: string[] = [];
+    const thoughtSegments: string[] = [];
+
+    let currentPos = 0;
+    const text = msg.content;
+
+    while (currentPos < text.length) {
+      // 查找下一个思考块开始标记
+      REGEX_THINK_OPEN.lastIndex = currentPos;
+      const openMatch = REGEX_THINK_OPEN.exec(text);
+
+      if (openMatch) {
+        // 添加思考块之前的内容
+        const contentBefore = text
+          .substring(currentPos, openMatch.index)
+          .trim();
+        if (contentBefore) {
+          contentSegments.push(contentBefore);
+        }
+
+        // 查找对应的结束标记
+        REGEX_THINK_CLOSE.lastIndex = openMatch.index + openMatch[0].length;
+        const closeMatch = REGEX_THINK_CLOSE.exec(text);
+
+        if (closeMatch) {
+          // 提取思考内容
+          const thinkContent = text
+            .substring(openMatch.index + openMatch[0].length, closeMatch.index)
+            .trim();
+
+          if (thinkContent) {
+            thoughtRound++;
+            thoughtSegments.push(
+              `第 ${thoughtRound} 轮思考：\n${thinkContent}`
+            );
+          }
+
+          currentPos = closeMatch.index + closeMatch[0].length;
+        } else {
+          // 没有找到结束标记，说明思考块未完成
+          const unfinishedThought = text
+            .substring(openMatch.index + openMatch[0].length)
+            .trim();
+          if (unfinishedThought) {
+            thoughtRound++;
+            thoughtSegments.push(
+              `第 ${thoughtRound} 轮思考（进行中）：\n${unfinishedThought}`
+            );
+          }
+          isThinking = true;
+          break;
+        }
+      } else {
+        // 没有更多的思考块，添加剩余内容
+        const remainingContent = text.substring(currentPos).trim();
+        if (remainingContent) {
+          contentSegments.push(remainingContent);
+        }
+        break;
       }
     }
-    return { content: actualContent, thought, isThinking };
+
+    // 组装思考内容
+    thought = thoughtSegments.join('\n\n');
+
+    // 组装实际内容 - 为所有内容段添加轮次标记
+    if (contentSegments.length > 1) {
+      actualContent = contentSegments
+        .map((seg, idx) => {
+          // 为所有内容段添加轮次标记，包括工具调用
+          return `第 ${idx + 1} 轮输出：\n${seg}`;
+        })
+        .join('\n\n');
+    } else if (contentSegments.length === 1) {
+      // 即使只有一个内容段，如果有思考块，也添加轮次标记以保持一致性
+      if (thoughtSegments.length > 0) {
+        actualContent = `第 1 轮输出：\n${contentSegments[0]}`;
+      } else {
+        actualContent = contentSegments[0];
+      }
+    } else {
+      actualContent = '';
+    }
+
+    return {
+      content: actualContent.trim(),
+      thought: thought.trim(),
+      isThinking,
+    };
   }, [msg]);
 
   if (!viewingChat) return null;
