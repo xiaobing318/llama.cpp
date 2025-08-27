@@ -1069,6 +1069,12 @@ public:
                                 msgs.push_back(normalized_msg);
 
                                 // 在执行工具前，发送一个表示工具正在执行的消息
+                                std::string tool_names_str;
+                                for (size_t i = 0; i < assist_msg["tool_calls"].size(); ++i) {
+                                    if (i > 0) tool_names_str += ", ";
+                                    tool_names_str += assist_msg["tool_calls"][i]["function"]["name"];
+                                }
+                                
                                 json tool_executing_msg = {
                                     {"id", stream_id},
                                     {"object", "chat.completion.chunk"},
@@ -1077,7 +1083,7 @@ public:
                                         json{
                                             {"index", 0},
                                             {"delta", json{
-                                                {"content", "\n\n QCopilot 正在调用工具执行操作 ......\n"}
+                                                {"content", " QCopilot 正在调用工具[" + tool_names_str + "]执行操作 ......\n"}
                                             }},
                                             {"finish_reason", nullptr}
                                         }
@@ -1103,13 +1109,34 @@ public:
                                         {"choices", json::array({
                                             json{
                                                 {"index", 0},
-                                                {"delta", json{ { "content", " QCopilot 调用工具 [" + tool_name + "] 执行操作完成，调用轮次：" + std::to_string(i) + "\n" }
+                                                {"delta", json{ { "content", " QCopilot 调用工具 [" + tool_name + "] 执行操作完成。\n" }
                                                 }},
                                                 {"finish_reason", nullptr}
                                             }
                                         })}
                                     };
                                     bridge->push(std::string("data: ") + tool_result_msg.dump() + "\n\n");
+
+                                    // 发送工具处理结果的预览（150字符以内）
+                                    std::string tool_content = msgs[i].value("content", "");
+                                    std::string preview = tool_content.length() > 150 ? 
+                                        tool_content.substr(0, 147) + "..." : tool_content;
+                                    
+                                    json tool_preview_msg = {
+                                        {"id", stream_id},
+                                        {"object", "chat.completion.chunk"},
+                                        {"model", model_name},
+                                        {"choices", json::array({
+                                            json{
+                                                {"index", 0},
+                                                {"delta", json{
+                                                    {"content", " QCopilot 调用工具 [" + tool_name + "] 执行结果预览：" + preview + "\n"}
+                                                }},
+                                                {"finish_reason", nullptr}
+                                            }
+                                        })}
+                                    };
+                                    bridge->push(std::string("data: ") + tool_preview_msg.dump() + "\n\n");
 
                                     LOG_INF("工具 %s 执行完成\n", tool_name.c_str());
                                 }
