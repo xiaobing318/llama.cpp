@@ -808,6 +808,70 @@ public:
     }
 
     void setupRoutes() {
+        /*
+         * 步骤1: 设置预路由处理器处理CORS(跨域资源共享)请求
+         * 此处理器在所有路由匹配之前执行，主要用于：
+         * 1. 处理浏览器发送的CORS预检请求(OPTIONS)
+         * 2. 为所有响应添加必要的CORS头部
+         * 3. 允许前端网页从不同域名访问QCopilot服务
+         */
+        server->set_pre_routing_handler([](const httplib::Request & req, httplib::Response & res) {
+            /*
+             * 设置Access-Control-Allow-Origin头部允许跨域访问
+             * 获取请求中的Origin头部值，并将其设置为允许的源
+             * 这样可以动态允许任何发起请求的域名访问此服务
+             */
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+            /*
+             * 处理浏览器CORS预检请求(OPTIONS方法)
+             * 当浏览器发送跨域请求时，会先发送OPTIONS请求询问服务器
+             * 是否允许跨域访问以及允许哪些方法和头部
+             */
+            if (req.method == "OPTIONS") {
+                /*
+                 * 告诉浏览器此服务允许携带认证信息的跨域请求
+                 * 如cookies、Authorization头部等敏感信息
+                 */
+                res.set_header("Access-Control-Allow-Credentials", "true");
+                
+                /*
+                 * 指定允许的HTTP方法
+                 * QCopilot服务主要使用GET和POST方法
+                 * GET用于健康检查、获取工具列表等
+                 * POST用于聊天完成、工具执行等
+                 */
+                res.set_header("Access-Control-Allow-Methods", "GET, POST");
+                
+                /*
+                 * 允许请求携带任意头部
+                 * 通配符*表示不限制请求头部类型
+                 * 这对于灵活的API调用非常重要
+                 */
+                res.set_header("Access-Control-Allow-Headers", "*");
+                
+                /*
+                 * 为OPTIONS请求返回空内容
+                 * OPTIONS请求只需要响应头部信息，不需要实际数据
+                 */
+                res.set_content("", "text/html");
+                
+                /*
+                 * 返回Handled状态表示此请求已完全处理完成
+                 * 跳过后续的路由匹配和处理逻辑
+                 * 直接向浏览器返回响应
+                 */
+                return httplib::Server::HandlerResponse::Handled;
+            }
+            
+            /*
+             * 对于非OPTIONS请求，返回Unhandled状态
+             * 让请求继续进入正常的路由处理流程
+             * 但CORS头部已经设置完成
+             */
+            return httplib::Server::HandlerResponse::Unhandled;
+        });
+
         // Health check endpoint
         server->Get("/health", [this](const httplib::Request&, httplib::Response& res) {
             auto llama_res = llama_client->Get("/health");
@@ -936,10 +1000,16 @@ public:
             // streaming mode：一路打通 llama-server ←→ WebUI 的 SSE
             else
             {
+                /*
+                 * 设置Server-Sent Events (SSE) 流式响应的标准头部
+                 * Content-Type: 告诉浏览器这是一个事件流
+                 * Cache-Control: 禁止浏览器缓存流式数据
+                 * Connection: 保持连接活跃以持续发送数据
+                 * 注意: Access-Control-Allow-Origin已由预路由处理器统一处理
+                 */
                 res.set_header("Content-Type", "text/event-stream");
                 res.set_header("Cache-Control", "no-cache");
                 res.set_header("Connection", "keep-alive");
-                res.set_header("Access-Control-Allow-Origin", "*");
 
                 auto bridge = std::make_shared<SSEBridge>();
 
