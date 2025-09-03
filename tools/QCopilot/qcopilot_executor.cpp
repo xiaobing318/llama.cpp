@@ -1,11 +1,11 @@
-#include "qcopilot_executor.h"
-#include "qcopilot_utils.h"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
 #ifdef _WIN32
+    // Windows platform specific headers
     #include <windows.h>
 #else
+    // Linux platform specific headers
     #include <unistd.h>      // pipe, fork, dup2, execlp/execvp, read, write, close, STDIN_FILENO...
     #include <sys/types.h>   // pid_t
     #include <sys/wait.h>    // waitpid, WIFEXITED, WEXITSTATUS, WIFSIGNALED, WTERMSIG
@@ -14,8 +14,11 @@
     #include <cstdlib>       // exit, _exit
     #include <cstring>       // strerror（若要打印错误）
 #endif
+#include "qcopilot_executor.h"
+#include "qcopilot_utils.h"
 
 ToolExecutor::ToolExecutor() {
+    //  在构造 ToolExecutor 实体的时候自动注册内置工具。
     registerBuiltinTools();
 }
 
