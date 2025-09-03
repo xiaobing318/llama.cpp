@@ -254,7 +254,8 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
 // 获取内置工具的执行器函数映射
 std::map<std::string, ToolFunction> getBuiltinToolFunctions(ToolExecutor* executor) {
     std::map<std::string, ToolFunction> functions;
-    
+
+    // 基础工具
     functions["get_current_time"] = [executor](const json& args) {
         return executeGetCurrentTime(executor, args);
     };

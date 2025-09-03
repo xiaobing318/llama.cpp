@@ -29,7 +29,8 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions();
 // 获取内置工具的执行器函数映射
 std::map<std::string, ToolFunction> getBuiltinToolFunctions(ToolExecutor* executor);
 
-// 各个内置工具的具体实现函数（这些函数需要传入ToolExecutor指针来访问其方法）
+/*各个内置工具的具体实现函数（这些函数需要传入ToolExecutor指针来访问其方法）*/
+
 // 基础工具
 json executeGetCurrentTime(ToolExecutor* executor, const json& args);
 json executeCalculate(ToolExecutor* executor, const json& args);
