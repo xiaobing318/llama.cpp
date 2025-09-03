@@ -16,6 +16,7 @@
 #endif
 #include "qcopilot_executor.h"
 #include "qcopilot_utils.h"
+#include "qcopilot_builtin_tools.h"
 
 ToolExecutor::ToolExecutor() {
     //  在构造 ToolExecutor 实体的时候自动注册内置工具。
@@ -23,119 +24,27 @@ ToolExecutor::ToolExecutor() {
 }
 
 void ToolExecutor::registerBuiltinTools() {
-    // Register get_current_time
-    builtinTools["get_current_time"] = [this](const json& args) {
-        return executeGetCurrentTime(args);
-    };
-    tool_definitions["get_current_time"] = {
-        {"type", "function"},
-        {"function", {
-            {"name", "get_current_time"},
-            {"description", "获取当前时间"},
-            {"parameters", {
-                {"type", "object"},
-                {"properties", {
-                    {"format", {{"type", "string"}, {"description", "时间格式：ISO8601, unix, 或默认格式"}}},
-                    {"timezone", {{"type", "string"}, {"description", "时区：local 或 UTC"}}}
-                }}
-            }}
-        }}
-    };
-    LOG_INF("成功注册内置工具： %s - %s\n",
-        "get_current_time",
-        tool_definitions["get_current_time"]["function"]["description"].get<std::string>().c_str());
-
-    // Register calculate
-    builtinTools["calculate"] = [this](const json& args) {
-        return executeCalculate(args);
-    };
-    tool_definitions["calculate"] = {
-        {"type", "function"},
-        {"function", {
-            {"name", "calculate"},
-            {"description", "计算数学表达式"},
-            {"parameters", {
-                {"type", "object"},
-                {"properties", {
-                    {"expression", {{"type", "string"}, {"description", "要计算的数学表达式"}}}
-                }},
-                {"required", {"expression"}}
-            }}
-        }}
-    };
-    LOG_INF("成功注册内置工具： %s - %s\n",
-        "calculate",
-        tool_definitions["calculate"]["function"]["description"].get<std::string>().c_str());
-
-    // Register read_file
-    builtinTools["read_file"] = [this](const json& args) {
-        return executeReadFile(args);
-    };
-    tool_definitions["read_file"] = {
-        {"type", "function"},
-        {"function", {
-            {"name", "read_file"},
-            {"description", "读取文件内容"},
-            {"parameters", {
-                {"type", "object"},
-                {"properties", {
-                    {"path", {{"type", "string"}, {"description", "文件路径"}}},
-                    {"encoding", {{"type", "string"}, {"description", "文件编码，默认utf-8"}}}
-                }},
-                {"required", {"path"}}
-            }}
-        }}
-    };
-    LOG_INF("成功注册内置工具： %s - %s\n",
-        "read_file",
-        tool_definitions["read_file"]["function"]["description"].get<std::string>().c_str());
-
-    // Register write_file
-    builtinTools["write_file"] = [this](const json& args) {
-        return executeWriteFile(args);
-    };
-    tool_definitions["write_file"] = {
-        {"type", "function"},
-        {"function", {
-            {"name", "write_file"},
-            {"description", "写入文件内容"},
-            {"parameters", {
-                {"type", "object"},
-                {"properties", {
-                    {"path", {{"type", "string"}, {"description", "文件路径"}}},
-                    {"content", {{"type", "string"}, {"description", "要写入的内容"}}},
-                    {"append", {{"type", "boolean"}, {"description", "是否追加到文件末尾"}}}
-                }},
-                {"required", {"path", "content"}}
-            }}
-        }}
-    };
-    LOG_INF("成功注册内置工具： %s - %s\n",
-        "write_file",
-        tool_definitions["write_file"]["function"]["description"].get<std::string>().c_str());
-
-    // Register list_files
-    builtinTools["list_files"] = [this](const json& args) {
-        return executeListFiles(args);
-    };
-    tool_definitions["list_files"] = {
-        {"type", "function"},
-        {"function", {
-            {"name", "list_files"},
-            {"description", "列出目录中的文件"},
-            {"parameters", {
-                {"type", "object"},
-                {"properties", {
-                    {"directory", {{"type", "string"}, {"description", "目录路径，默认为当前目录"}}},
-                    {"pattern", {{"type", "string"}, {"description", "文件名匹配模式"}}},
-                    {"recursive", {{"type", "boolean"}, {"description", "是否递归搜索子目录"}}}
-                }}
-            }}
-        }}
-    };
-    LOG_INF("成功注册内置工具： %s - %s\n",
-        "list_files",
-        tool_definitions["list_files"]["function"]["description"].get<std::string>().c_str());
+    // 使用新的内置工具模块获取工具定义和函数
+    auto definitions = BuiltinTools::getBuiltinToolDefinitions();
+    auto functions = BuiltinTools::getBuiltinToolFunctions(this);
+    
+    // 注册所有内置工具
+    for (const auto& definition : definitions) {
+        const std::string& name = definition.name;
+        
+        // 注册工具定义
+        tool_definitions[name] = definition.definition;
+        
+        // 注册工具执行函数
+        if (functions.find(name) != functions.end()) {
+            builtinTools[name] = functions[name];
+        }
+        
+        // 输出日志
+        LOG_INF("成功注册内置工具： %s - %s\n",
+            name.c_str(),
+            tool_definitions[name]["function"]["description"].get<std::string>().c_str());
+    }
 }
 
 bool ToolExecutor::registerExternalTools(const json& tool_definition) {
@@ -264,194 +173,6 @@ json ToolExecutor::getTools() const {
     return result;
 }
 
-// BuiltinTools
-
-json ToolExecutor::executeGetCurrentTime(const json& args) {
-    std::string format = args.value("format", "ISO8601");
-    std::string timezone = args.value("timezone", "local");
-
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-
-    std::stringstream ss;
-    if (format == "ISO8601") {
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
-    } else if (format == "unix") {
-        ss << time_t;
-    } else {
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    }
-
-    return json{
-        {"time", ss.str()},
-        {"format", format},
-        {"timezone", timezone},
-        {"success", true}
-    };
-}
-
-json ToolExecutor::executeCalculate(const json& args) {
-    std::string expression = args.value("expression", "");
-
-    if (expression.empty()) {
-        return json{
-            {"error", "Expression is required"},
-            {"success", false}
-        };
-    }
-
-    // Simple calculator implementation (supports +, -, *, /)
-    // Note: This is a very basic implementation
-    try {
-        double result = 0;
-        char op = '+';
-        std::stringstream ss(expression);
-        double num;
-
-        while (ss >> num) {
-            switch (op) {
-                case '+': result += num; break;
-                case '-': result -= num; break;
-                case '*': result *= num; break;
-                case '/':
-                    if (num == 0) {
-                        return json{
-                            {"error", "Division by zero"},
-                            {"success", false}
-                        };
-                    }
-                    result /= num;
-                    break;
-            }
-            ss >> op;
-        }
-
-        return json{
-            {"expression", expression},
-            {"result", result},
-            {"success", true}
-        };
-
-    } catch (const std::exception& e) {
-        return json{
-            {"error", "Failed to evaluate expression"},
-            {"success", false}
-        };
-    }
-}
-
-json ToolExecutor::executeReadFile(const json& args) {
-    std::string path = args.value("path", "");
-    std::string encoding = args.value("encoding", "utf-8");
-
-    if (path.empty()) {
-        return json{
-            {"error", "Path is required"},
-            {"success", false}
-        };
-    }
-
-    if (!file_exists(path)) {
-        return json{
-            {"error", "File not found"},
-            {"success", false}
-        };
-    }
-
-    std::string content;
-    if (!read_file_content(path, content)) {
-        return json{
-            {"error", "Failed to read file"},
-            {"success", false}
-        };
-    }
-
-    return json{
-        {"path", path},
-        {"content", content},
-        {"size", content.size()},
-        {"success", true}
-    };
-}
-
-json ToolExecutor::executeWriteFile(const json& args) {
-    std::string path = args.value("path", "");
-    std::string content = args.value("content", "");
-    bool append = args.value("append", false);
-
-    if (path.empty()) {
-        return json{
-            {"error", "Path is required"},
-            {"success", false}
-        };
-    }
-
-    std::string final_content = content;
-    if (append && file_exists(path)) {
-        std::string existing;
-        if (read_file_content(path, existing)) {
-            final_content = existing + content;
-        }
-    }
-
-    if (!write_file_content(path, final_content)) {
-        return json{
-            {"error", "Failed to write file"},
-            {"success", false}
-        };
-    }
-
-    return json{
-        {"path", path},
-        {"bytes_written", final_content.size()},
-        {"success", true}
-    };
-}
-
-json ToolExecutor::executeListFiles(const json& args) {
-    std::string directory = args.value("directory", ".");
-    std::string pattern = args.value("pattern", "*");
-    bool recursive = args.value("recursive", false);
-
-    if (!file_exists(directory)) {
-        return json{
-            {"error", "Directory not found"},
-            {"success", false}
-        };
-    }
-
-    std::vector<std::string> files = list_directory(directory);
-
-    // Simple pattern matching (only supports * wildcard)
-    if (pattern != "*") {
-        std::vector<std::string> filtered;
-        for (const auto& file : files) {
-            if (pattern.front() == '*') {
-                std::string suffix = pattern.substr(1);
-                if (file.size() >= suffix.size() &&
-                    file.substr(file.size() - suffix.size()) == suffix) {
-                    filtered.push_back(file);
-                }
-            } else if (pattern.back() == '*') {
-                std::string prefix = pattern.substr(0, pattern.size() - 1);
-                if (file.size() >= prefix.size() &&
-                    file.substr(0, prefix.size()) == prefix) {
-                    filtered.push_back(file);
-                }
-            } else if (file == pattern) {
-                filtered.push_back(file);
-            }
-        }
-        files = filtered;
-    }
-
-    return json{
-        {"directory", directory},
-        {"files", files},
-        {"count", files.size()},
-        {"success", true}
-    };
-}
 
 // ExternalTools
 

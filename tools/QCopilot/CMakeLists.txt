@@ -27,6 +27,7 @@ set(TARGET_SRCS
     qcopilot.cpp
     qcopilot_utils.cpp
     qcopilot_executor.cpp
+    qcopilot_builtin_tools.cpp
 )
 set(PUBLIC_ASSETS
     index.html.gz
@@ -52,7 +53,12 @@ foreach(asset ${PUBLIC_ASSETS})
 endforeach()
 
 #[[
-1、该目标包含了 qcopilot.cpp、qcopilot_utils.cpp、qcopilot_executor.cpp 和生成的前端资源头文件这些编译单元。
+1、该目标包含了以下编译单元：
+   - qcopilot.cpp: 主程序入口和HTTP服务器
+   - qcopilot_utils.cpp: 通用工具函数库
+   - qcopilot_executor.cpp: 工具执行器核心逻辑
+   - qcopilot_builtin_tools.cpp: 内置工具实现（文件操作、数学计算、系统命令等）
+   - 生成的前端资源头文件
 2、编译单元指的是源代码中的一个独立的文件，它可以被单独编译并生成一个目标文件，可以包含头文件、源文件和其他资源。
 ]]
 add_executable(${TARGET} ${TARGET_SRCS})

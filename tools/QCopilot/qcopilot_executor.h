@@ -32,12 +32,7 @@ private:
     // 包含内置工具和外部工具定义的映射
     std::unordered_map<std::string, json> tool_definitions;
 
-    // Built-in tool implementations
-    json executeGetCurrentTime(const json& args);
-    json executeCalculate(const json& args);
-    json executeReadFile(const json& args);
-    json executeWriteFile(const json& args);
-    json executeListFiles(const json& args);
+    // Built-in tool implementations have been moved to qcopilot_builtin_tools module
 
     // Register built-in tools
     void registerBuiltinTools();
