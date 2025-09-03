@@ -26,7 +26,7 @@ ToolExecutor::ToolExecutor() {
 void ToolExecutor::registerBuiltinTools() {
     // 使用新的内置工具模块获取工具定义和函数
     auto definitions = BuiltinTools::getBuiltinToolDefinitions();
-    auto functions = BuiltinTools::getBuiltinToolFunctions(this);
+    auto functions = BuiltinTools::getBuiltinToolFunctions();
     
     // 注册所有内置工具
     for (const auto& definition : definitions) {

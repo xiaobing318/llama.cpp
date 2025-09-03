@@ -26,25 +26,25 @@ using ToolFunction = std::function<json(const json&)>;
 // 获取所有内置工具的定义
 std::vector<ToolDefinition> getBuiltinToolDefinitions();
 
-// 获取内置工具的执行器函数映射
-std::map<std::string, ToolFunction> getBuiltinToolFunctions(ToolExecutor* executor);
+// 获取内置工具的执行器函数映射（不需要executor参数）
+std::map<std::string, ToolFunction> getBuiltinToolFunctions();
 
-/*各个内置工具的具体实现函数（这些函数需要传入ToolExecutor指针来访问其方法）*/
+/*各个内置工具的具体实现函数（静态函数，完全独立）*/
 
 // 基础工具
-json executeGetCurrentTime(ToolExecutor* executor, const json& args);
-json executeCalculate(ToolExecutor* executor, const json& args);
-json executeReadFile(ToolExecutor* executor, const json& args);
-json executeWriteFile(ToolExecutor* executor, const json& args);
+json executeGetCurrentTime(const json& args);
+json executeCalculate(const json& args);
+json executeReadFile(const json& args);
+json executeWriteFile(const json& args);
 
 // Claude Code风格工具
-json executeGlob(ToolExecutor* executor, const json& args);
-json executeGrep(ToolExecutor* executor, const json& args);
-json executeMultiEdit(ToolExecutor* executor, const json& args);
-json executeEdit(ToolExecutor* executor, const json& args);
-json executeBash(ToolExecutor* executor, const json& args);
-json executeListDirectory(ToolExecutor* executor, const json& args);
-json executeFileStats(ToolExecutor* executor, const json& args);
+json executeGlob(const json& args);
+json executeGrep(const json& args);
+json executeMultiEdit(const json& args);
+json executeEdit(const json& args);
+json executeBash(const json& args);
+json executeListDirectory(const json& args);
+json executeFileStats(const json& args);
 
 // 辅助函数
 bool matchPattern(const std::string& text, const std::string& pattern);

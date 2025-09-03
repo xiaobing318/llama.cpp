@@ -252,54 +252,54 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
 }
 
 // 获取内置工具的执行器函数映射
-std::map<std::string, ToolFunction> getBuiltinToolFunctions(ToolExecutor* executor) {
+std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
     std::map<std::string, ToolFunction> functions;
 
     // 基础工具
-    functions["get_current_time"] = [executor](const json& args) {
-        return executeGetCurrentTime(executor, args);
+    functions["get_current_time"] = [](const json& args) {
+        return executeGetCurrentTime(args);
     };
     
-    functions["calculate"] = [executor](const json& args) {
-        return executeCalculate(executor, args);
+    functions["calculate"] = [](const json& args) {
+        return executeCalculate(args);
     };
     
-    functions["read_file"] = [executor](const json& args) {
-        return executeReadFile(executor, args);
+    functions["read_file"] = [](const json& args) {
+        return executeReadFile(args);
     };
     
-    functions["write_file"] = [executor](const json& args) {
-        return executeWriteFile(executor, args);
+    functions["write_file"] = [](const json& args) {
+        return executeWriteFile(args);
     };
     
     
     // Claude Code风格工具函数
-    functions["glob"] = [executor](const json& args) {
-        return executeGlob(executor, args);
+    functions["glob"] = [](const json& args) {
+        return executeGlob(args);
     };
     
-    functions["grep"] = [executor](const json& args) {
-        return executeGrep(executor, args);
+    functions["grep"] = [](const json& args) {
+        return executeGrep(args);
     };
     
-    functions["multiedit"] = [executor](const json& args) {
-        return executeMultiEdit(executor, args);
+    functions["multiedit"] = [](const json& args) {
+        return executeMultiEdit(args);
     };
     
-    functions["edit"] = [executor](const json& args) {
-        return executeEdit(executor, args);
+    functions["edit"] = [](const json& args) {
+        return executeEdit(args);
     };
     
-    functions["bash"] = [executor](const json& args) {
-        return executeBash(executor, args);
+    functions["bash"] = [](const json& args) {
+        return executeBash(args);
     };
     
-    functions["list_directory"] = [executor](const json& args) {
-        return executeListDirectory(executor, args);
+    functions["list_directory"] = [](const json& args) {
+        return executeListDirectory(args);
     };
     
-    functions["file_stats"] = [executor](const json& args) {
-        return executeFileStats(executor, args);
+    functions["file_stats"] = [](const json& args) {
+        return executeFileStats(args);
     };
     
     return functions;
@@ -307,7 +307,7 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions(ToolExecutor* execut
 
 // 内置工具具体实现
 
-json executeGetCurrentTime(ToolExecutor* executor, const json& args) {
+json executeGetCurrentTime(const json& args) {
     std::string format = args.value("format", "ISO8601");
     std::string timezone = args.value("timezone", "local");
 
@@ -340,7 +340,7 @@ double parseFunction(const std::string& funcName, const std::string& expr, size_
 void skipWhitespace(const std::string& expr, size_t& pos);
 bool isFunction(const std::string& name);
 
-json executeCalculate(ToolExecutor* executor, const json& args) {
+json executeCalculate(const json& args) {
     std::string expression = args.value("expression", "");
 
     if (expression.empty()) {
@@ -391,7 +391,7 @@ json executeCalculate(ToolExecutor* executor, const json& args) {
     }
 }
 
-json executeReadFile(ToolExecutor* executor, const json& args) {
+json executeReadFile(const json& args) {
     std::string path = args.value("path", "");
     std::string encoding = args.value("encoding", "utf-8");
 
@@ -425,7 +425,7 @@ json executeReadFile(ToolExecutor* executor, const json& args) {
     };
 }
 
-json executeWriteFile(ToolExecutor* executor, const json& args) {
+json executeWriteFile(const json& args) {
     std::string path = args.value("path", "");
     std::string content = args.value("content", "");
     bool append = args.value("append", false);
@@ -461,7 +461,7 @@ json executeWriteFile(ToolExecutor* executor, const json& args) {
 
 // Claude Code风格工具实现
 
-json executeGlob(ToolExecutor* executor, const json& args) {
+json executeGlob(const json& args) {
     std::string pattern = args.value("pattern", "");
     std::string path = args.value("path", ".");
 
@@ -529,7 +529,7 @@ json executeGlob(ToolExecutor* executor, const json& args) {
     };
 }
 
-json executeGrep(ToolExecutor* executor, const json& args) {
+json executeGrep(const json& args) {
     std::string pattern = args.value("pattern", "");
     std::string path = args.value("path", ".");
     std::string include = args.value("include", "");
@@ -584,7 +584,7 @@ json executeGrep(ToolExecutor* executor, const json& args) {
     };
 }
 
-json executeMultiEdit(ToolExecutor* executor, const json& args) {
+json executeMultiEdit(const json& args) {
     std::string file_path = args.value("file_path", "");
     
     if (file_path.empty()) {
@@ -669,7 +669,7 @@ json executeMultiEdit(ToolExecutor* executor, const json& args) {
     };
 }
 
-json executeEdit(ToolExecutor* executor, const json& args) {
+json executeEdit(const json& args) {
     std::string file_path = args.value("file_path", "");
     std::string old_string = args.value("old_string", "");
     std::string new_string = args.value("new_string", "");
@@ -732,7 +732,7 @@ json executeEdit(ToolExecutor* executor, const json& args) {
     };
 }
 
-json executeBash(ToolExecutor* executor, const json& args) {
+json executeBash(const json& args) {
     std::string command = args.value("command", "");
     int timeout = args.value("timeout", 30000); // 30秒默认超时
     std::string description = args.value("description", "");
@@ -842,7 +842,7 @@ std::vector<json> searchInFile(const std::string& filepath, const std::string& p
     return matches;
 }
 
-json executeListDirectory(ToolExecutor* executor, const json& args) {
+json executeListDirectory(const json& args) {
     std::string path = args.value("path", ".");
     bool recursive = args.value("recursive", false);
     bool show_hidden = args.value("show_hidden", false);
@@ -986,7 +986,7 @@ json executeListDirectory(ToolExecutor* executor, const json& args) {
     };
 }
 
-json executeFileStats(ToolExecutor* executor, const json& args) {
+json executeFileStats(const json& args) {
     std::string path = args.value("path", "");
     bool detailed = args.value("detailed", false);
     bool checksum = args.value("checksum", false);
