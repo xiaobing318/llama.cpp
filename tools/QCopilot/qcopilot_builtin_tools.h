@@ -26,18 +26,14 @@ using ToolFunction = std::function<json(const json&)>;
 // 获取所有内置工具的定义
 std::vector<ToolDefinition> getBuiltinToolDefinitions();
 
-// 获取内置工具的执行器函数映射（不需要executor参数）
+// 获取内置工具的执行器函数映射
 std::map<std::string, ToolFunction> getBuiltinToolFunctions();
 
-/*各个内置工具的具体实现函数（静态函数，完全独立）*/
-
-// 基础工具
+// 各个内置工具的具体实现函数，静态函数，完全独立
 json executeGetCurrentTime(const json& args);
 json executeCalculate(const json& args);
 json executeReadFile(const json& args);
 json executeWriteFile(const json& args);
-
-// Claude Code风格工具
 json executeGlob(const json& args);
 json executeGrep(const json& args);
 json executeMultiEdit(const json& args);
@@ -48,7 +44,10 @@ json executeFileStats(const json& args);
 
 // 辅助函数
 bool matchPattern(const std::string& text, const std::string& pattern);
-std::vector<json> searchInFile(const std::string& filepath, const std::string& pattern, 
-                              bool case_sensitive, bool line_numbers);
+std::vector<json> searchInFile(
+    const std::string& filepath,
+    const std::string& pattern, 
+    bool case_sensitive,
+    bool line_numbers);
 
 } // namespace BuiltinTools

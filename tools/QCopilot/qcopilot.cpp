@@ -294,50 +294,81 @@ public:
 };
 
 static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
+    //  在单个推理过程中可能会存在多个 tool calling/function calling，因此这里最好是循环处理每一个  tool calling/function calling。
     for (const auto& tool_call : tool_calls) {
+        //  从当前 function calling 中提取 id 字段，如果没有则置空。
         std::string tool_id = tool_call.value("id", "");
+        //  从当前 function calling 中提取 name 字段。
         std::string tool_name = tool_call["function"]["name"];
+        //  从当前 function calling 中提取 arguments 字段。
         std::string args_str = tool_call["function"]["arguments"];
 
-        // 输出完整的工具调用命令到终端
+#ifdef NDEBUG
+        /*
+        1、Release 模式：不输出完整的工具调用命令到终端。
+        2、TODO:需要完善日志功能。
+        */
+#else
+        /*
+        1、Debug 模式：输出完整的工具调用命令到终端
+        2、TODO:需要完善日志功能。
+        */
         LOG_INF("<=== 工具调用 ===>\n");
         LOG_INF("工具名称: %s\n", tool_name.c_str());
         LOG_INF("工具ID: %s\n", tool_id.c_str());
         LOG_INF("调用参数: %s\n", args_str.c_str());
-        LOG_INF("<===============>\n");
-
+        LOG_INF("<===============>\n");          
+#endif
+        //  创建一个临时变量用来存储调用工具所需要的参数。
         json arguments;
         try {
+            //  从 JSON 数据中解析调用工具所需要的参数。
             arguments = json::parse(args_str);
         } catch (const json::parse_error& e) {
+            //  输出错误日志说明解析调用工具所需参数失败。
             LOG_ERR("解析工具参数失败: %s\n", e.what());
+            //  将调用工具所需参数置空，这里不应该直接返回结果，因为有些工具的确是不需要参数的。
             arguments = json::object();
         }
 
+        //  创建两个临时变量用来保存工具调用处理结果。
         json result;
         std::string result_content;
         try {
+            //  使用特定参数调用指定工具。
             result = tool_executor->execute(tool_name, arguments);
-            LOG_INF("工具执行成功: %s\n", tool_name.c_str());
+            LOG_INF("名为[%s]工具执行成功！\n", tool_name.c_str());
+            //  将工具执行的 JSON 结果序列化为字符串。
             result_content = result.dump();
         } catch (const std::exception& e) {
-            LOG_ERR("工具执行失败: %s: %s\n", tool_name.c_str(), e.what());
+            LOG_ERR("名为[%s]工具执行失败，错误日志：%s\n", tool_name.c_str(), e.what());
             result = json{
                 {"error", "Tool execution failed"},
                 {"details", e.what()}
             };
             result_content = result.dump();
         }
-
+        //  判断序列话的工具执行结果是否为空。
         if (result_content.empty()) {
             result_content = "{}";
         }
 
-        // 输出完整的工具执行结果到终端
+#ifdef NDEBUG
+        /*
+        1、Release 模式：不输出完整的工具调用命令到终端。
+        2、TODO:需要完善日志功能。
+        */
+#else
+        /*
+        1、Debug 模式：输出完整的工具调用命令到终端
+        2、TODO:需要完善日志功能。
+        */
         LOG_INF("<=== 工具执行结果 ===>\n");
         LOG_INF("工具名称: %s\n", tool_name.c_str());
         LOG_INF("执行结果: %s\n", result_content.c_str());
-        LOG_INF("<===================>\n");
+        LOG_INF("<===================>\n");       
+#endif
+
 
         // 确保工具消息格式完整，包含所有必要字段
         json tool_message = {
@@ -345,9 +376,9 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
             {"tool_call_id", tool_id},
             {"name", tool_name},
             {"content", result_content},
-            {"reasoning_content", ""}  // 必须包含此字段
+            {"reasoning_content", ""}
         };
-
+        //  将工具执行结果保存到消息中用来再次给到推理引擎。
         messages.push_back(tool_message);
     }
 

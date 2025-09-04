@@ -1,5 +1,3 @@
-#include "qcopilot_builtin_tools.h"
-#include "qcopilot_executor.h"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -10,10 +8,12 @@
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
+#include "qcopilot_builtin_tools.h"
+#include "qcopilot_executor.h"
 
 namespace BuiltinTools {
 
-// 获取所有内置工具的定义
+// 获取内置工具的定义
 std::vector<ToolDefinition> getBuiltinToolDefinitions() {
     std::vector<ToolDefinition> definitions;
     
@@ -255,7 +255,6 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
 std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
     std::map<std::string, ToolFunction> functions;
 
-    // 基础工具
     functions["get_current_time"] = [](const json& args) {
         return executeGetCurrentTime(args);
     };
@@ -272,8 +271,6 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
         return executeWriteFile(args);
     };
     
-    
-    // Claude Code风格工具函数
     functions["glob"] = [](const json& args) {
         return executeGlob(args);
     };
@@ -305,7 +302,335 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
     return functions;
 }
 
-// 内置工具具体实现
+/********各个内置工具使用到的函数********/
+
+// 前向声明内部函数 
+double evaluateExpression(const std::string& expr);
+double parseExpression(const std::string& expr, size_t& pos);
+double parseTerm(const std::string& expr, size_t& pos);
+double parseFactor(const std::string& expr, size_t& pos);
+double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos);
+void skipWhitespace(const std::string& expr, size_t& pos);
+bool isFunction(const std::string& name);
+
+// 计算工具将会用到的常量
+const double PI = 3.14159265358979323846;
+const double E = 2.71828182845904523536;
+
+// 计算表达式的主函数
+double evaluateExpression(const std::string& expr) {
+    if (expr.empty()) {
+        throw std::runtime_error("Empty expression");
+    }
+    
+    size_t pos = 0;
+    double result = parseExpression(expr, pos);
+    
+    // 检查是否还有未处理的字符
+    skipWhitespace(expr, pos);
+    if (pos < expr.length()) {
+        throw std::runtime_error("Unexpected characters at end of expression: " + expr.substr(pos));
+    }
+    
+    return result;
+}
+// 解析表达式（处理 +, - 运算符）
+double parseExpression(const std::string& expr, size_t& pos) {
+    double result = parseTerm(expr, pos);
+    
+    while (pos < expr.length()) {
+        skipWhitespace(expr, pos);
+        
+        if (pos < expr.length() && (expr[pos] == '+' || expr[pos] == '-')) {
+            char op = expr[pos];
+            pos++;
+            double right = parseTerm(expr, pos);
+            
+            if (op == '+') {
+                result += right;
+            } else if (op == '-') {
+                result -= right;
+            }
+        } else {
+            break;
+        }
+    }
+    
+    return result;
+}
+// 解析项（处理 *, /, % 运算符）
+double parseTerm(const std::string& expr, size_t& pos) {
+    double result = parseFactor(expr, pos);
+    
+    while (pos < expr.length()) {
+        skipWhitespace(expr, pos);
+        
+        if (pos < expr.length() && (expr[pos] == '*' || expr[pos] == '/' || expr[pos] == '%')) {
+            char op = expr[pos];
+            pos++;
+            double right = parseFactor(expr, pos);
+            
+            if (op == '*') {
+                result *= right;
+            } else if (op == '/') {
+                if (right == 0) {
+                    throw std::runtime_error("Division by zero");
+                }
+                result /= right;
+            } else if (op == '%') {
+                if (right == 0) {
+                    throw std::runtime_error("Modulo by zero");
+                }
+                result = std::fmod(result, right);
+            }
+        } else {
+            break;
+        }
+    }
+    
+    return result;
+}
+// 解析因子（数字、常量、函数、括号表达式）
+double parseFactor(const std::string& expr, size_t& pos) {
+    skipWhitespace(expr, pos);
+    
+    if (pos >= expr.length()) {
+        throw std::runtime_error("Unexpected end of expression");
+    }
+    
+    // 处理负号
+    if (expr[pos] == '-') {
+        pos++;
+        return -parseFactor(expr, pos);
+    }
+    
+    // 处理正号
+    if (expr[pos] == '+') {
+        pos++;
+        return parseFactor(expr, pos);
+    }
+    
+    // 处理括号
+    if (expr[pos] == '(') {
+        pos++; // 跳过 '('
+        double result = parseExpression(expr, pos);
+        if (pos >= expr.length() || expr[pos] != ')') {
+            throw std::runtime_error("Expected ')'");
+        }
+        pos++; // 跳过 ')'
+        return result;
+    }
+    
+    // 解析数字或标识符
+    size_t start = pos;
+    
+    // 检查是否是数学常量或函数
+    if (std::isalpha(expr[pos])) {
+        while (pos < expr.length() && std::isalnum(expr[pos])) {
+            pos++;
+        }
+        
+        std::string identifier = expr.substr(start, pos - start);
+        
+        // 数学常量
+        if (identifier == "pi") return PI;
+        else if (identifier == "e") return E;
+        
+        // 数学函数
+        if (isFunction(identifier)) {
+            return parseFunction(identifier, expr, pos);
+        } else {
+            throw std::runtime_error("Unknown identifier: " + identifier);
+        }
+    }
+    
+    // 解析数字（包括小数和科学计数法）
+    if (std::isdigit(expr[pos]) || expr[pos] == '.') {
+        while (pos < expr.length() && 
+               (std::isdigit(expr[pos]) || expr[pos] == '.' || 
+                expr[pos] == 'e' || expr[pos] == 'E' || 
+                expr[pos] == '+' || expr[pos] == '-')) {
+            pos++;
+        }
+        
+        std::string numStr = expr.substr(start, pos - start);
+        try {
+            return std::stod(numStr);
+        } catch (const std::exception&) {
+            throw std::runtime_error("Invalid number format: " + numStr);
+        }
+    }
+    
+    throw std::runtime_error("Unexpected character: " + std::string(1, expr[pos]));
+}
+// 解析数学函数调用
+double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos) {
+    // 跳过函数名
+    pos += funcName.length();
+    
+    // 期望左括号
+    if (pos >= expr.length() || expr[pos] != '(') {
+        throw std::runtime_error("Expected '(' after function name");
+    }
+    pos++; // 跳过 '('
+    
+    // pow 函数需要两个参数
+    if (funcName == "pow") {
+        double arg1 = parseExpression(expr, pos);
+        
+        // 期望逗号
+        if (pos >= expr.length() || expr[pos] != ',') {
+            throw std::runtime_error("Expected ',' in pow function");
+        }
+        pos++; // 跳过 ','
+        
+        double arg2 = parseExpression(expr, pos);
+        
+        // 期望右括号
+        if (pos >= expr.length() || expr[pos] != ')') {
+            throw std::runtime_error("Expected ')' after function arguments");
+        }
+        pos++; // 跳过 ')'
+        
+        return std::pow(arg1, arg2);
+    } else {
+        // 单参数函数
+        double arg = parseExpression(expr, pos);
+        
+        // 期望右括号
+        if (pos >= expr.length() || expr[pos] != ')') {
+            throw std::runtime_error("Expected ')' after function argument");
+        }
+        pos++; // 跳过 ')'
+        
+        // 调用相应的数学函数
+        if (funcName == "sin") return std::sin(arg);
+        else if (funcName == "cos") return std::cos(arg);
+        else if (funcName == "tan") return std::tan(arg);
+        else if (funcName == "sqrt") {
+            if (arg < 0) throw std::runtime_error("sqrt of negative number");
+            return std::sqrt(arg);
+        }
+        else if (funcName == "log") {
+            if (arg <= 0) throw std::runtime_error("log of non-positive number");
+            return std::log10(arg);
+        }
+        else if (funcName == "ln") {
+            if (arg <= 0) throw std::runtime_error("ln of non-positive number");
+            return std::log(arg);
+        }
+        else if (funcName == "exp") return std::exp(arg);
+        else if (funcName == "abs") return std::abs(arg);
+        else if (funcName == "floor") return std::floor(arg);
+        else if (funcName == "ceil") return std::ceil(arg);
+        else if (funcName == "round") return std::round(arg);
+        else if (funcName == "asin") {
+            if (arg < -1 || arg > 1) throw std::runtime_error("asin argument out of range [-1,1]");
+            return std::asin(arg);
+        }
+        else if (funcName == "acos") {
+            if (arg < -1 || arg > 1) throw std::runtime_error("acos argument out of range [-1,1]");
+            return std::acos(arg);
+        }
+        else if (funcName == "atan") return std::atan(arg);
+        else if (funcName == "sinh") return std::sinh(arg);
+        else if (funcName == "cosh") return std::cosh(arg);
+        else if (funcName == "tanh") return std::tanh(arg);
+        else throw std::runtime_error("Unknown function: " + funcName);
+    }
+}
+// 跳过空白字符
+void skipWhitespace(const std::string& expr, size_t& pos) {
+    while (pos < expr.length() && std::isspace(expr[pos])) {
+        pos++;
+    }
+}
+// 检查字符串是否是数学函数
+bool isFunction(const std::string& name) {
+    static const std::set<std::string> functions = {
+        "sin", "cos", "tan", "sqrt", "log", "ln", "exp", "abs", 
+        "floor", "ceil", "round", "pow", "asin", "acos", "atan",
+        "sinh", "cosh", "tanh"
+    };
+    return functions.find(name) != functions.end();
+}
+// 匹配模式
+bool matchPattern(const std::string& text, const std::string& pattern) {
+    // 简化的模式匹配实现，支持*通配符
+    if (pattern == "*") return true;
+    
+    size_t star_pos = pattern.find('*');
+    if (star_pos == std::string::npos) {
+        // 没有通配符，直接比较
+        return text == pattern;
+    }
+    
+    if (star_pos == 0) {
+        // *在开头
+        std::string suffix = pattern.substr(1);
+        return text.length() >= suffix.length() && 
+               text.substr(text.length() - suffix.length()) == suffix;
+    } else if (star_pos == pattern.length() - 1) {
+        // *在末尾
+        std::string prefix = pattern.substr(0, star_pos);
+        return text.length() >= prefix.length() &&
+               text.substr(0, prefix.length()) == prefix;
+    } else {
+        // *在中间
+        std::string prefix = pattern.substr(0, star_pos);
+        std::string suffix = pattern.substr(star_pos + 1);
+        return text.length() >= prefix.length() + suffix.length() &&
+               text.substr(0, prefix.length()) == prefix &&
+               text.substr(text.length() - suffix.length()) == suffix;
+    }
+}
+// 在文件中搜索模式
+std::vector<json> searchInFile(
+    const std::string& filepath,
+    const std::string& pattern, 
+    bool case_sensitive,
+    bool line_numbers) {
+    std::vector<json> matches;
+    std::string content;
+    
+    if (!read_file_content(filepath, content)) {
+        return matches;
+    }
+    
+    std::string search_content = content;
+    std::string search_pattern = pattern;
+    
+    if (!case_sensitive) {
+        std::transform(search_content.begin(), search_content.end(), search_content.begin(), ::tolower);
+        std::transform(search_pattern.begin(), search_pattern.end(), search_pattern.begin(), ::tolower);
+    }
+    
+    std::istringstream iss(content);
+    std::istringstream search_iss(search_content);
+    std::string line, search_line;
+    int line_num = 1;
+    
+    while (std::getline(iss, line) && std::getline(search_iss, search_line)) {
+        if (search_line.find(search_pattern) != std::string::npos) {
+            json match = {
+                {"file", filepath},
+                {"line_content", line},
+                {"success", true}
+            };
+            
+            if (line_numbers) {
+                match["line_number"] = line_num;
+            }
+            
+            matches.push_back(match);
+        }
+        line_num++;
+    }
+    
+    return matches;
+}
+
+/********各个内置工具的具体实现函数********/
 
 json executeGetCurrentTime(const json& args) {
     std::string format = args.value("format", "ISO8601");
@@ -351,15 +676,6 @@ json executeGetCurrentTime(const json& args) {
         {"success", true}
     };
 }
-
-// 前向声明内部函数 
-double evaluateExpression(const std::string& expr);
-double parseExpression(const std::string& expr, size_t& pos);
-double parseTerm(const std::string& expr, size_t& pos);
-double parseFactor(const std::string& expr, size_t& pos);
-double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos);
-void skipWhitespace(const std::string& expr, size_t& pos);
-bool isFunction(const std::string& name);
 
 json executeCalculate(const json& args) {
     std::string expression = args.value("expression", "");
@@ -642,8 +958,6 @@ json executeWriteFile(const json& args) {
         {"success", true}
     };
 }
-
-// Claude Code风格工具实现
 
 json executeGlob(const json& args) {
     std::string pattern = args.value("pattern", "");
@@ -952,80 +1266,6 @@ json executeBash(const json& args) {
     };
 }
 
-// 辅助函数实现
-
-bool matchPattern(const std::string& text, const std::string& pattern) {
-    // 简化的模式匹配实现，支持*通配符
-    if (pattern == "*") return true;
-    
-    size_t star_pos = pattern.find('*');
-    if (star_pos == std::string::npos) {
-        // 没有通配符，直接比较
-        return text == pattern;
-    }
-    
-    if (star_pos == 0) {
-        // *在开头
-        std::string suffix = pattern.substr(1);
-        return text.length() >= suffix.length() && 
-               text.substr(text.length() - suffix.length()) == suffix;
-    } else if (star_pos == pattern.length() - 1) {
-        // *在末尾
-        std::string prefix = pattern.substr(0, star_pos);
-        return text.length() >= prefix.length() &&
-               text.substr(0, prefix.length()) == prefix;
-    } else {
-        // *在中间
-        std::string prefix = pattern.substr(0, star_pos);
-        std::string suffix = pattern.substr(star_pos + 1);
-        return text.length() >= prefix.length() + suffix.length() &&
-               text.substr(0, prefix.length()) == prefix &&
-               text.substr(text.length() - suffix.length()) == suffix;
-    }
-}
-
-std::vector<json> searchInFile(const std::string& filepath, const std::string& pattern, 
-                              bool case_sensitive, bool line_numbers) {
-    std::vector<json> matches;
-    std::string content;
-    
-    if (!read_file_content(filepath, content)) {
-        return matches;
-    }
-    
-    std::string search_content = content;
-    std::string search_pattern = pattern;
-    
-    if (!case_sensitive) {
-        std::transform(search_content.begin(), search_content.end(), search_content.begin(), ::tolower);
-        std::transform(search_pattern.begin(), search_pattern.end(), search_pattern.begin(), ::tolower);
-    }
-    
-    std::istringstream iss(content);
-    std::istringstream search_iss(search_content);
-    std::string line, search_line;
-    int line_num = 1;
-    
-    while (std::getline(iss, line) && std::getline(search_iss, search_line)) {
-        if (search_line.find(search_pattern) != std::string::npos) {
-            json match = {
-                {"file", filepath},
-                {"line_content", line},
-                {"success", true}
-            };
-            
-            if (line_numbers) {
-                match["line_number"] = line_num;
-            }
-            
-            matches.push_back(match);
-        }
-        line_num++;
-    }
-    
-    return matches;
-}
-
 json executeListDirectory(const json& args) {
     std::string path = args.value("path", ".");
     bool recursive = args.value("recursive", false);
@@ -1309,255 +1549,6 @@ json executeFileStats(const json& args) {
     
     stats["success"] = true;
     return stats;
-}
-
-// 增强计算器实现 - 表达式解析和计算
-
-const double PI = 3.14159265358979323846;
-const double E = 2.71828182845904523536;
-
-// 检查字符串是否是数学函数
-bool isFunction(const std::string& name) {
-    static const std::set<std::string> functions = {
-        "sin", "cos", "tan", "sqrt", "log", "ln", "exp", "abs", 
-        "floor", "ceil", "round", "pow", "asin", "acos", "atan",
-        "sinh", "cosh", "tanh"
-    };
-    return functions.find(name) != functions.end();
-}
-
-// 跳过空白字符
-void skipWhitespace(const std::string& expr, size_t& pos) {
-    while (pos < expr.length() && std::isspace(expr[pos])) {
-        pos++;
-    }
-}
-
-// 解析数学函数调用
-double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos) {
-    // 跳过函数名
-    pos += funcName.length();
-    
-    // 期望左括号
-    if (pos >= expr.length() || expr[pos] != '(') {
-        throw std::runtime_error("Expected '(' after function name");
-    }
-    pos++; // 跳过 '('
-    
-    // pow 函数需要两个参数
-    if (funcName == "pow") {
-        double arg1 = parseExpression(expr, pos);
-        
-        // 期望逗号
-        if (pos >= expr.length() || expr[pos] != ',') {
-            throw std::runtime_error("Expected ',' in pow function");
-        }
-        pos++; // 跳过 ','
-        
-        double arg2 = parseExpression(expr, pos);
-        
-        // 期望右括号
-        if (pos >= expr.length() || expr[pos] != ')') {
-            throw std::runtime_error("Expected ')' after function arguments");
-        }
-        pos++; // 跳过 ')'
-        
-        return std::pow(arg1, arg2);
-    } else {
-        // 单参数函数
-        double arg = parseExpression(expr, pos);
-        
-        // 期望右括号
-        if (pos >= expr.length() || expr[pos] != ')') {
-            throw std::runtime_error("Expected ')' after function argument");
-        }
-        pos++; // 跳过 ')'
-        
-        // 调用相应的数学函数
-        if (funcName == "sin") return std::sin(arg);
-        else if (funcName == "cos") return std::cos(arg);
-        else if (funcName == "tan") return std::tan(arg);
-        else if (funcName == "sqrt") {
-            if (arg < 0) throw std::runtime_error("sqrt of negative number");
-            return std::sqrt(arg);
-        }
-        else if (funcName == "log") {
-            if (arg <= 0) throw std::runtime_error("log of non-positive number");
-            return std::log10(arg);
-        }
-        else if (funcName == "ln") {
-            if (arg <= 0) throw std::runtime_error("ln of non-positive number");
-            return std::log(arg);
-        }
-        else if (funcName == "exp") return std::exp(arg);
-        else if (funcName == "abs") return std::abs(arg);
-        else if (funcName == "floor") return std::floor(arg);
-        else if (funcName == "ceil") return std::ceil(arg);
-        else if (funcName == "round") return std::round(arg);
-        else if (funcName == "asin") {
-            if (arg < -1 || arg > 1) throw std::runtime_error("asin argument out of range [-1,1]");
-            return std::asin(arg);
-        }
-        else if (funcName == "acos") {
-            if (arg < -1 || arg > 1) throw std::runtime_error("acos argument out of range [-1,1]");
-            return std::acos(arg);
-        }
-        else if (funcName == "atan") return std::atan(arg);
-        else if (funcName == "sinh") return std::sinh(arg);
-        else if (funcName == "cosh") return std::cosh(arg);
-        else if (funcName == "tanh") return std::tanh(arg);
-        else throw std::runtime_error("Unknown function: " + funcName);
-    }
-}
-
-// 解析因子（数字、常量、函数、括号表达式）
-double parseFactor(const std::string& expr, size_t& pos) {
-    skipWhitespace(expr, pos);
-    
-    if (pos >= expr.length()) {
-        throw std::runtime_error("Unexpected end of expression");
-    }
-    
-    // 处理负号
-    if (expr[pos] == '-') {
-        pos++;
-        return -parseFactor(expr, pos);
-    }
-    
-    // 处理正号
-    if (expr[pos] == '+') {
-        pos++;
-        return parseFactor(expr, pos);
-    }
-    
-    // 处理括号
-    if (expr[pos] == '(') {
-        pos++; // 跳过 '('
-        double result = parseExpression(expr, pos);
-        if (pos >= expr.length() || expr[pos] != ')') {
-            throw std::runtime_error("Expected ')'");
-        }
-        pos++; // 跳过 ')'
-        return result;
-    }
-    
-    // 解析数字或标识符
-    size_t start = pos;
-    
-    // 检查是否是数学常量或函数
-    if (std::isalpha(expr[pos])) {
-        while (pos < expr.length() && std::isalnum(expr[pos])) {
-            pos++;
-        }
-        
-        std::string identifier = expr.substr(start, pos - start);
-        
-        // 数学常量
-        if (identifier == "pi") return PI;
-        else if (identifier == "e") return E;
-        
-        // 数学函数
-        if (isFunction(identifier)) {
-            return parseFunction(identifier, expr, pos);
-        } else {
-            throw std::runtime_error("Unknown identifier: " + identifier);
-        }
-    }
-    
-    // 解析数字（包括小数和科学计数法）
-    if (std::isdigit(expr[pos]) || expr[pos] == '.') {
-        while (pos < expr.length() && 
-               (std::isdigit(expr[pos]) || expr[pos] == '.' || 
-                expr[pos] == 'e' || expr[pos] == 'E' || 
-                expr[pos] == '+' || expr[pos] == '-')) {
-            pos++;
-        }
-        
-        std::string numStr = expr.substr(start, pos - start);
-        try {
-            return std::stod(numStr);
-        } catch (const std::exception&) {
-            throw std::runtime_error("Invalid number format: " + numStr);
-        }
-    }
-    
-    throw std::runtime_error("Unexpected character: " + std::string(1, expr[pos]));
-}
-
-// 解析项（处理 *, /, % 运算符）
-double parseTerm(const std::string& expr, size_t& pos) {
-    double result = parseFactor(expr, pos);
-    
-    while (pos < expr.length()) {
-        skipWhitespace(expr, pos);
-        
-        if (pos < expr.length() && (expr[pos] == '*' || expr[pos] == '/' || expr[pos] == '%')) {
-            char op = expr[pos];
-            pos++;
-            double right = parseFactor(expr, pos);
-            
-            if (op == '*') {
-                result *= right;
-            } else if (op == '/') {
-                if (right == 0) {
-                    throw std::runtime_error("Division by zero");
-                }
-                result /= right;
-            } else if (op == '%') {
-                if (right == 0) {
-                    throw std::runtime_error("Modulo by zero");
-                }
-                result = std::fmod(result, right);
-            }
-        } else {
-            break;
-        }
-    }
-    
-    return result;
-}
-
-// 解析表达式（处理 +, - 运算符）
-double parseExpression(const std::string& expr, size_t& pos) {
-    double result = parseTerm(expr, pos);
-    
-    while (pos < expr.length()) {
-        skipWhitespace(expr, pos);
-        
-        if (pos < expr.length() && (expr[pos] == '+' || expr[pos] == '-')) {
-            char op = expr[pos];
-            pos++;
-            double right = parseTerm(expr, pos);
-            
-            if (op == '+') {
-                result += right;
-            } else if (op == '-') {
-                result -= right;
-            }
-        } else {
-            break;
-        }
-    }
-    
-    return result;
-}
-
-// 计算表达式的主函数
-double evaluateExpression(const std::string& expr) {
-    if (expr.empty()) {
-        throw std::runtime_error("Empty expression");
-    }
-    
-    size_t pos = 0;
-    double result = parseExpression(expr, pos);
-    
-    // 检查是否还有未处理的字符
-    skipWhitespace(expr, pos);
-    if (pos < expr.length()) {
-        throw std::runtime_error("Unexpected characters at end of expression: " + expr.substr(pos));
-    }
-    
-    return result;
 }
 
 } // namespace BuiltinTools
