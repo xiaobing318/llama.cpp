@@ -371,6 +371,26 @@ json executeCalculate(const json& args) {
         };
     }
 
+    // 输入验证：检查表达式长度是否合理
+    if (expression.length() > 1000) {
+        return json{
+            {"error", "Expression too long (maximum 1000 characters)"},
+            {"success", false}
+        };
+    }
+
+    // 基本字符验证：确保只包含允许的字符
+    for (char c : expression) {
+        if (!std::isalnum(c) && !std::isspace(c) && 
+            c != '+' && c != '-' && c != '*' && c != '/' && c != '%' &&
+            c != '(' && c != ')' && c != '.' && c != ',' && c != '^') {
+            return json{
+                {"error", std::string("Invalid character in expression: '") + c + "'"},
+                {"success", false}
+            };
+        }
+    }
+
     // 增强的计算器实现 - 支持常见数学运算
     try {
         // 移除所有空格以简化解析
@@ -381,32 +401,70 @@ json executeCalculate(const json& args) {
             }
         }
         
+        // 检查清理后的表达式是否为空
+        if (cleanExpr.empty()) {
+            return json{
+                {"error", "Expression contains only whitespace"},
+                {"success", false}
+            };
+        }
+        
+        // 基本语法检查：检查括号是否匹配
+        int parentheses_count = 0;
+        for (char c : cleanExpr) {
+            if (c == '(') parentheses_count++;
+            else if (c == ')') parentheses_count--;
+            if (parentheses_count < 0) {
+                return json{
+                    {"error", "Mismatched parentheses: too many closing parentheses"},
+                    {"success", false}
+                };
+            }
+        }
+        if (parentheses_count != 0) {
+            return json{
+                {"error", "Mismatched parentheses: unclosed opening parentheses"},
+                {"success", false}
+            };
+        }
+        
         double result = evaluateExpression(cleanExpr);
         
         // 检查结果是否有效
         if (std::isnan(result)) {
             return json{
-                {"error", "Invalid mathematical operation (NaN result)"},
+                {"error", "Invalid mathematical operation resulted in NaN (Not a Number)"},
                 {"success", false}
             };
         }
         
         if (std::isinf(result)) {
             return json{
-                {"error", "Result is infinite"},
+                {"error", "Mathematical operation resulted in infinity"},
                 {"success", false}
             };
         }
 
         return json{
             {"expression", expression},
+            {"cleaned_expression", cleanExpr},
             {"result", result},
             {"success", true}
         };
 
+    } catch (const std::runtime_error& e) {
+        return json{
+            {"error", std::string("Mathematical evaluation error: ") + e.what()},
+            {"success", false}
+        };
     } catch (const std::exception& e) {
         return json{
-            {"error", std::string("Failed to evaluate expression: ") + e.what()},
+            {"error", std::string("Unexpected error: ") + e.what()},
+            {"success", false}
+        };
+    } catch (...) {
+        return json{
+            {"error", "Unknown error occurred during expression evaluation"},
             {"success", false}
         };
     }
