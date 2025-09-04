@@ -9,8 +9,8 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
-#include <cstdlib>       // exit, _exit
-#include <cstring>       // strerror（若要打印错误）
+#include <cstdlib>
+#include <cstring>
 
 // 4. 平台特定头文件
 #ifdef _WIN32
