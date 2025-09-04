@@ -299,7 +299,12 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         std::string tool_name = tool_call["function"]["name"];
         std::string args_str = tool_call["function"]["arguments"];
 
-        LOG_INF("执行工具: %s (id: %s)\n", tool_name.c_str(), tool_id.c_str());
+        // 输出完整的工具调用命令到终端
+        LOG_INF("<=== 工具调用 ===>\n");
+        LOG_INF("工具名称: %s\n", tool_name.c_str());
+        LOG_INF("工具ID: %s\n", tool_id.c_str());
+        LOG_INF("调用参数: %s\n", args_str.c_str());
+        LOG_INF("<===============>\n");
 
         json arguments;
         try {
@@ -327,6 +332,12 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         if (result_content.empty()) {
             result_content = "{}";
         }
+
+        // 输出完整的工具执行结果到终端
+        LOG_INF("<=== 工具执行结果 ===>\n");
+        LOG_INF("工具名称: %s\n", tool_name.c_str());
+        LOG_INF("执行结果: %s\n", result_content.c_str());
+        LOG_INF("<===================>\n");
 
         // 确保工具消息格式完整，包含所有必要字段
         json tool_message = {
@@ -582,7 +593,7 @@ static bool forward_llama_sse_once(
     );
 
     if (!ok || resp.status != 200) return false;
-    
+
     out_has_tool_calls = saw_tool_calls.load();
     if (saw_tool_calls) {
         out_merged_tool_message = SSEParser::mergeToolCallChunks(json_chunks);
@@ -834,7 +845,7 @@ public:
                  * 如cookies、Authorization头部等敏感信息
                  */
                 res.set_header("Access-Control-Allow-Credentials", "true");
-                
+
                 /*
                  * 指定允许的HTTP方法
                  * QCopilot服务主要使用GET和POST方法
@@ -842,20 +853,20 @@ public:
                  * POST用于聊天完成、工具执行等
                  */
                 res.set_header("Access-Control-Allow-Methods", "GET, POST");
-                
+
                 /*
                  * 允许请求携带任意头部
                  * 通配符*表示不限制请求头部类型
                  * 这对于灵活的API调用非常重要
                  */
                 res.set_header("Access-Control-Allow-Headers", "*");
-                
+
                 /*
                  * 为OPTIONS请求返回空内容
                  * OPTIONS请求只需要响应头部信息，不需要实际数据
                  */
                 res.set_content("", "text/html");
-                
+
                 /*
                  * 返回Handled状态表示此请求已完全处理完成
                  * 跳过后续的路由匹配和处理逻辑
@@ -863,7 +874,7 @@ public:
                  */
                 return httplib::Server::HandlerResponse::Handled;
             }
-            
+
             /*
              * 对于非OPTIONS请求，返回Unhandled状态
              * 让请求继续进入正常的路由处理流程
@@ -1031,18 +1042,18 @@ public:
                             nlohmann::ordered_json merged_tool_msg;
                             bool saw_done_marker = false;
                             bool has_tool_calls = false;  // 新增变量
-                            
+
                             // 传递round参数
                             bool success = forward_llama_sse_once(
                                 *llama_client, one, *bridge, merged_tool_msg,
                                 saw_done_marker, has_tool_calls, stream_id, model_name, round);
-                            
+
                             if (!success) {
                                 LOG_ERR("第 %d 轮推理失败\n", round);
                                 bridge->push("data: [DONE]\n\n");
                                 break;
                             }
-                            
+
                             if (!has_tool_calls) {
                                 LOG_INF("第 %d 轮推理完成，无工具调用，结束会话\n", round);
                                 // 发送最终的[DONE]
@@ -1074,7 +1085,7 @@ public:
                                     if (i > 0) tool_names_str += ", ";
                                     tool_names_str += assist_msg["tool_calls"][i]["function"]["name"];
                                 }
-                                
+
                                 json tool_executing_msg = {
                                     {"id", stream_id},
                                     {"object", "chat.completion.chunk"},
@@ -1119,9 +1130,9 @@ public:
 
                                     // 发送工具处理结果的预览（150字符以内）
                                     std::string tool_content = msgs[i].value("content", "");
-                                    std::string preview = tool_content.length() > 150 ? 
+                                    std::string preview = tool_content.length() > 150 ?
                                         tool_content.substr(0, 147) + "..." : tool_content;
-                                    
+
                                     json tool_preview_msg = {
                                         {"id", stream_id},
                                         {"object", "chat.completion.chunk"},
