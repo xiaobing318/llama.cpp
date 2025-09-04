@@ -1,11 +1,11 @@
 /*
  * C++头文件包含顺序的重要性：
- * 
+ *
  * 为什么要按特定顺序包含头文件？
  * 1. 验证头文件自包含性 - 确保每个.h文件都包含了所需的依赖
  * 2. 避免隐式依赖 - 防止系统头文件意外提供你需要的声明
  * 3. 早期发现编译错误 - 如果头文件有问题，立即暴露而不是隐藏
- * 
+ *
  * 示例：如果先包含<iostream>，它可能间接包含<string>，导致你的头文件看似正常但实际缺少#include <string>
  */
 
@@ -123,6 +123,7 @@ struct QCopilotConfig {
     int n_ctx = 2048;
     int n_gpu_layers = -1;
     bool auto_start_base_server = true;
+    std::string log_level = "INFO";  // 日志级别：DEBUG, INFO, WARN, ERROR, NONE
     json tools;
 };
 
@@ -143,7 +144,7 @@ public:
         try {
             return json::parse(chunk);
         } catch (const json::parse_error& e) {
-            LOG_WRN("SSE chunk解析失败: %s\n", e.what());
+            LOG_WRN("SSE chunk解析失败: %s", e.what());
             return json{};
         }
     }
@@ -323,22 +324,12 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         //  从当前 function calling 中提取 arguments 字段。
         std::string args_str = tool_call["function"]["arguments"];
 
-#ifdef NDEBUG
-        /*
-        1、Release 模式：不输出完整的工具调用命令到终端。
-        2、TODO:需要完善日志功能。
-        */
-#else
-        /*
-        1、Debug 模式：输出完整的工具调用命令到终端
-        2、TODO:需要完善日志功能。
-        */
-        LOG_INF("<=== 工具调用 ===>\n");
-        LOG_INF("工具名称: %s\n", tool_name.c_str());
-        LOG_INF("工具ID: %s\n", tool_id.c_str());
-        LOG_INF("调用参数: %s\n", args_str.c_str());
-        LOG_INF("<===============>\n");          
-#endif
+        // 使用DEBUG级别记录工具调用详细信息
+        LOG_DBG("<=== 工具调用 ===>");
+        LOG_DBG("工具名称: %s", tool_name.c_str());
+        LOG_DBG("工具ID: %s", tool_id.c_str());
+        LOG_DBG("调用参数: %s", args_str.c_str());
+        LOG_DBG("<===============>");
         //  创建一个临时变量用来存储调用工具所需要的参数。
         json arguments;
         try {
@@ -346,7 +337,7 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
             arguments = json::parse(args_str);
         } catch (const json::parse_error& e) {
             //  输出错误日志说明解析调用工具所需参数失败。
-            LOG_ERR("解析工具参数失败: %s\n", e.what());
+            LOG_ERR("解析工具参数失败: %s", e.what());
             //  将调用工具所需参数置空，这里不应该直接返回结果，因为有些工具的确是不需要参数的。
             arguments = json::object();
         }
@@ -357,11 +348,11 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         try {
             //  使用特定参数调用指定工具。
             result = tool_executor->execute(tool_name, arguments);
-            LOG_INF("名为[%s]工具执行成功！\n", tool_name.c_str());
+            LOG_INF("名为[%s]工具执行成功！", tool_name.c_str());
             //  将工具执行的 JSON 结果序列化为字符串。
             result_content = result.dump();
         } catch (const std::exception& e) {
-            LOG_ERR("名为[%s]工具执行失败，错误日志：%s\n", tool_name.c_str(), e.what());
+            LOG_ERR("名为[%s]工具执行失败，错误日志：%s", tool_name.c_str(), e.what());
             result = json{
                 {"error", "Tool execution failed"},
                 {"details", e.what()}
@@ -373,21 +364,11 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
             result_content = "{}";
         }
 
-#ifdef NDEBUG
-        /*
-        1、Release 模式：不输出完整的工具调用命令到终端。
-        2、TODO:需要完善日志功能。
-        */
-#else
-        /*
-        1、Debug 模式：输出完整的工具调用命令到终端
-        2、TODO:需要完善日志功能。
-        */
-        LOG_INF("<=== 工具执行结果 ===>\n");
-        LOG_INF("工具名称: %s\n", tool_name.c_str());
-        LOG_INF("执行结果: %s\n", result_content.c_str());
-        LOG_INF("<===================>\n");       
-#endif
+        // 使用DEBUG级别记录工具执行结果详细信息
+        LOG_DBG("<=== 工具执行结果 ===>");
+        LOG_DBG("工具名称: %s", tool_name.c_str());
+        LOG_DBG("执行结果: %s", result_content.c_str());
+        LOG_DBG("<===================>");
 
 
         // 确保工具消息格式完整，包含所有必要字段
@@ -682,8 +663,7 @@ public:
         try {
             std::ifstream file(config_file);
             if (!file.is_open()) {
-                // TODO:使用 spdlog 日志库记录错误，可以使用 __FUNCTION__ 定位函数。
-                LOG_ERR("打开配置文件失败：%s \n", config_file.c_str());
+                LOG_ERR("打开配置文件失败：%s", config_file.c_str());
                 return false;
             }
             // 如果打开配置文件成功，则使用 nlohmann::json 库解析 JSON 格式的配置文件，解析的过程中出现问题将会抛出异常。
@@ -699,6 +679,7 @@ public:
             QCopilotConfig.n_ctx = j.value("n_ctx", QCopilotConfig.n_ctx);
             QCopilotConfig.n_gpu_layers = j.value("n_gpu_layers", QCopilotConfig.n_gpu_layers);
             QCopilotConfig.auto_start_base_server = j.value("auto_start_base_server", QCopilotConfig.auto_start_base_server);
+            QCopilotConfig.log_level = j.value("log_level", QCopilotConfig.log_level);
             QCopilotConfig.tools = j.value("tools", json::array());
 
             // 将配置文件中的配置的工具注册到 ToolExecutor 中，设置一个标志用来判断配置中的工具定义是否有效。
@@ -709,13 +690,17 @@ public:
                 }
             }
             if (!areToolsDefinitionValid) {
-                LOG_ERR("配置文件中的工具定义无效，请检查 tools 字段。\n");
+                LOG_ERR("配置文件中的工具定义无效，请检查 tools 字段。");
                 return false;
             }
-            LOG_INF("配置加载成功！\n");
+
+            // 应用配置文件中的日志级别设置
+            Logger::set_level_from_string(QCopilotConfig.log_level);
+
+            LOG_INF("配置加载成功！日志级别设置为：%s", QCopilotConfig.log_level.c_str());
             return true;
         } catch (const std::exception& e) {
-            LOG_ERR("加载配置失败：%s\n", e.what());
+            LOG_ERR("加载配置失败：%s", e.what());
             return false;
         }
     }
@@ -726,14 +711,14 @@ public:
         // 每次检查间隔 1 秒，总共可以预留 300 秒（5 mins）的时间让 llama-server 进行启动。
         const int retry_interval_ms = 1000;
 
-        LOG_INF("正在等待 llama-server 启动...\n");
+        LOG_INF("正在等待 llama-server 启动...");
 
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
 #ifdef _WIN32
             if (llama_process.hProcess) {
                 DWORD exit_code;
                 if (GetExitCodeProcess(llama_process.hProcess, &exit_code) && exit_code != STILL_ACTIVE) {
-                    LOG_ERR("llama-server 进程已退出，退出码: %lu\n", exit_code);
+                    LOG_ERR("llama-server 进程已退出，退出码: %lu", exit_code);
                     return false;
                 }
             }
@@ -743,13 +728,13 @@ public:
                 pid_t result = waitpid(llama_pid, &status, WNOHANG);
                 if (result > 0) {
                     if (WIFEXITED(status)) {
-                        LOG_ERR("llama-server 进程已退出，退出码: %d\n", WEXITSTATUS(status));
+                        LOG_ERR("llama-server 进程已退出，退出码: %d", WEXITSTATUS(status));
                     } else if (WIFSIGNALED(status)) {
-                        LOG_ERR("llama-server 进程被信号终止: %d\n", WTERMSIG(status));
+                        LOG_ERR("llama-server 进程被信号终止: %d", WTERMSIG(status));
                     }
                     return false;
                 } else if (result < 0 && errno != ECHILD) {
-                    LOG_ERR("检查进程状态失败: %s\n", strerror(errno));
+                    LOG_ERR("检查进程状态失败: %s", strerror(errno));
                     return false;
                 }
             }
@@ -758,20 +743,20 @@ public:
             // 尝试连接健康检查端点。
             auto res = llama_client->Get("/health");
             if (res && res->status == 200) {
-                LOG_INF(" llama-server 启动成功！(等待次数 %d/%d 次/秒)\n", attempt, max_attempts);
+                LOG_INF("llama-server 启动成功！(等待次数 %d/%d 次/秒)", attempt, max_attempts);
                 return true;
             }
 
             // 输出等待进度，每两次检查输出一次进度。
             if (attempt % 2 == 0) {
-                LOG_INF("等待 llama-server 启动中... (%d/%d)\n", attempt, max_attempts);
+                LOG_INF("等待 llama-server 启动中... (%d/%d)", attempt, max_attempts);
             }
 
             // 等待后重试。
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_interval_ms));
         }
 
-        LOG_ERR(" llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒\n",
+        LOG_ERR("llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒",
                 max_attempts, max_attempts * retry_interval_ms / 1000);
         return false;
     }
@@ -779,7 +764,7 @@ public:
     bool startLlamaServer() {
         // 如果自动启动 llama-server 服务器选项被禁用，则假设 llama-server 已经在运行。
         if (!QCopilotConfig.auto_start_base_server) {
-            LOG_INF(" auto_start_base_server 已禁用，这里假设 base_server 已在运行！\n");
+            LOG_INF("auto_start_base_server 已禁用，这里假设 base_server 已在运行！");
             return true;
         }
         // 拼接 llama-server 的命令行参数。
@@ -796,18 +781,13 @@ public:
         }
 
 
-#ifdef NDEBUG
-        // Release 模式
-        LOG_INF("正在启动 base-server......\n");
-#else
-        // Debug 模式
-        LOG_INF("正在启动 base-server: %s\n", cmd.c_str());
-#endif
+        LOG_INF("正在启动 base-server......");
+        LOG_DBG("启动命令: %s", cmd.c_str());
 
 #ifdef _WIN32
         STARTUPINFOA si = {sizeof(si)};
         if (!CreateProcessA(NULL, const_cast<char*>(cmd.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &llama_process)) {
-            LOG_ERR("启动 base-server 失败\n");
+            LOG_ERR("启动 base-server 失败");
             return false;
         }
 #else
@@ -817,7 +797,7 @@ public:
             system(cmd.c_str());
             exit(0);
         } else if (llama_pid < 0) {
-            LOG_ERR("fork 进程失败，即启动 base-server 失败\n");
+            LOG_ERR("fork 进程失败，即启动 base-server 失败");
             return false;
         }
 #endif
@@ -835,14 +815,14 @@ public:
             return;
         }
 
-        LOG_INF("正在停止 base-server...\n");
+        LOG_INF("正在停止 base-server...");
 
 #ifdef _WIN32
         if (llama_process.hProcess) {
             if (TerminateProcess(llama_process.hProcess, 0)) {
                 DWORD waitResult = WaitForSingleObject(llama_process.hProcess, 5000);
                 if (waitResult == WAIT_TIMEOUT) {
-                    LOG_WRN("base-server 进程在5秒内未响应，强制终止\n");
+                    LOG_WRN("base-server 进程在5秒内未响应，强制终止");
                 }
             }
             CloseHandle(llama_process.hProcess);
@@ -858,7 +838,7 @@ public:
                     wait_count++;
                 }
                 if (kill(llama_pid, 0) == 0) {
-                    LOG_WRN("base-server 进程在5秒内未响应，强制终止\n");
+                    LOG_WRN("base-server 进程在5秒内未响应，强制终止");
                     kill(llama_pid, SIGKILL);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
@@ -866,7 +846,7 @@ public:
             llama_pid = -1;
         }
 #endif
-        LOG_INF(" base-server 已停止。\n");
+        LOG_INF("base-server 已停止。");
     }
 
     void setupRoutes() {
@@ -1083,7 +1063,7 @@ public:
                         json msgs = messages;
 
                         for (int round = 1; ; ++round) {
-                            LOG_INF("开始第 %d 轮推理\n", round);
+                            LOG_INF("开始第 %d 轮推理", round);
 
                             nlohmann::ordered_json one = request;
                             one["messages"] = msgs;
@@ -1100,13 +1080,13 @@ public:
                                 saw_done_marker, has_tool_calls, stream_id, model_name, round);
 
                             if (!success) {
-                                LOG_ERR("第 %d 轮推理失败\n", round);
+                                LOG_ERR("第 %d 轮推理失败", round);
                                 bridge->push("data: [DONE]\n\n");
                                 break;
                             }
 
                             if (!has_tool_calls) {
-                                LOG_INF("第 %d 轮推理完成，无工具调用，结束会话\n", round);
+                                LOG_INF("第 %d 轮推理完成，无工具调用，结束会话", round);
                                 // 发送最终的[DONE]
                                 bridge->push("data: [DONE]\n\n");
                                 break;
@@ -1200,7 +1180,7 @@ public:
                                     };
                                     bridge->push(std::string("data: ") + tool_preview_msg.dump() + "\n\n");
 
-                                    LOG_INF("工具 %s 执行完成\n", tool_name.c_str());
+                                    LOG_INF("工具 %s 执行完成", tool_name.c_str());
                                 }
 
                                 continue;
@@ -1209,14 +1189,14 @@ public:
                             break;
                         }
                     } catch (const std::exception &e) {
-                        LOG_ERR("生产者线程异常: %s\n", e.what());
+                        LOG_ERR("生产者线程异常: %s", e.what());
                         nlohmann::ordered_json err = {
                             {"error", {{"message", std::string("处理过程中出错: ") + e.what()}}}
                         };
                         bridge->push(std::string("data: ") + err.dump() + "\n\n");
                         bridge->push("data: [DONE]\n\n");
                     } catch (...) {
-                        LOG_ERR("生产者线程未知异常\n");
+                        LOG_ERR("生产者线程未知异常");
                         bridge->push("data: [DONE]\n\n");
                     }
                     bridge->close();
@@ -1282,12 +1262,12 @@ public:
 
         // 如果启动 llama-server 失败的话直接返回。
         if (!startLlamaServer()) {
-            LOG_ERR("无法启动 base-server，QCopilot 启动失败\n");
-            LOG_ERR("请检查：\n");
-            LOG_ERR("  1. base-server 路径是否正确: %s\n", QCopilotConfig.base_server_path.c_str());
-            LOG_ERR("  2. 模型文件路径是否正确: %s\n", QCopilotConfig.model_path.c_str());
-            LOG_ERR("  3. 端口 %d 是否被占用\n", QCopilotConfig.base_server_port);
-            LOG_ERR("  4. 系统资源是否充足（内存、GPU等）\n");
+            LOG_ERR("无法启动 base-server，QCopilot 启动失败");
+            LOG_ERR("请检查：");
+            LOG_ERR("  1. base-server 路径是否正确: %s", QCopilotConfig.base_server_path.c_str());
+            LOG_ERR("  2. 模型文件路径是否正确: %s", QCopilotConfig.model_path.c_str());
+            LOG_ERR("  3. 端口 %d 是否被占用", QCopilotConfig.base_server_port);
+            LOG_ERR("  4. 系统资源是否充足（内存、GPU等）");
             return false;
         }
 
@@ -1297,7 +1277,7 @@ public:
         // 启动 QCopilot 服务。
         running = true;
         server_thread = std::thread([this]() {
-            LOG_INF(" QCopilot 正在监听 http://%s:%d\n", QCopilotConfig.qcopilot_host.c_str(), QCopilotConfig.qcopilot_port);
+            LOG_INF("QCopilot 正在监听 http://%s:%d", QCopilotConfig.qcopilot_host.c_str(), QCopilotConfig.qcopilot_port);
             server->listen(QCopilotConfig.qcopilot_host, QCopilotConfig.qcopilot_port);
         });
 
@@ -1384,7 +1364,7 @@ static bool parseCommandLine(int argc, char** argv, CommandLineArgs& args) {
 static void signal_handler(int signal_num) {
     const char* signal_name = (signal_num == SIGINT) ? "SIGINT" :
                              (signal_num == SIGTERM) ? "SIGTERM" : "UNKNOWN";
-    LOG_INF("收到信号 %s，正在关闭 QCopilot 服务...\n", signal_name);
+    LOG_INF("收到信号 %s，正在关闭 QCopilot 服务...", signal_name);
 
     g_running = false;
 
@@ -1397,6 +1377,13 @@ static void signal_handler(int signal_num) {
 int main(int argc, char** argv) {
     // 初始化程序环境，包括设置 UTF-8 区域和在 Windows 上启用 UTF-8 控制台输出。
     common_init();
+
+    // 设置默认日志级别（根据编译模式）
+#ifdef NDEBUG
+    Logger::set_level(LogLevel::INFO);  // Release模式：只显示INFO及以上级别
+#else
+    Logger::set_level(LogLevel::DEBUG); // Debug模式：显示所有级别
+#endif
 
     // 解析命令行参数
     CommandLineArgs args;
@@ -1430,20 +1417,20 @@ int main(int argc, char** argv) {
 
     // 如果代理实例加载配置文件失败，则输出错误信息并退出程序。
     if (!agent.loadConfig(config_file)) {
-        LOG_ERR("加载 QCopilot 配置失败！\n");
+        LOG_ERR("加载 QCopilot 配置失败！");
         g_agent_instance = nullptr;
         return 1;
     }
 
     // 如果代理实例启动失败，则输出错误信息并退出程序。
     if (!agent.start()) {
-        LOG_ERR("启动 QCopilot 失败！\n");
+        LOG_ERR("启动 QCopilot 失败！");
         g_agent_instance = nullptr;
         return 1;
     }
 
     // 输出代理正在运行的信息，并提示用户按 Ctrl+C 停止。
-    LOG_INF(" QCopilot 正在运行，如果想要停止运行 QCopilot 请按下 Ctrl+C 。\n");
+    LOG_INF("QCopilot 正在运行，如果想要停止运行 QCopilot 请按下 Ctrl+C 。");
 
     // 执行循环，直到收到终止信号。
     while (g_running) {
@@ -1451,13 +1438,13 @@ int main(int argc, char** argv) {
     }
 
     // 输出代理正在关闭的信息，并停止代理实例。
-    LOG_INF("正在停止运行 QCopilot 服务......\n");
+    LOG_INF("正在停止运行 QCopilot 服务......");
     // 停止运行 QCopilot 。
     agent.stop();
 
     // 清理全局引用
     g_agent_instance = nullptr;
-    LOG_INF(" QCopilot 已完全停止。\n");
+    LOG_INF("QCopilot 已完全停止。");
 
     return 0;
 }

@@ -310,20 +310,20 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
 /********各个内置工具使用到的函数********/
 
 // 前向声明内部函数 
-double evaluateExpression(const std::string& expr);
-double parseExpression(const std::string& expr, size_t& pos);
-double parseTerm(const std::string& expr, size_t& pos);
-double parseFactor(const std::string& expr, size_t& pos);
-double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos);
-void skipWhitespace(const std::string& expr, size_t& pos);
-bool isFunction(const std::string& name);
+static double evaluateExpression(const std::string& expr);
+static double parseExpression(const std::string& expr, size_t& pos);
+static double parseTerm(const std::string& expr, size_t& pos);
+static double parseFactor(const std::string& expr, size_t& pos);
+static double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos);
+static void skipWhitespace(const std::string& expr, size_t& pos);
+static bool isFunction(const std::string& name);
 
 // 计算工具将会用到的常量
-const double PI = 3.14159265358979323846;
-const double E = 2.71828182845904523536;
+static const double PI = 3.14159265358979323846;
+static const double E = 2.71828182845904523536;
 
 // 计算表达式的主函数
-double evaluateExpression(const std::string& expr) {
+static double evaluateExpression(const std::string& expr) {
     if (expr.empty()) {
         throw std::runtime_error("Empty expression");
     }
@@ -340,7 +340,7 @@ double evaluateExpression(const std::string& expr) {
     return result;
 }
 // 解析表达式（处理 +, - 运算符）
-double parseExpression(const std::string& expr, size_t& pos) {
+static double parseExpression(const std::string& expr, size_t& pos) {
     double result = parseTerm(expr, pos);
     
     while (pos < expr.length()) {
@@ -364,7 +364,7 @@ double parseExpression(const std::string& expr, size_t& pos) {
     return result;
 }
 // 解析项（处理 *, /, % 运算符）
-double parseTerm(const std::string& expr, size_t& pos) {
+static double parseTerm(const std::string& expr, size_t& pos) {
     double result = parseFactor(expr, pos);
     
     while (pos < expr.length()) {
@@ -396,7 +396,7 @@ double parseTerm(const std::string& expr, size_t& pos) {
     return result;
 }
 // 解析因子（数字、常量、函数、括号表达式）
-double parseFactor(const std::string& expr, size_t& pos) {
+static double parseFactor(const std::string& expr, size_t& pos) {
     skipWhitespace(expr, pos);
     
     if (pos >= expr.length()) {
@@ -469,7 +469,7 @@ double parseFactor(const std::string& expr, size_t& pos) {
     throw std::runtime_error("Unexpected character: " + std::string(1, expr[pos]));
 }
 // 解析数学函数调用
-double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos) {
+static double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos) {
     // 跳过函数名
     pos += funcName.length();
     
@@ -545,13 +545,13 @@ double parseFunction(const std::string& funcName, const std::string& expr, size_
     }
 }
 // 跳过空白字符
-void skipWhitespace(const std::string& expr, size_t& pos) {
+static void skipWhitespace(const std::string& expr, size_t& pos) {
     while (pos < expr.length() && std::isspace(expr[pos])) {
         pos++;
     }
 }
 // 检查字符串是否是数学函数
-bool isFunction(const std::string& name) {
+static bool isFunction(const std::string& name) {
     static const std::set<std::string> functions = {
         "sin", "cos", "tan", "sqrt", "log", "ln", "exp", "abs", 
         "floor", "ceil", "round", "pow", "asin", "acos", "atan",

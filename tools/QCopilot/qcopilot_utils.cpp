@@ -8,6 +8,10 @@
 #include <filesystem>
 #include <cstdlib>
 #include <regex>
+#include <mutex>
+#include <cstdarg>
+#include <cctype>
+#include <algorithm>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -20,6 +24,94 @@
 #endif
 
 namespace fs = std::filesystem;
+
+// Logger implementation
+LogLevel Logger::current_level_ = LogLevel::INFO;
+
+void Logger::set_level(LogLevel level) {
+    current_level_ = level;
+}
+
+LogLevel Logger::get_level() {
+    return current_level_;
+}
+
+std::string Logger::get_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()) % 1000;
+    
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+    ss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+    return ss.str();
+}
+
+const char* Logger::level_to_string(LogLevel level) {
+    switch (level) {
+        case LogLevel::DEBUG: return "DEBUG";
+        case LogLevel::INFO:  return "INFO";
+        case LogLevel::WARN:  return "WARN";
+        case LogLevel::ERROR: return "ERROR";
+        case LogLevel::NONE:  return "NONE";
+        default:              return "UNKNOWN";
+    }
+}
+
+LogLevel Logger::string_to_level(const std::string& level_str) {
+    std::string upper_str = level_str;
+    std::transform(upper_str.begin(), upper_str.end(), upper_str.begin(), ::toupper);
+    
+    if (upper_str == "DEBUG") return LogLevel::DEBUG;
+    if (upper_str == "INFO")  return LogLevel::INFO;
+    if (upper_str == "WARN")  return LogLevel::WARN;
+    if (upper_str == "ERROR") return LogLevel::ERROR;
+    if (upper_str == "NONE")  return LogLevel::NONE;
+    
+    // 默认返回INFO级别
+    return LogLevel::INFO;
+}
+
+void Logger::set_level_from_string(const std::string& level_str) {
+    current_level_ = string_to_level(level_str);
+}
+
+void Logger::log(LogLevel level, const char* file, int line, const char* format, ...) {
+    // Check if we should log this level
+    if (level < current_level_) {
+        return;
+    }
+    
+    // Thread-safe logging
+    static std::mutex log_mutex;
+    std::lock_guard<std::mutex> lock(log_mutex);
+    
+    // Extract filename from path for cleaner output
+    const char* filename = strrchr(file, '/');
+    if (!filename) filename = strrchr(file, '\\');  // Windows path separator
+    filename = filename ? filename + 1 : file;
+    
+    // Format timestamp and header
+    std::string timestamp = get_timestamp();
+    FILE* output = (level == LogLevel::ERROR) ? stderr : stdout;
+    
+    fprintf(output, "[%s] [%s] [%s:%d] ", 
+            timestamp.c_str(), 
+            level_to_string(level), 
+            filename, 
+            line);
+    
+    // Format and output the message
+    va_list args;
+    va_start(args, format);
+    vfprintf(output, format, args);
+    va_end(args);
+    
+    // Ensure newline at the end of each log message
+    fprintf(output, "\n");
+    fflush(output);
+}
 
 void common_init() {
     // Set UTF-8 locale

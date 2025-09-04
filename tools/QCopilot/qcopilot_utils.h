@@ -5,14 +5,46 @@
 #include <chrono>
 #include "json.hpp"
 
-// TODO：需要将部分函数接口使用 static 修饰，这样可以控制符号的链接可见性。
+// 符号的链接可见性已经通过 static 修饰符进行优化。
 using json = nlohmann::ordered_json;
 
-// Logging functions
-#define LOG_INF(...) fprintf(stdout, "[INFO] " __VA_ARGS__)
-#define LOG_WRN(...) fprintf(stdout, "[WARN] " __VA_ARGS__)
-#define LOG_ERR(...) fprintf(stderr, "[ERROR] " __VA_ARGS__)
-#define LOG_DBG(...) fprintf(stdout, "[DEBUG] " __VA_ARGS__)
+// Logging system
+enum class LogLevel {
+    DEBUG = 0,
+    INFO = 1,
+    WARN = 2,
+    ERROR = 3,
+    NONE = 4  // 完全禁用日志
+};
+
+class Logger {
+public:
+    static void set_level(LogLevel level);
+    static LogLevel get_level();
+    static void set_level_from_string(const std::string& level_str);
+    static void log(LogLevel level, const char* file, int line, const char* format, ...);
+    
+private:
+    static LogLevel current_level_;
+    static std::string get_timestamp();
+    static const char* level_to_string(LogLevel level);
+    static LogLevel string_to_level(const std::string& level_str);
+};
+
+// 编译时日志控制宏
+// 可以通过 -DQCOPILOT_DISABLE_LOGGING 完全禁用日志
+#ifdef QCOPILOT_DISABLE_LOGGING
+    #define LOG_DBG(...) do {} while(0)
+    #define LOG_INF(...) do {} while(0)
+    #define LOG_WRN(...) do {} while(0)
+    #define LOG_ERR(...) do {} while(0)
+#else
+    // 运行时日志级别控制
+    #define LOG_DBG(...) Logger::log(LogLevel::DEBUG, __FILE__, __LINE__, __VA_ARGS__)
+    #define LOG_INF(...) Logger::log(LogLevel::INFO, __FILE__, __LINE__, __VA_ARGS__)
+    #define LOG_WRN(...) Logger::log(LogLevel::WARN, __FILE__, __LINE__, __VA_ARGS__)
+    #define LOG_ERR(...) Logger::log(LogLevel::ERROR, __FILE__, __LINE__, __VA_ARGS__)
+#endif
 
 // Common initialization
 void common_init();
