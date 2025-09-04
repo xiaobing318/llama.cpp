@@ -1,3 +1,10 @@
+// 1. 本模块的头文件必须第一个包含（验证头文件自包含性）
+#include "qcopilot_builtin_tools.h"
+
+// 2. 相关项目头文件
+#include "qcopilot_executor.h"
+
+// 3. C++标准库头文件
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -8,8 +15,6 @@
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
-#include "qcopilot_builtin_tools.h"
-#include "qcopilot_executor.h"
 
 namespace BuiltinTools {
 

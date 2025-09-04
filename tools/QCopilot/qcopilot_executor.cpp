@@ -1,6 +1,18 @@
+// 1. 本模块的头文件必须第一个包含（验证头文件自包含性）
+#include "qcopilot_executor.h"
+
+// 2. 相关项目头文件
+#include "qcopilot_utils.h"
+#include "qcopilot_builtin_tools.h"
+
+// 3. C++标准库头文件
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <cstdlib>       // exit, _exit
+#include <cstring>       // strerror（若要打印错误）
+
+// 4. 平台特定头文件
 #ifdef _WIN32
     // Windows platform specific headers
     #include <windows.h>
@@ -11,12 +23,7 @@
     #include <sys/wait.h>    // waitpid, WIFEXITED, WEXITSTATUS, WIFSIGNALED, WTERMSIG
     #include <fcntl.h>       // 可选：pipe2, O_CLOEXEC 等
     #include <errno.h>       // errno
-    #include <cstdlib>       // exit, _exit
-    #include <cstring>       // strerror（若要打印错误）
 #endif
-#include "qcopilot_executor.h"
-#include "qcopilot_utils.h"
-#include "qcopilot_builtin_tools.h"
 
 ToolExecutor::ToolExecutor() {
     //  在构造 ToolExecutor 实体的时候自动注册内置工具。

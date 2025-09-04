@@ -1,16 +1,34 @@
-#include "common.h"
-#include "httplib.h"
-#include "json.hpp"
+/*
+ * C++头文件包含顺序的重要性：
+ * 
+ * 为什么要按特定顺序包含头文件？
+ * 1. 验证头文件自包含性 - 确保每个.h文件都包含了所需的依赖
+ * 2. 避免隐式依赖 - 防止系统头文件意外提供你需要的声明
+ * 3. 早期发现编译错误 - 如果头文件有问题，立即暴露而不是隐藏
+ * 
+ * 示例：如果先包含<iostream>，它可能间接包含<string>，
+ * 导致你的头文件看似正常但实际缺少#include <string>
+ */
+
+// 1. 相关项目头文件
 #include "qcopilot_utils.h"
 #include "qcopilot_executor.h"
 
+// 2. llama.cpp项目头文件
+#include "common.h"
+
+// 3. 第三方库头文件
+#include "httplib.h"
+#include "json.hpp"
+
+// 4. 生成的资源头文件
 #include "index.html.gz.hpp"
 #include "loading.html.hpp"
 
+// 5. C++标准库头文件
 #include <atomic>
 #include <thread>
 #include <chrono>
-#include <signal.h>
 #include <fstream>
 #include <memory>
 #include <cstring>
@@ -18,6 +36,9 @@
 #include <sstream>
 #include <ctime>
 #include <deque>
+
+// 6. C标准库头文件
+#include <signal.h>
 
 #ifdef _WIN32
     #include <windows.h>
