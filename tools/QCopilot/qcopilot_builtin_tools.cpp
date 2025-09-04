@@ -1255,10 +1255,13 @@ json executeBash(const json& args) {
     }
 
     // 执行命令
-    std::string result = execute_command(command);
+    auto exec_result = execute_command(command);
+    bool command_success = exec_result.first;
+    std::string result = exec_result.second;
     
-    // 简单检查命令是否成功（基于输出是否包含错误关键词）
-    bool success = result.find("command not found") == std::string::npos &&
+    // 检查命令是否成功（使用execute_command的返回值和输出内容）
+    bool success = command_success && 
+                   result.find("command not found") == std::string::npos &&
                    result.find("No such file") == std::string::npos &&
                    result.find("Permission denied") == std::string::npos;
 

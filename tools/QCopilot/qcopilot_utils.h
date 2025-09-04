@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <mutex>
 #include "json.hpp"
 
 // 符号的链接可见性已经通过 static 修饰符进行优化。
@@ -26,6 +27,7 @@ public:
     
 private:
     static LogLevel current_level_;
+    static std::mutex level_mutex_;
     static std::string get_timestamp();
     static const char* level_to_string(LogLevel level);
     static LogLevel string_to_level(const std::string& level_str);
@@ -65,7 +67,7 @@ bool write_file_content(const std::string& path, const std::string& content);
 std::vector<std::string> list_directory(const std::string& path);
 
 // Process utilities
-std::string execute_command(const std::string& command);
+std::pair<bool, std::string> execute_command(const std::string& command);
 bool is_process_running(int pid);
 
 // JSON utilities

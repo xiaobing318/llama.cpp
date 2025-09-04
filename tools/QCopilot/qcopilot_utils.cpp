@@ -11,7 +11,6 @@
 #include <mutex>
 #include <cstdarg>
 #include <cctype>
-#include <algorithm>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -27,12 +26,15 @@ namespace fs = std::filesystem;
 
 // Logger implementation
 LogLevel Logger::current_level_ = LogLevel::INFO;
+std::mutex Logger::level_mutex_;
 
 void Logger::set_level(LogLevel level) {
+    std::lock_guard<std::mutex> lock(level_mutex_);
     current_level_ = level;
 }
 
 LogLevel Logger::get_level() {
+    std::lock_guard<std::mutex> lock(level_mutex_);
     return current_level_;
 }
 
@@ -74,13 +76,16 @@ LogLevel Logger::string_to_level(const std::string& level_str) {
 }
 
 void Logger::set_level_from_string(const std::string& level_str) {
-    current_level_ = string_to_level(level_str);
+    set_level(string_to_level(level_str));
 }
 
 void Logger::log(LogLevel level, const char* file, int line, const char* format, ...) {
-    // Check if we should log this level
-    if (level < current_level_) {
-        return;
+    // Thread-safe level check
+    {
+        std::lock_guard<std::mutex> level_lock(level_mutex_);
+        if (level < current_level_) {
+            return;
+        }
     }
     
     // Thread-safe logging
@@ -151,34 +156,67 @@ std::string trim(const std::string& str) {
 }
 
 std::vector<std::string> split_string(const std::string& str, char delimiter) {
+    if (str.empty()) {
+        return {};
+    }
+    
     std::vector<std::string> tokens;
+    // Reserve space for better performance
+    tokens.reserve(std::count(str.begin(), str.end(), delimiter) + 1);
+    
     std::stringstream ss(str);
     std::string token;
     while (std::getline(ss, token, delimiter)) {
-        tokens.push_back(token);
+        tokens.emplace_back(std::move(token));
     }
     return tokens;
 }
 
 std::string join_strings(const std::vector<std::string>& strings, const std::string& delimiter) {
     if (strings.empty()) return "";
-    std::stringstream ss;
-    for (size_t i = 0; i < strings.size(); ++i) {
-        if (i > 0) ss << delimiter;
-        ss << strings[i];
+    if (strings.size() == 1) return strings[0];
+    
+    // Calculate total size for better performance
+    size_t total_size = 0;
+    for (const auto& str : strings) {
+        total_size += str.size();
     }
-    return ss.str();
+    total_size += delimiter.size() * (strings.size() - 1);
+    
+    std::string result;
+    result.reserve(total_size);
+    
+    result = strings[0];
+    for (size_t i = 1; i < strings.size(); ++i) {
+        result += delimiter;
+        result += strings[i];
+    }
+    return result;
 }
 
 bool file_exists(const std::string& path) {
-    return fs::exists(path);
+    if (path.empty()) {
+        return false;
+    }
+    
+    try {
+        return fs::exists(path);
+    } catch (const fs::filesystem_error& e) {
+        LOG_ERR("Filesystem error checking if file exists %s: %s", path.c_str(), e.what());
+        return false;
+    }
 }
 
 bool read_file_content(const std::string& path, std::string& content) {
+    if (path.empty()) {
+        LOG_ERR("Empty path provided to read_file_content");
+        return false;
+    }
+    
     try {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
-            LOG_ERR("Failed to open file %s\n", path.c_str());
+            LOG_ERR("Failed to open file %s", path.c_str());
             return false;
         }
 
@@ -188,16 +226,14 @@ bool read_file_content(const std::string& path, std::string& content) {
         
         // 检查 tellg() 是否失败
         if (file_size == std::streampos(-1)) {
-            LOG_ERR("Failed to get file size for %s\n", path.c_str());
-            file.close();
-            return false;
+            LOG_ERR("Failed to get file size for %s", path.c_str());
+            return false;  // RAII will handle file close
         }
         
         // 检查文件是否为空
         if (file_size == 0) {
             content.clear();
-            file.close();
-            return true;
+            return true;  // RAII will handle file close
         }
         
         // 转换为 size_t 并检查是否超出合理范围
@@ -205,27 +241,24 @@ bool read_file_content(const std::string& path, std::string& content) {
         const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
         
         if (size > MAX_FILE_SIZE) {
-            LOG_ERR("File %s is too large (%zu bytes, maximum %zu bytes)\n", 
+            LOG_ERR("File %s is too large (%zu bytes, maximum %zu bytes)", 
                     path.c_str(), size, MAX_FILE_SIZE);
-            file.close();
-            return false;
+            return false;  // RAII will handle file close
         }
 
         // 回到文件开始位置
         file.seekg(0, std::ios::beg);
         if (file.fail()) {
-            LOG_ERR("Failed to seek to beginning of file %s\n", path.c_str());
-            file.close();
-            return false;
+            LOG_ERR("Failed to seek to beginning of file %s", path.c_str());
+            return false;  // RAII will handle file close
         }
 
         // 预分配内存
         try {
             content.resize(size);
         } catch (const std::bad_alloc& e) {
-            LOG_ERR("Failed to allocate memory for file %s: %s\n", path.c_str(), e.what());
-            file.close();
-            return false;
+            LOG_ERR("Failed to allocate memory for file %s: %s", path.c_str(), e.what());
+            return false;  // RAII will handle file close
         }
 
         // 读取文件内容
@@ -233,38 +266,36 @@ bool read_file_content(const std::string& path, std::string& content) {
         
         // 检查读取是否成功
         if (file.fail() && !file.eof()) {
-            LOG_ERR("Failed to read file %s (read %zu bytes out of %zu)\n", 
+            LOG_ERR("Failed to read file %s (read %zu bytes out of %zu)", 
                     path.c_str(), static_cast<size_t>(file.gcount()), size);
-            file.close();
             content.clear();
-            return false;
+            return false;  // RAII will handle file close
         }
         
         // 调整内容大小为实际读取的字节数
         size_t bytes_read = static_cast<size_t>(file.gcount());
         if (bytes_read != size) {
-            LOG_WRN("Read %zu bytes from file %s, expected %zu bytes\n", 
+            LOG_WRN("Read %zu bytes from file %s, expected %zu bytes", 
                     bytes_read, path.c_str(), size);
             content.resize(bytes_read);
         }
 
-        file.close();
-        return true;
+        return true;  // RAII will handle file close
         
     } catch (const std::ios_base::failure& e) {
-        LOG_ERR("IO error reading file %s: %s\n", path.c_str(), e.what());
+        LOG_ERR("IO error reading file %s: %s", path.c_str(), e.what());
         content.clear();
         return false;
     } catch (const std::bad_alloc& e) {
-        LOG_ERR("Memory allocation error reading file %s: %s\n", path.c_str(), e.what());
+        LOG_ERR("Memory allocation error reading file %s: %s", path.c_str(), e.what());
         content.clear();
         return false;
     } catch (const std::exception& e) {
-        LOG_ERR("Unexpected error reading file %s: %s\n", path.c_str(), e.what());
+        LOG_ERR("Unexpected error reading file %s: %s", path.c_str(), e.what());
         content.clear();
         return false;
     } catch (...) {
-        LOG_ERR("Unknown error reading file %s\n", path.c_str());
+        LOG_ERR("Unknown error reading file %s", path.c_str());
         content.clear();
         return false;
     }
@@ -274,15 +305,33 @@ bool write_file_content(const std::string& path, const std::string& content) {
     try {
         std::ofstream file(path, std::ios::binary);
         if (!file.is_open()) {
+            LOG_ERR("Failed to open file %s for writing", path.c_str());
             return false;
         }
 
         file.write(content.c_str(), content.size());
+        
+        // Check if write operation failed
+        if (file.fail()) {
+            LOG_ERR("Failed to write content to file %s", path.c_str());
+            file.close();
+            return false;
+        }
+        
         file.close();
+        
+        // Check if close operation failed
+        if (file.fail()) {
+            LOG_ERR("Failed to close file %s after writing", path.c_str());
+            return false;
+        }
 
         return true;
+    } catch (const std::ios_base::failure& e) {
+        LOG_ERR("IO error writing file %s: %s", path.c_str(), e.what());
+        return false;
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to write file %s: %s\n", path.c_str(), e.what());
+        LOG_ERR("Unexpected error writing file %s: %s", path.c_str(), e.what());
         return false;
     }
 }
@@ -305,7 +354,12 @@ std::vector<std::string> list_directory(const std::string& path) {
     return files;
 }
 
-std::string execute_command(const std::string& command) {
+std::pair<bool, std::string> execute_command(const std::string& command) {
+    if (command.empty()) {
+        LOG_ERR("Empty command provided to execute_command");
+        return {false, "ERROR: Empty command"};
+    }
+    
     std::string result;
 
 #ifdef _WIN32
@@ -315,7 +369,8 @@ std::string execute_command(const std::string& command) {
 #endif
 
     if (!pipe) {
-        return "ERROR: Failed to execute command";
+        LOG_ERR("Failed to execute command: %s", command.c_str());
+        return {false, "ERROR: Failed to execute command"};
     }
 
     char buffer[128];
@@ -324,12 +379,19 @@ std::string execute_command(const std::string& command) {
     }
 
 #ifdef _WIN32
-    _pclose(pipe);
+    int exit_code = _pclose(pipe);
 #else
-    pclose(pipe);
+    int exit_code = pclose(pipe);
 #endif
 
-    return result;
+    bool success = (exit_code == 0);
+    if (!success) {
+        LOG_WRN("Command exited with code %d: %s", exit_code, command.c_str());
+    } else {
+        LOG_DBG("Command executed successfully: %s", command.c_str());
+    }
+
+    return {success, result};
 }
 
 bool is_process_running(int pid) {
@@ -350,16 +412,29 @@ bool is_process_running(int pid) {
 }
 
 json safe_parse_json(const std::string& str) {
+    if (str.empty()) {
+        LOG_WRN("Empty string provided to safe_parse_json");
+        return json();
+    }
+    
     try {
         return json::parse(str);
+    } catch (const json::parse_error& e) {
+        LOG_ERR("JSON parse error: %s (at position %zu)", e.what(), e.byte);
+        return json();
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to parse JSON: %s\n", e.what());
+        LOG_ERR("Unexpected error parsing JSON: %s", e.what());
         return json();
     }
 }
 
 std::string format_json(const json& j) {
-    return j.dump(2);
+    try {
+        return j.dump(2);
+    } catch (const std::exception& e) {
+        LOG_ERR("Error formatting JSON: %s", e.what());
+        return "{}";
+    }
 }
 
 bool validate_tool_name(const std::string& name) {
@@ -591,9 +666,18 @@ static bool validate_json_schema(const json& value, const json& schema) {
 // 工具调用参数验证
 bool validate_arguments(const json& args, const json& schema) {
     if (schema.empty()) {
-        LOG_WRN("Empty schema provided for validation\n");
+        LOG_WRN("Empty schema provided for validation");
         return true;
     }
 
-    return validate_json_schema(args, schema);
+    if (args.is_null() && !schema.contains("required")) {
+        return true;  // No arguments provided and none required
+    }
+
+    try {
+        return validate_json_schema(args, schema);
+    } catch (const std::exception& e) {
+        LOG_ERR("Exception during argument validation: %s", e.what());
+        return false;
+    }
 }

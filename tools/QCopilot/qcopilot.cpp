@@ -142,7 +142,7 @@ public:
         EMPTY_OR_DONE,
         PARSE_ERROR
     };
-    
+
     // 解析单个SSE数据块，返回解析状态
     static std::pair<ParseResult, json> parseSSEChunk(const std::string& chunk) {
         if (chunk.empty() || chunk == "[DONE]") {
@@ -157,7 +157,7 @@ public:
             return {ParseResult::PARSE_ERROR, json{}};
         }
     }
-    
+
     // 向后兼容的旧接口
     static json parseSSEChunk_legacy(const std::string& chunk) {
         auto [result, data] = parseSSEChunk(chunk);
@@ -334,7 +334,7 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         LOG_ERR("ToolExecutor为空，无法执行工具调用");
         return messages;
     }
-    
+
     if (!tool_calls.is_array() || tool_calls.empty()) {
         LOG_WRN("工具调用列表为空或格式错误");
         return messages;
@@ -343,12 +343,12 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
     //  在单个推理过程中可能会存在多个 tool calling/function calling，因此这里最好是循环处理每一个  tool calling/function calling。
     for (const auto& tool_call : tool_calls) {
         // 验证tool_call结构
-        if (!tool_call.contains("function") || !tool_call["function"].contains("name") || 
+        if (!tool_call.contains("function") || !tool_call["function"].contains("name") ||
             !tool_call["function"].contains("arguments")) {
             LOG_ERR("工具调用结构不完整，跳过此调用");
             continue;
         }
-        
+
         //  从当前 function calling 中提取 id 字段，如果没有则置空。
         std::string tool_id = tool_call.value("id", "");
         //  从当前 function calling 中提取 name 字段。
@@ -588,21 +588,8 @@ static bool forward_llama_sse_once(
 
                 auto j = nlohmann::ordered_json::parse(payload, nullptr, false);
                 if (j.is_discarded()) {
-                    // JSON解析失败，创建错误消息而不是原样透传
-                    LOG_WRN("SSE payload解析失败，丢弃: %s", payload.c_str());
-                    nlohmann::ordered_json error_chunk = {
-                        {"id", stream_id},
-                        {"object", "chat.completion.chunk"},
-                        {"model", model_name},
-                        {"choices", nlohmann::ordered_json::array({
-                            nlohmann::ordered_json{
-                                {"index", 0},
-                                {"delta", nlohmann::ordered_json{{"content", "[数据解析错误]"}}},
-                                {"finish_reason", nullptr}
-                            }
-                        })}
-                    };
-                    bridge.push(std::string("data: ") + error_chunk.dump() + "\n\n");
+                    // 异常块：原样透传，避免丢信息
+                    bridge.push(std::string("data: ") + payload + "\n\n");
                     continue;
                 }
 
@@ -678,6 +665,7 @@ static bool forward_llama_sse_once(
     // 返回true表示成功处理
     return true;
 }
+
 
 class QCopilot {
 private:
@@ -757,58 +745,58 @@ private:
             LOG_ERR("base-server端口无效: %d，有效范围: 1-65535", QCopilotConfig.base_server_port);
             return false;
         }
-        
+
         // 验证主机地址格式（简单检查）
         if (QCopilotConfig.qcopilot_host.empty() || QCopilotConfig.base_server_host.empty()) {
             LOG_ERR("主机地址不能为空");
             return false;
         }
-        
+
         // 验证上下文长度
         if (QCopilotConfig.n_ctx < 512 || QCopilotConfig.n_ctx > 1048576) {
             LOG_ERR("上下文长度无效: %d，建议范围: 512-1048576", QCopilotConfig.n_ctx);
             return false;
         }
-        
+
         // 验证GPU层数（-1表示自动，0表示CPU，正数表示GPU层数）
         if (QCopilotConfig.n_gpu_layers < -1) {
             LOG_ERR("GPU层数无效: %d，最小值: -1", QCopilotConfig.n_gpu_layers);
             return false;
         }
-        
+
         // 如果启用自动启动，验证相关路径
         if (QCopilotConfig.auto_start_base_server) {
             if (QCopilotConfig.base_server_path.empty()) {
                 LOG_ERR("base-server路径不能为空");
                 return false;
             }
-            
+
             if (QCopilotConfig.model_path.empty()) {
                 LOG_ERR("模型路径不能为空");
                 return false;
             }
-            
+
             // 验证base-server路径是否存在
             if (!file_exists(QCopilotConfig.base_server_path)) {
                 LOG_ERR("base-server路径不存在: %s", QCopilotConfig.base_server_path.c_str());
                 return false;
             }
-            
+
             // 验证模型路径是否存在
             if (!file_exists(QCopilotConfig.model_path)) {
                 LOG_ERR("模型路径不存在: %s", QCopilotConfig.model_path.c_str());
                 return false;
             }
         }
-        
+
         // 验证日志级别
-        if (QCopilotConfig.log_level != "DEBUG" && QCopilotConfig.log_level != "INFO" && 
-            QCopilotConfig.log_level != "WARN" && QCopilotConfig.log_level != "ERROR" && 
+        if (QCopilotConfig.log_level != "DEBUG" && QCopilotConfig.log_level != "INFO" &&
+            QCopilotConfig.log_level != "WARN" && QCopilotConfig.log_level != "ERROR" &&
             QCopilotConfig.log_level != "NONE") {
             LOG_WRN("未知的日志级别: %s，使用默认INFO级别", QCopilotConfig.log_level.c_str());
             QCopilotConfig.log_level = "INFO";
         }
-        
+
         return true;
     }
 
@@ -935,18 +923,20 @@ public:
 #else
         llama_pid = fork();
         if (llama_pid == 0) {
-            // Child process
-            system(cmd.c_str());
-            exit(0);
+            // Child process - use execl to replace process image
+            execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
+            // If execl returns, it failed
+            LOG_ERR("execl failed to start base-server: %s", strerror(errno));
+            exit(1);
         } else if (llama_pid < 0) {
-            LOG_ERR("fork 进程失败，即启动 base-server 失败");
+            LOG_ERR("fork 进程失败，即启动 base-server 失败: %s", strerror(errno));
             return false;
         }
 #endif
 
         // 上述代码已经在启动 llama-server ，这时候创建一个 HTTP 客户端用于健康检查，即检查 llama-server 是否启动成功。
         llama_client = std::make_unique<httplib::Client>(QCopilotConfig.base_server_host, QCopilotConfig.base_server_port);
-        
+
         // 配置HTTP客户端超时（只配置一次）
         llama_client->set_read_timeout(300);  // 5分钟读超时
         llama_client->set_write_timeout(120); // 2分钟写超时
@@ -1101,22 +1091,7 @@ public:
                 res.status = 400;
                 return;
             }
-            
-            // 验证必需字段
-            if (!request.contains("messages")) {
-                json err = {{"error", {{"message", "Missing required field: messages"}}}};
-                res.set_content(err.dump(), "application/json");
-                res.status = 400;
-                return;
-            }
-            
-            if (!request["messages"].is_array() || request["messages"].empty()) {
-                json err = {{"error", {{"message", "Messages must be a non-empty array"}}}};
-                res.set_content(err.dump(), "application/json");
-                res.status = 400;
-                return;
-            }
-            
+
             bool stream = request.value("stream", false);
             json messages = request["messages"];
 
