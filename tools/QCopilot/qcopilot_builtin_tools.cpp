@@ -314,13 +314,34 @@ json executeGetCurrentTime(const json& args) {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
 
+    // 根据时区参数选择合适的时间转换函数
+    std::tm* time_info = nullptr;
+    if (timezone == "UTC") {
+        time_info = std::gmtime(&time_t);
+    } else {
+        time_info = std::localtime(&time_t);
+    }
+
+    // 错误处理：检查时间转换是否成功
+    if (!time_info) {
+        return json{
+            {"error", "Failed to convert system time"},
+            {"success", false}
+        };
+    }
+
     std::stringstream ss;
     if (format == "ISO8601") {
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+        ss << std::put_time(time_info, "%Y-%m-%dT%H:%M:%S");
+        // 为 UTC 时间添加 Z 后缀，符合 ISO8601 标准
+        if (timezone == "UTC") {
+            ss << "Z";
+        }
     } else if (format == "unix") {
         ss << time_t;
     } else {
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+        // default 格式
+        ss << std::put_time(time_info, "%Y-%m-%d %H:%M:%S");
     }
 
     return json{
