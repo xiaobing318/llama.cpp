@@ -35,6 +35,7 @@
 #include <sstream>
 #include <ctime>
 #include <deque>
+#include <tuple>
 
 // 6. C标准库头文件
 #include <signal.h>
@@ -135,18 +136,32 @@ struct CommandLineArgs {
 
 class SSEParser {
 public:
-    // 解析单个SSE数据块
-    static json parseSSEChunk(const std::string& chunk) {
+    // 解析结果枚举
+    enum class ParseResult {
+        SUCCESS,
+        EMPTY_OR_DONE,
+        PARSE_ERROR
+    };
+    
+    // 解析单个SSE数据块，返回解析状态
+    static std::pair<ParseResult, json> parseSSEChunk(const std::string& chunk) {
         if (chunk.empty() || chunk == "[DONE]") {
-            return json{};
+            return {ParseResult::EMPTY_OR_DONE, json{}};
         }
 
         try {
-            return json::parse(chunk);
+            json result = json::parse(chunk);
+            return {ParseResult::SUCCESS, std::move(result)};
         } catch (const json::parse_error& e) {
-            LOG_WRN("SSE chunk解析失败: %s", e.what());
-            return json{};
+            LOG_WRN("SSE chunk解析失败: %s, 原始数据: %s", e.what(), chunk.c_str());
+            return {ParseResult::PARSE_ERROR, json{}};
         }
+    }
+    
+    // 向后兼容的旧接口
+    static json parseSSEChunk_legacy(const std::string& chunk) {
+        auto [result, data] = parseSSEChunk(chunk);
+        return data;
     }
 
     // 从SSE流中提取所有数据块
@@ -315,8 +330,25 @@ public:
 };
 
 static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
+    if (!tool_executor) {
+        LOG_ERR("ToolExecutor为空，无法执行工具调用");
+        return messages;
+    }
+    
+    if (!tool_calls.is_array() || tool_calls.empty()) {
+        LOG_WRN("工具调用列表为空或格式错误");
+        return messages;
+    }
+
     //  在单个推理过程中可能会存在多个 tool calling/function calling，因此这里最好是循环处理每一个  tool calling/function calling。
     for (const auto& tool_call : tool_calls) {
+        // 验证tool_call结构
+        if (!tool_call.contains("function") || !tool_call["function"].contains("name") || 
+            !tool_call["function"].contains("arguments")) {
+            LOG_ERR("工具调用结构不完整，跳过此调用");
+            continue;
+        }
+        
         //  从当前 function calling 中提取 id 字段，如果没有则置空。
         std::string tool_id = tool_call.value("id", "");
         //  从当前 function calling 中提取 name 字段。
@@ -556,8 +588,21 @@ static bool forward_llama_sse_once(
 
                 auto j = nlohmann::ordered_json::parse(payload, nullptr, false);
                 if (j.is_discarded()) {
-                    // 异常块：原样透传，避免丢信息
-                    bridge.push(std::string("data: ") + payload + "\n\n");
+                    // JSON解析失败，创建错误消息而不是原样透传
+                    LOG_WRN("SSE payload解析失败，丢弃: %s", payload.c_str());
+                    nlohmann::ordered_json error_chunk = {
+                        {"id", stream_id},
+                        {"object", "chat.completion.chunk"},
+                        {"model", model_name},
+                        {"choices", nlohmann::ordered_json::array({
+                            nlohmann::ordered_json{
+                                {"index", 0},
+                                {"delta", nlohmann::ordered_json{{"content", "[数据解析错误]"}}},
+                                {"finish_reason", nullptr}
+                            }
+                        })}
+                    };
+                    bridge.push(std::string("data: ") + error_chunk.dump() + "\n\n");
                     continue;
                 }
 
@@ -659,6 +704,116 @@ public:
         stop();
     }
 
+private:
+    // 统一的进程状态检查函数
+    bool isLlamaServerRunning() {
+        if (!QCopilotConfig.auto_start_base_server) {
+            return true; // 如果不是自动启动，假设服务器在运行
+        }
+
+#ifdef _WIN32
+        if (llama_process.hProcess) {
+            DWORD exit_code;
+            if (GetExitCodeProcess(llama_process.hProcess, &exit_code)) {
+                if (exit_code != STILL_ACTIVE) {
+                    LOG_ERR("llama-server 进程已退出，退出码: %lu", exit_code);
+                    return false;
+                }
+            } else {
+                LOG_ERR("获取进程状态失败: %lu", GetLastError());
+                return false;
+            }
+        }
+#else
+        if (llama_pid > 0) {
+            int status;
+            pid_t result = waitpid(llama_pid, &status, WNOHANG);
+            if (result > 0) {
+                if (WIFEXITED(status)) {
+                    LOG_ERR("llama-server 进程已退出，退出码: %d", WEXITSTATUS(status));
+                } else if (WIFSIGNALED(status)) {
+                    LOG_ERR("llama-server 进程被信号终止: %d", WTERMSIG(status));
+                } else {
+                    LOG_ERR("llama-server 进程异常状态");
+                }
+                return false;
+            } else if (result < 0 && errno != ECHILD) {
+                LOG_ERR("检查进程状态失败: %s", strerror(errno));
+                return false;
+            }
+        }
+#endif
+        return true;
+    }
+
+    // 配置验证函数
+    bool validateConfig() {
+        // 验证端口范围
+        if (QCopilotConfig.qcopilot_port < 1 || QCopilotConfig.qcopilot_port > 65535) {
+            LOG_ERR("QCopilot端口无效: %d，有效范围: 1-65535", QCopilotConfig.qcopilot_port);
+            return false;
+        }
+        if (QCopilotConfig.base_server_port < 1 || QCopilotConfig.base_server_port > 65535) {
+            LOG_ERR("base-server端口无效: %d，有效范围: 1-65535", QCopilotConfig.base_server_port);
+            return false;
+        }
+        
+        // 验证主机地址格式（简单检查）
+        if (QCopilotConfig.qcopilot_host.empty() || QCopilotConfig.base_server_host.empty()) {
+            LOG_ERR("主机地址不能为空");
+            return false;
+        }
+        
+        // 验证上下文长度
+        if (QCopilotConfig.n_ctx < 512 || QCopilotConfig.n_ctx > 1048576) {
+            LOG_ERR("上下文长度无效: %d，建议范围: 512-1048576", QCopilotConfig.n_ctx);
+            return false;
+        }
+        
+        // 验证GPU层数（-1表示自动，0表示CPU，正数表示GPU层数）
+        if (QCopilotConfig.n_gpu_layers < -1) {
+            LOG_ERR("GPU层数无效: %d，最小值: -1", QCopilotConfig.n_gpu_layers);
+            return false;
+        }
+        
+        // 如果启用自动启动，验证相关路径
+        if (QCopilotConfig.auto_start_base_server) {
+            if (QCopilotConfig.base_server_path.empty()) {
+                LOG_ERR("base-server路径不能为空");
+                return false;
+            }
+            
+            if (QCopilotConfig.model_path.empty()) {
+                LOG_ERR("模型路径不能为空");
+                return false;
+            }
+            
+            // 验证base-server路径是否存在
+            if (!file_exists(QCopilotConfig.base_server_path)) {
+                LOG_ERR("base-server路径不存在: %s", QCopilotConfig.base_server_path.c_str());
+                return false;
+            }
+            
+            // 验证模型路径是否存在
+            if (!file_exists(QCopilotConfig.model_path)) {
+                LOG_ERR("模型路径不存在: %s", QCopilotConfig.model_path.c_str());
+                return false;
+            }
+        }
+        
+        // 验证日志级别
+        if (QCopilotConfig.log_level != "DEBUG" && QCopilotConfig.log_level != "INFO" && 
+            QCopilotConfig.log_level != "WARN" && QCopilotConfig.log_level != "ERROR" && 
+            QCopilotConfig.log_level != "NONE") {
+            LOG_WRN("未知的日志级别: %s，使用默认INFO级别", QCopilotConfig.log_level.c_str());
+            QCopilotConfig.log_level = "INFO";
+        }
+        
+        return true;
+    }
+
+public:
+
     bool loadConfig(const std::string& config_file) {
         try {
             std::ifstream file(config_file);
@@ -682,6 +837,16 @@ public:
             QCopilotConfig.log_level = j.value("log_level", QCopilotConfig.log_level);
             QCopilotConfig.tools = j.value("tools", json::array());
 
+            // 验证配置有效性
+            if (!validateConfig()) {
+                LOG_ERR("配置验证失败");
+                return false;
+            }
+
+            // 立即应用配置文件中的日志级别设置（在工具注册之前）
+            Logger::set_level_from_string(QCopilotConfig.log_level);
+            LOG_INF("日志级别设置为：%s", QCopilotConfig.log_level.c_str());
+
             // 将配置文件中的配置的工具注册到 ToolExecutor 中，设置一个标志用来判断配置中的工具定义是否有效。
             bool areToolsDefinitionValid = true;
             for (const auto& tool : QCopilotConfig.tools) {
@@ -694,10 +859,7 @@ public:
                 return false;
             }
 
-            // 应用配置文件中的日志级别设置
-            Logger::set_level_from_string(QCopilotConfig.log_level);
-
-            LOG_INF("配置加载成功！日志级别设置为：%s", QCopilotConfig.log_level.c_str());
+            LOG_INF("配置加载成功！");
             return true;
         } catch (const std::exception& e) {
             LOG_ERR("加载配置失败：%s", e.what());
@@ -714,31 +876,11 @@ public:
         LOG_INF("正在等待 llama-server 启动...");
 
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
-#ifdef _WIN32
-            if (llama_process.hProcess) {
-                DWORD exit_code;
-                if (GetExitCodeProcess(llama_process.hProcess, &exit_code) && exit_code != STILL_ACTIVE) {
-                    LOG_ERR("llama-server 进程已退出，退出码: %lu", exit_code);
-                    return false;
-                }
+            // 统一的进程状态检查
+            if (!isLlamaServerRunning()) {
+                LOG_ERR("llama-server 进程异常退出");
+                return false;
             }
-#else
-            if (llama_pid > 0) {
-                int status;
-                pid_t result = waitpid(llama_pid, &status, WNOHANG);
-                if (result > 0) {
-                    if (WIFEXITED(status)) {
-                        LOG_ERR("llama-server 进程已退出，退出码: %d", WEXITSTATUS(status));
-                    } else if (WIFSIGNALED(status)) {
-                        LOG_ERR("llama-server 进程被信号终止: %d", WTERMSIG(status));
-                    }
-                    return false;
-                } else if (result < 0 && errno != ECHILD) {
-                    LOG_ERR("检查进程状态失败: %s", strerror(errno));
-                    return false;
-                }
-            }
-#endif
 
             // 尝试连接健康检查端点。
             auto res = llama_client->Get("/health");
@@ -804,6 +946,11 @@ public:
 
         // 上述代码已经在启动 llama-server ，这时候创建一个 HTTP 客户端用于健康检查，即检查 llama-server 是否启动成功。
         llama_client = std::make_unique<httplib::Client>(QCopilotConfig.base_server_host, QCopilotConfig.base_server_port);
+        
+        // 配置HTTP客户端超时（只配置一次）
+        llama_client->set_read_timeout(300);  // 5分钟读超时
+        llama_client->set_write_timeout(120); // 2分钟写超时
+        llama_client->set_connection_timeout(30); // 30秒连接超时
 
         // 等待并检测 llama-server 启动状态
         return waitForServerStartup();
@@ -944,7 +1091,32 @@ public:
               return;
             }
             // 反序列化过程即将 JSON 数据从网络读取到 main memory 中待使用。
-            json request = json::parse(req.body);
+            json request;
+            try {
+                request = json::parse(req.body);
+            } catch (const json::parse_error& e) {
+                LOG_ERR("请求体JSON解析失败: %s", e.what());
+                json err = {{"error", {{"message", "Invalid JSON format in request body"}}}};
+                res.set_content(err.dump(), "application/json");
+                res.status = 400;
+                return;
+            }
+            
+            // 验证必需字段
+            if (!request.contains("messages")) {
+                json err = {{"error", {{"message", "Missing required field: messages"}}}};
+                res.set_content(err.dump(), "application/json");
+                res.status = 400;
+                return;
+            }
+            
+            if (!request["messages"].is_array() || request["messages"].empty()) {
+                json err = {{"error", {{"message", "Messages must be a non-empty array"}}}};
+                res.set_content(err.dump(), "application/json");
+                res.status = 400;
+                return;
+            }
+            
             bool stream = request.value("stream", false);
             json messages = request["messages"];
 
@@ -958,10 +1130,7 @@ public:
             json all_tools = tool_executor->getTools();
             request["tools"] = all_tools;
 
-            // 读操作：客户端在等待服务器回应时，如果 300（单位往往是秒）内没拿到回应，就触发一个读超时（read timeout）。
-            llama_client->set_read_timeout(300);
-            // 写操作：客户端在等待服务器回应时，如果 300（单位往往是秒）内没拿到回应，就触发一个写超时（write timeout）。
-            llama_client->set_write_timeout(120);
+            // HTTP客户端超时已在启动时配置
 
             // no streaming mode：跑多轮，最后合并（含 reasoning）后一次性返回
             if (!stream) {
@@ -986,8 +1155,8 @@ public:
                   bool has_tool = false;
                   for (auto &s : chunks) {
                     if (s == "[DONE]") break;
-                    auto j = SSEParser::parseSSEChunk(s);
-                    if (!j.empty()) {
+                    auto [result, j] = SSEParser::parseSSEChunk(s);
+                    if (result == SSEParser::ParseResult::SUCCESS && !j.empty()) {
                       jchunks.push_back(j);
                       if (j.contains("choices") && !j["choices"].empty()) {
                         const auto &c = j["choices"][0];
@@ -1304,8 +1473,7 @@ public:
 };
 
 static std::atomic<bool> g_running{true};
-
-static QCopilot* g_agent_instance = nullptr;
+static std::atomic<QCopilot*> g_agent_instance{nullptr};
 
 static void printHelp(const char* program_name) {
     std::cout << "Usage: " << program_name << " [OPTIONS]\n"
@@ -1368,9 +1536,10 @@ static void signal_handler(int signal_num) {
 
     g_running = false;
 
-    // 如果有代理实例的引用，直接调用停止方法以确保立即停止
-    if (g_agent_instance) {
-        g_agent_instance->stop();
+    // 安全地获取agent实例并调用停止方法
+    QCopilot* instance = g_agent_instance.load();
+    if (instance) {
+        instance->stop();
     }
 }
 
@@ -1413,19 +1582,19 @@ int main(int argc, char** argv) {
     // 创建 QCopilot 实例
     QCopilot agent;
     // 设置全局引用以便信号处理器使用
-    g_agent_instance = &agent;
+    g_agent_instance.store(&agent);
 
     // 如果代理实例加载配置文件失败，则输出错误信息并退出程序。
     if (!agent.loadConfig(config_file)) {
         LOG_ERR("加载 QCopilot 配置失败！");
-        g_agent_instance = nullptr;
+        g_agent_instance.store(nullptr);
         return 1;
     }
 
     // 如果代理实例启动失败，则输出错误信息并退出程序。
     if (!agent.start()) {
         LOG_ERR("启动 QCopilot 失败！");
-        g_agent_instance = nullptr;
+        g_agent_instance.store(nullptr);
         return 1;
     }
 
@@ -1443,7 +1612,7 @@ int main(int argc, char** argv) {
     agent.stop();
 
     // 清理全局引用
-    g_agent_instance = nullptr;
+    g_agent_instance.store(nullptr);
     LOG_INF("QCopilot 已完全停止。");
 
     return 0;
