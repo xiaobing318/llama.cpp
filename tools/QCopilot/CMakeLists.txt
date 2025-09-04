@@ -5,22 +5,6 @@
 set(TARGET qcopilot)
 
 #[[
-1、包含当前源目录是为了让编译器能够找到当前目录下的头文件，因为该目标中的编译单元需要该目录下的头文件。
-2、包含当前二进制目录是为了让编译器能够找到当前二进制目录下的头文件，因为该目标中的编译单元需要该二进制目录下的头文件，即前端代码头文件。
-3、包含通用头文件目录是为了让编译器能够找到项目中共享的头文件，这些头文件可能在多个目标中使用，目前使用的是 nlohmann/json 库。
-4、在指定包含头文件目录的时候需要明确说明针对哪一个目标进行的参数。
-]]
-target_include_directories(${TARGET} PRIVATE
-    # 向编译系统传递该头文件查找路径是为了能够包含 qcopilot_utils.h/qcopilot_executor.h 头文件
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    # 向编译系统传递该头文件查找路径是为了能够包含 index.html.gz.hpp/loading.html.hpp 头文件
-    ${CMAKE_CURRENT_BINARY_DIR}
-    # 向编译系统传递该头文件查找路径是为了能够包含 json.hpp/json_fwd.hpp 头文件
-    ${CMAKE_SOURCE_DIR}/vendor/nlohmann
-    # 向编译系统传递该头文件查找路径是为了能够包含 httplib.h 头文件
-    ${CMAKE_SOURCE_DIR}/vendor/cpp-httplib
-    )
-#[[
 1、定义目标的源文件列表和公共资源文件列表。
 2、PUBLIC_ASSETS 包含需要嵌入到可执行文件中的前端资源文件。
 ]]
@@ -63,6 +47,23 @@ endforeach()
 2、编译单元指的是源代码中的一个独立的文件，它可以被单独编译并生成一个目标文件，可以包含头文件、源文件和其他资源。
 ]]
 add_executable(${TARGET} ${TARGET_SRCS})
+
+#[[
+1、包含当前源目录是为了让编译器能够找到当前目录下的头文件，因为该目标中的编译单元需要该目录下的头文件。
+2、包含当前二进制目录是为了让编译器能够找到当前二进制目录下的头文件，因为该目标中的编译单元需要该二进制目录下的头文件，即前端代码头文件。
+3、包含通用头文件目录是为了让编译器能够找到项目中共享的头文件，这些头文件可能在多个目标中使用，目前使用的是 nlohmann/json 库。
+4、在指定包含头文件目录的时候需要明确说明针对哪一个目标进行的参数。
+]]
+target_include_directories(${TARGET} PRIVATE
+    # 向编译系统传递该头文件查找路径是为了能够包含 qcopilot_utils.h/qcopilot_executor.h 头文件
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    # 向编译系统传递该头文件查找路径是为了能够包含 index.html.gz.hpp/loading.html.hpp 头文件
+    ${CMAKE_CURRENT_BINARY_DIR}
+    # 向编译系统传递该头文件查找路径是为了能够包含 json.hpp/json_fwd.hpp 头文件
+    ${CMAKE_SOURCE_DIR}/vendor/nlohmann
+    # 向编译系统传递该头文件查找路径是为了能够包含 httplib.h 头文件
+    ${CMAKE_SOURCE_DIR}/vendor/cpp-httplib
+    )
 
 #[[
 1、该目标使用到了 common、llama 和 ${CMAKE_THREAD_LIBS_INIT} 这几个库，因此需要通过链接的方式将其包含进来。
