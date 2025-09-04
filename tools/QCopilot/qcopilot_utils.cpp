@@ -86,20 +86,94 @@ bool read_file_content(const std::string& path, std::string& content) {
     try {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
+            LOG_ERR("Failed to open file %s\n", path.c_str());
             return false;
         }
 
+        // 获取文件大小
         file.seekg(0, std::ios::end);
-        size_t size = file.tellg();
+        std::streampos file_size = file.tellg();
+        
+        // 检查 tellg() 是否失败
+        if (file_size == std::streampos(-1)) {
+            LOG_ERR("Failed to get file size for %s\n", path.c_str());
+            file.close();
+            return false;
+        }
+        
+        // 检查文件是否为空
+        if (file_size == 0) {
+            content.clear();
+            file.close();
+            return true;
+        }
+        
+        // 转换为 size_t 并检查是否超出合理范围
+        size_t size = static_cast<size_t>(file_size);
+        const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
+        
+        if (size > MAX_FILE_SIZE) {
+            LOG_ERR("File %s is too large (%zu bytes, maximum %zu bytes)\n", 
+                    path.c_str(), size, MAX_FILE_SIZE);
+            file.close();
+            return false;
+        }
+
+        // 回到文件开始位置
         file.seekg(0, std::ios::beg);
+        if (file.fail()) {
+            LOG_ERR("Failed to seek to beginning of file %s\n", path.c_str());
+            file.close();
+            return false;
+        }
 
-        content.resize(size);
+        // 预分配内存
+        try {
+            content.resize(size);
+        } catch (const std::bad_alloc& e) {
+            LOG_ERR("Failed to allocate memory for file %s: %s\n", path.c_str(), e.what());
+            file.close();
+            return false;
+        }
+
+        // 读取文件内容
         file.read(&content[0], size);
-        file.close();
+        
+        // 检查读取是否成功
+        if (file.fail() && !file.eof()) {
+            LOG_ERR("Failed to read file %s (read %zu bytes out of %zu)\n", 
+                    path.c_str(), static_cast<size_t>(file.gcount()), size);
+            file.close();
+            content.clear();
+            return false;
+        }
+        
+        // 调整内容大小为实际读取的字节数
+        size_t bytes_read = static_cast<size_t>(file.gcount());
+        if (bytes_read != size) {
+            LOG_WRN("Read %zu bytes from file %s, expected %zu bytes\n", 
+                    bytes_read, path.c_str(), size);
+            content.resize(bytes_read);
+        }
 
+        file.close();
         return true;
+        
+    } catch (const std::ios_base::failure& e) {
+        LOG_ERR("IO error reading file %s: %s\n", path.c_str(), e.what());
+        content.clear();
+        return false;
+    } catch (const std::bad_alloc& e) {
+        LOG_ERR("Memory allocation error reading file %s: %s\n", path.c_str(), e.what());
+        content.clear();
+        return false;
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to read file %s: %s\n", path.c_str(), e.what());
+        LOG_ERR("Unexpected error reading file %s: %s\n", path.c_str(), e.what());
+        content.clear();
+        return false;
+    } catch (...) {
+        LOG_ERR("Unknown error reading file %s\n", path.c_str());
+        content.clear();
         return false;
     }
 }

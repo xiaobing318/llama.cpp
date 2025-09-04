@@ -481,27 +481,132 @@ json executeReadFile(const json& args) {
         };
     }
 
-    if (!file_exists(path)) {
+    // 路径安全检查：防止路径遍历攻击
+    if (path.find("..") != std::string::npos) {
         return json{
-            {"error", "File not found"},
+            {"error", "Path traversal not allowed"},
             {"success", false}
         };
     }
 
-    std::string content;
-    if (!read_file_content(path, content)) {
+    // 检查路径长度是否合理
+    if (path.length() > 4096) {
         return json{
-            {"error", "Failed to read file"},
+            {"error", "Path too long (maximum 4096 characters)"},
             {"success", false}
         };
     }
 
-    return json{
-        {"path", path},
-        {"content", content},
-        {"size", content.size()},
-        {"success", true}
-    };
+    // 使用 filesystem 库进行更完整的路径和文件检查
+    try {
+        std::filesystem::path fs_path(path);
+        
+        // 检查路径是否存在
+        if (!std::filesystem::exists(fs_path)) {
+            return json{
+                {"error", "File or directory not found: " + path},
+                {"success", false}
+            };
+        }
+        
+        // 检查是否是目录而不是文件
+        if (std::filesystem::is_directory(fs_path)) {
+            return json{
+                {"error", "Path is a directory, not a file: " + path},
+                {"success", false}
+            };
+        }
+        
+        // 检查是否是常规文件
+        if (!std::filesystem::is_regular_file(fs_path)) {
+            return json{
+                {"error", "Path is not a regular file: " + path},
+                {"success", false}
+            };
+        }
+        
+        // 获取文件大小并检查是否过大
+        auto file_size = std::filesystem::file_size(fs_path);
+        const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
+        
+        if (file_size > MAX_FILE_SIZE) {
+            return json{
+                {"error", "File too large (maximum 100MB): " + std::to_string(file_size) + " bytes"},
+                {"success", false}
+            };
+        }
+        
+        // 检查文件权限（是否可读）
+        auto perms = std::filesystem::status(fs_path).permissions();
+        if ((perms & std::filesystem::perms::owner_read) == std::filesystem::perms::none &&
+            (perms & std::filesystem::perms::group_read) == std::filesystem::perms::none &&
+            (perms & std::filesystem::perms::others_read) == std::filesystem::perms::none) {
+            return json{
+                {"error", "File is not readable: " + path},
+                {"success", false}
+            };
+        }
+        
+        std::string content;
+        if (!read_file_content(path, content)) {
+            return json{
+                {"error", "Failed to read file content: " + path},
+                {"success", false}
+            };
+        }
+        
+        // 获取文件的实际路径（解析符号链接等）
+        std::string canonical_path;
+        try {
+            canonical_path = std::filesystem::canonical(fs_path).string();
+        } catch (const std::exception&) {
+            canonical_path = std::filesystem::absolute(fs_path).string();
+        }
+        
+        // 获取文件修改时间
+        std::string last_modified;
+        try {
+            auto ftime = std::filesystem::last_write_time(fs_path);
+            auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                ftime - std::filesystem::file_time_type::clock::now() + 
+                std::chrono::system_clock::now()
+            );
+            auto time_t = std::chrono::system_clock::to_time_t(sctp);
+            
+            std::ostringstream time_ss;
+            time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+            last_modified = time_ss.str();
+        } catch (const std::exception&) {
+            last_modified = "unknown";
+        }
+
+        return json{
+            {"path", path},
+            {"canonical_path", canonical_path},
+            {"content", content},
+            {"size", content.size()},
+            {"file_size", file_size},
+            {"encoding", encoding},
+            {"last_modified", last_modified},
+            {"success", true}
+        };
+        
+    } catch (const std::filesystem::filesystem_error& e) {
+        return json{
+            {"error", "Filesystem error: " + std::string(e.what())},
+            {"success", false}
+        };
+    } catch (const std::exception& e) {
+        return json{
+            {"error", "Error reading file: " + std::string(e.what())},
+            {"success", false}
+        };
+    } catch (...) {
+        return json{
+            {"error", "Unknown error occurred while reading file"},
+            {"success", false}
+        };
+    }
 }
 
 json executeWriteFile(const json& args) {
