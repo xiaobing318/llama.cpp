@@ -1,10 +1,11 @@
 #pragma once
 
+#include "json.hpp"
+
 #include <string>
 #include <vector>
 #include <chrono>
 #include <mutex>
-#include "json.hpp"
 
 // 符号的链接可见性已经通过 static 修饰符进行优化。
 using json = nlohmann::ordered_json;
@@ -14,7 +15,7 @@ enum class LogLevel {
     DEBUG = 0,
     INFO = 1,
     WARN = 2,
-    ERR = 3,    // 避免与Windows ERROR宏冲突
+    ERR = 3,    // 避免与Windows ERROR宏冲突，如果命名为 ERROR 则会与 Windows 中的 ERROR 宏冲突。
     NONE = 4    // 完全禁用日志
 };
 
