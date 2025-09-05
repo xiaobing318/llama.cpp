@@ -1119,8 +1119,8 @@ public:
                   bool has_tool = false;
                   for (auto &s : chunks) {
                     if (s == "[DONE]") break;
-                    auto [result, j] = SSEParser::parseSSEChunk(s);
-                    if (result == SSEParser::ParseResult::SUCCESS && !j.empty()) {
+                    auto j = SSEParser::parseSSEChunk(s);
+                    if (!j.empty()) {
                       jchunks.push_back(j);
                       if (j.contains("choices") && !j["choices"].empty()) {
                         const auto &c = j["choices"][0];
