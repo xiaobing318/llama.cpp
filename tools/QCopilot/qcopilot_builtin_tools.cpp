@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
+#include <regex>
 
 namespace BuiltinTools {
 
@@ -108,12 +109,26 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "glob"},
-                {"description", "Advanced file system pattern matching tool for efficient file discovery and batch operations. Implements powerful glob patterns with support for wildcards, recursive directory traversal, and complex matching rules. Essential for DevOps automation, code analysis, build systems, and data processing pipelines. Primary use cases: 1) Bulk file operations and batch processing (find all .jpg files for image processing) 2) Code repository analysis and metrics collection (locate all source files matching patterns) 3) Build system file discovery (find compilation targets, test files, documentation) 4) Cleanup and maintenance tasks (identify temporary files, old backups, unused assets) 5) Deployment and packaging (collect files for distribution, exclude patterns) 6) Security scanning (find files with specific extensions or naming patterns). Supports both simple wildcards and advanced recursive patterns for comprehensive file system exploration."},
+                {"description",
+                    "What it does — Cross-platform filename pattern matching. Scans a base directory and returns regular files whose *filenames* match a wildcard pattern. The token '**' acts only as a recursion switch; the actual filename match uses '*' (prefix/suffix/infix). Case sensitivity and result caps are supported.\n"
+                    "\n"
+                    "What it can do — 1) Non-recursive or recursive traversal (triggered by '**') 2) Match by simple '*' wildcards on the final filename segment 3) Toggle case sensitivity to match NTFS/macOS/Linux expectations 4) Cap results via 'max_results' and mark 'truncated=true' when hit 5) Work with absolute or relative 'path', and both '/' and '\\\\' separators.\n"
+                    "\n"
+                    "When to use — Bulk file discovery before further processing (compile/test packs, dataset ingestion, cleanup); selecting inputs for downstream tools (grep, converters); enforcing narrow search surfaces in large repositories or data lakes.\n"
+                    "\n"
+                    "Examples —\n"
+                    "• args: {'path':'src','pattern':'**/*.cpp'}  // recursively list all C++ sources under src\n"
+                    "• args: {'pattern':'*.md','case_sensitive':false,'max_results':50}  // case-insensitive markdown in current dir, up to 50\n"
+                    "• args: {'path':'data','pattern':'backup_*_2025.*'}  // year-tagged backups in a folder\n"
+                    "• args: {'path':'.','pattern':'**/Dockerfile'}  // find Dockerfiles anywhere beneath cwd\n"
+                },
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"pattern", {{"type", "string"}, {"description", "Glob pattern string supporting wildcards and recursive matching. Examples: '*.txt' (all text files in current directory), '**/*.py' (all Python files recursively), 'test_*.js' (test files starting with 'test_'), 'src/**/*.{cpp,h}' (C++ source and headers in src tree), '*.log' (log files), 'backup_*_2023.*' (specific backup files), '**/Dockerfile' (Docker files anywhere in tree). Patterns are case-sensitive by default."}}},
-                        {"path", {{"type", "string"}, {"description", "Starting directory path for the search operation. Can be absolute ('/home/user/project') or relative ('./src', '../data'). Defaults to current working directory ('.') if not specified. The search will begin from this location and follow the pattern's directory traversal rules."}}}
+                        {"pattern",        {{"type","string"},  {"description","Glob pattern; '*' for wildcard. If the pattern contains '**', recursion is enabled (note: '**' is only a recursion switch; filename matching still uses '*')."}}},
+                        {"path",           {{"type","string"},  {"description","Base directory. Absolute or relative. Default '.'."}, {"default","."}}},
+                        {"case_sensitive", {{"type","boolean"}, {"description","Case-sensitive filename matching. Default true."}, {"default", true}}},
+                        {"max_results",    {{"type","integer"}, {"description","Soft cap on returned matches; results are truncated with 'truncated=true' when reached. Default 10000."}, {"default", 10000}}}
                     }},
                     {"required", {"pattern"}}
                 }}
@@ -128,15 +143,29 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "grep"},
-                {"description", "Powerful text search and content analysis tool implementing regex-based pattern matching across files and directories. Inspired by the Unix grep utility but enhanced for modern development workflows. Essential for code analysis, log mining, documentation search, and data extraction tasks. Key applications: 1) Code navigation and refactoring (find function definitions, variable usage, API calls) 2) Log analysis and debugging (search error patterns, trace execution flows) 3) Configuration auditing (locate settings, validate parameters) 4) Documentation search (find examples, API references, explanations) 5) Data mining and extraction (parse structured text, extract metrics) 6) Security analysis (search for sensitive patterns, credential leaks) 7) Code quality assessment (find TODO comments, deprecated usage). Supports advanced regex patterns, case sensitivity control, and flexible output formatting."},
+                {"description",
+                    "What it does — Text search over a single file or an entire directory tree. Supports literal substring matching or ECMAScript regular expressions. Optional filename filtering via a simple '*' pattern. Returns per-hit objects with 'file', 'line_content', and optionally 'line_number'. Honors caps via 'max_matches' and marks 'truncated=true' when reached.\n"
+                    "\n"
+                    "What it can do — 1) Recursive search across many files 2) Literal or regex matching ('regex': true) 3) Case-insensitive or sensitive search 4) Include only files that match an 'include' filename filter (e.g., '*.cpp') 5) Return line numbers for quick navigation.\n"
+                    "\n"
+                    "When to use — Code navigation/refactors (find usages, class defs), log mining (ERROR/FATAL bursts), configuration audits (flags/keys), security sweeps (secrets patterns), and lightweight data extraction (IDs, timestamps) without external tools.\n"
+                    "\n"
+                    "Examples —\n"
+                    "• args: {'path':'src','pattern':'TODO','include':'*.cpp'}  // find TODOs in C++ sources recursively\n"
+                    "• args: {'path':'README.md','pattern':'\\\\bclass\\\\s+\\\\w+','regex':true}  // regex for class definitions in a single file\n"
+                    "• args: {'pattern':'ERROR|FATAL','regex':true,'case_sensitive':false}  // errors across current dir, case-insensitive\n"
+                    "• args: {'path':'logs','pattern':'session_id=','include':'*.log','max_matches':1000}  // cap hits for performance\n"
+                },
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"pattern", {{"type", "string"}, {"description", "Search pattern supporting both literal text and regular expressions. Examples: 'function main' (literal text), 'ERROR|FATAL' (regex alternation), '^class\\s+\\w+' (regex for class definitions), '\\b\\d{3}-\\d{3}-\\d{4}\\b' (phone numbers), 'TODO.*' (comments), 'import\\s+['\\\"].*['\\\"]' (import statements). Use regex metacharacters for advanced pattern matching."}}},
-                        {"path", {{"type", "string"}, {"description", "Target path for search operation - can be a specific file ('/path/to/file.txt'), directory ('/path/to/project'), or use current directory if omitted ('.'). When targeting directories, recursively searches all contained files."}}},
-                        {"include", {{"type", "string"}, {"description", "File filter pattern to limit search scope to specific file types. Examples: '*.cpp' (C++ files only), '*.{js,ts}' (JavaScript/TypeScript), '*.log' (log files), '*.py' (Python files), 'test_*.py' (test files). Helps focus search and improve performance."}}},
-                        {"case_sensitive", {{"type", "boolean"}, {"description", "Case sensitivity control: false (default, case-insensitive search, finds 'Error', 'ERROR', 'error') or true (exact case matching required). Case-insensitive is often preferred for general searches."}}},
-                        {"line_numbers", {{"type", "boolean"}, {"description", "Include line numbers in results: true (default, shows file:line format for easy navigation) or false (shows only matching content). Line numbers are essential for code navigation and debugging."}}}
+                        {"pattern",        {{"type","string"},  {"description","Search pattern. Literal text when 'regex'=false; ECMAScript regular expression when 'regex'=true."}}},
+                        {"path",           {{"type","string"},  {"description","Target file or directory. Default '.'."}, {"default","."}}},
+                        {"include",        {{"type","string"},  {"description","Optional filename filter using '*' (applies to the basename only), e.g., '*.cpp', '*.log'."}}},
+                        {"regex",          {{"type","boolean"}, {"description","Use regular expression search. Default false."}, {"default", false}}},
+                        {"case_sensitive", {{"type","boolean"}, {"description","Case-sensitive matching. Default false."}, {"default", false}}},
+                        {"line_numbers",   {{"type","boolean"}, {"description","Include 'line_number' in results. Default true."}, {"default", true}}},
+                        {"max_matches",    {{"type","integer"}, {"description","Global cap on total matches; sets 'truncated=true' when reached. Default 10000."}, {"default", 10000}}}
                     }},
                     {"required", {"pattern"}}
                 }}
@@ -207,23 +236,42 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
     
-    // list_directory tool (enhanced replacement for removed list_files)
+    // list_directory tool
     definitions.push_back({
-        "list_directory", 
+        "list_directory",
         {
             {"type", "function"},
             {"function", {
                 {"name", "list_directory"},
-                {"description", "Enhanced directory listing and file system exploration tool providing detailed file and directory information with filtering capabilities. More comprehensive than basic glob patterns, designed for file system analysis, cleanup operations, and inventory management. Essential for: 1) Project structure analysis and documentation 2) File system auditing and cleanup (find large files, old files, duplicates) 3) Build system preparation (identify source files, check dependencies) 4) Backup and archival operations (catalog files, verify completeness) 5) Security scanning (check permissions, identify sensitive files) 6) Development environment setup (verify installations, check configurations). Provides rich metadata including sizes, timestamps, permissions, and file types with flexible filtering options."},
+                {"description",
+                    "What it does — Lists directory entries with optional recursion, hidden-item visibility, type filtering (files/dirs), extension allow-list, sorting, and pagination. Each entry may include size and modified time (human-readable size included when requested).\n"
+                    "\n"
+                    "What it can do — 1) Traverse one folder or the whole subtree 2) Filter to files only or dirs only 3) Restrict by extensions (e.g., 'cpp,h,py') 4) Sort by name/size/modified and choose asc/desc 5) Paginate via 'offset' and 'limit' 6) Cap enumeration via 'max_results' with 'truncated=true'.\n"
+                    "\n"
+                    "When to use — Project inventory (what’s here?), build preparation (collect inputs), housekeeping (find largest/oldest), packaging/backup manifests, or pre-filtering before expensive downstream steps.\n"
+                    "\n"
+                    "Examples —\n"
+                    "• args: {'path':'.','kinds':'files','ext_filter':'cpp,h'}  // list C/C++ sources in cwd\n"
+                    "• args: {'path':'data','recursive':true,'sort_by':'size','order':'desc','limit':100}  // top 100 largest under data\n"
+                    "• args: {'path':'.','show_hidden':true,'kinds':'dirs'}  // include hidden directories\n"
+                    "• args: {'path':'assets','sort_by':'modified','order':'desc','offset':50,'limit':25}  // paged recent items\n"
+                },
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "Directory path to list. Supports both absolute ('/home/user/project') and relative paths ('./src', '../data'). Defaults to current directory ('.') if not specified."}}},
-                        {"recursive", {{"type", "boolean"}, {"description", "Traversal depth: false (current directory only, faster for shallow inspection) or true (include all subdirectories, comprehensive for full analysis). Default false."}}},
-                        {"show_hidden", {{"type", "boolean"}, {"description", "Hidden file visibility: false (skip files starting with '.', cleaner output) or true (include hidden files and system files, complete inventory). Default false."}}},
-                        {"file_types", {{"type", "string"}, {"description", "File type filter using extensions: 'all' (no filtering), 'source' (code files: .py, .js, .cpp, .h), 'data' (data files: .csv, .json, .xml), 'docs' (documentation: .md, .txt, .pdf), or specific extensions like 'py,js,cpp'. Helps focus on relevant files."}}},
-                        {"size_info", {{"type", "boolean"}, {"description", "Include file size information: true (show file sizes, useful for cleanup and analysis) or false (names only, faster for simple listings). Default true."}}}
-                    }}
+                        {"path",        {{"type","string"},  {"description","Directory to list. Absolute or relative."}}},
+                        {"recursive",   {{"type","boolean"}, {"description","Recurse into subdirectories. Default false."}, {"default", false}}},
+                        {"show_hidden", {{"type","boolean"}, {"description","Include entries whose names start with '.'. Default false."}, {"default", false}}},
+                        {"kinds",       {{"type","string"},  {"enum", {"all","files","dirs"}}, {"description","Filter by kind: 'all' | 'files' | 'dirs'. Default 'all'."}, {"default","all"}}},
+                        {"ext_filter",  {{"type","string"},  {"description","Comma-separated extension allow-list (without dots), e.g., 'cpp,h,py'. Applies to files only."}}},
+                        {"size_info",   {{"type","boolean"}, {"description","Include 'size' and human-readable size for files. Default true."}, {"default", true}}},
+                        {"sort_by",     {{"type","string"},  {"enum", {"name","size","modified"}}, {"description","Sort field. Default 'name'."}, {"default","name"}}},
+                        {"order",       {{"type","string"},  {"enum", {"asc","desc"}}, {"description","Sort order. Default 'asc'."}, {"default","asc"}}},
+                        {"limit",       {{"type","integer"}, {"description","Return at most this many items (pagination). Default 0 = no explicit limit."}, {"default", 0}}},
+                        {"offset",      {{"type","integer"}, {"description","Skip this many items before returning (pagination). Default 0."}, {"default", 0}}},
+                        {"max_results", {{"type","integer"}, {"description","Internal soft cap during enumeration; sets 'truncated=true' if reached. Default 50000."}, {"default", 50000}}}
+                    }},
+                    {"required", {"path"}}
                 }}
             }}
         }
@@ -586,12 +634,16 @@ bool matchPattern(const std::string& text, const std::string& pattern) {
                text.substr(text.length() - suffix.length()) == suffix;
     }
 }
-// 在文件中搜索模式
-std::vector<json> searchInFile(
+// 使用 Regex 模式在文件中匹配
+std::vector<json> searchInFileRegex(
     const std::string& filepath,
-    const std::string& pattern, 
+    const std::string& pattern,
+    bool use_regex,
     bool case_sensitive,
-    bool line_numbers) {
+    bool line_numbers,
+    int& total_matches,
+    int max_matches) {
+    
     std::vector<json> matches;
     std::string content;
     
@@ -599,25 +651,47 @@ std::vector<json> searchInFile(
         return matches;
     }
     
-    std::string search_content = content;
-    std::string search_pattern = pattern;
-    
-    if (!case_sensitive) {
-        std::transform(search_content.begin(), search_content.end(), search_content.begin(), ::tolower);
-        std::transform(search_pattern.begin(), search_pattern.end(), search_pattern.begin(), ::tolower);
+    // 准备正则表达式（如果需要）
+    std::regex regex_pattern;
+    if (use_regex) {
+        try {
+            auto flags = std::regex::ECMAScript;
+            if (!case_sensitive) {
+                flags |= std::regex::icase;
+            }
+            regex_pattern = std::regex(pattern, flags);
+        } catch (const std::regex_error& e) {
+            LOG_WRN("Invalid regex pattern: %s", e.what());
+            return matches;
+        }
     }
     
     std::istringstream iss(content);
-    std::istringstream search_iss(search_content);
-    std::string line, search_line;
+    std::string line;
     int line_num = 1;
     
-    while (std::getline(iss, line) && std::getline(search_iss, search_line)) {
-        if (search_line.find(search_pattern) != std::string::npos) {
+    while (std::getline(iss, line) && total_matches < max_matches) {
+        bool found = false;
+        
+        if (use_regex) {
+            found = std::regex_search(line, regex_pattern);
+        } else {
+            // 子串搜索
+            std::string search_line = line;
+            std::string search_pattern = pattern;
+            
+            if (!case_sensitive) {
+                std::transform(search_line.begin(), search_line.end(), search_line.begin(), ::tolower);
+                std::transform(search_pattern.begin(), search_pattern.end(), search_pattern.begin(), ::tolower);
+            }
+            
+            found = (search_line.find(search_pattern) != std::string::npos);
+        }
+        
+        if (found) {
             json match = {
                 {"file", filepath},
-                {"line_content", line},
-                {"success", true}
+                {"line_content", line}
             };
             
             if (line_numbers) {
@@ -625,6 +699,11 @@ std::vector<json> searchInFile(
             }
             
             matches.push_back(match);
+            total_matches++;
+            
+            if (total_matches >= max_matches) {
+                break;
+            }
         }
         line_num++;
     }
@@ -980,6 +1059,8 @@ json executeWriteFile(const json& args) {
 json executeGlob(const json& args) {
     std::string pattern = args.value("pattern", "");
     std::string path = args.value("path", ".");
+    bool case_sensitive = args.value("case_sensitive", true);
+    int max_results = args.value("max_results", 10000);
 
     if (pattern.empty()) {
         return json{
@@ -996,37 +1077,59 @@ json executeGlob(const json& args) {
     }
 
     std::vector<std::string> matched_files;
+    bool truncated = false;
     
     try {
-        // 使用filesystem库进行文件匹配
-        // 简化实现：支持基本的*通配符
-        if (pattern.find("**") != std::string::npos) {
-            // 递归搜索
-            std::string file_pattern = pattern;
-            // 移除路径部分，保留文件名模式
-            size_t last_slash = file_pattern.find_last_of("/\\");
-            if (last_slash != std::string::npos) {
-                file_pattern = file_pattern.substr(last_slash + 1);
+        // ** 仅作为递归开关，实际匹配仍使用 * 模式
+        bool recursive = (pattern.find("**") != std::string::npos);
+        
+        // 提取文件名模式（移除路径部分）
+        std::string file_pattern = pattern;
+        // 如果包含 **，将其简化为 * 用于文件名匹配
+        size_t star_star_pos = file_pattern.find("**");
+        if (star_star_pos != std::string::npos) {
+            file_pattern.replace(star_star_pos, 2, "*");
+        }
+        
+        // 提取纯文件名部分用于匹配
+        size_t last_slash = file_pattern.find_last_of("/\\");
+        if (last_slash != std::string::npos) {
+            file_pattern = file_pattern.substr(last_slash + 1);
+        }
+        
+        auto match_file = [&](const std::filesystem::path& entry_path) {
+            if (!std::filesystem::is_regular_file(entry_path)) {
+                return;
             }
             
-            // 递归遍历目录
+            if (matched_files.size() >= static_cast<size_t>(max_results)) {
+                truncated = true;
+                return;
+            }
+            
+            std::string filename = entry_path.filename().string();
+            std::string pattern_to_match = file_pattern;
+            
+            // 大小写不敏感时统一转换为小写
+            if (!case_sensitive) {
+                std::transform(filename.begin(), filename.end(), filename.begin(), ::tolower);
+                std::transform(pattern_to_match.begin(), pattern_to_match.end(), pattern_to_match.begin(), ::tolower);
+            }
+            
+            if (matchPattern(filename, pattern_to_match)) {
+                matched_files.push_back(entry_path.string());
+            }
+        };
+        
+        if (recursive) {
             for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
-                if (entry.is_regular_file()) {
-                    std::string filename = entry.path().filename().string();
-                    if (matchPattern(filename, file_pattern)) {
-                        matched_files.push_back(entry.path().string());
-                    }
-                }
+                if (truncated) break;
+                match_file(entry.path());
             }
         } else {
-            // 非递归搜索
             for (auto& entry : std::filesystem::directory_iterator(path)) {
-                if (entry.is_regular_file()) {
-                    std::string filename = entry.path().filename().string();
-                    if (matchPattern(filename, pattern)) {
-                        matched_files.push_back(entry.path().string());
-                    }
-                }
+                if (truncated) break;
+                match_file(entry.path());
             }
         }
     } catch (const std::exception& e) {
@@ -1036,13 +1139,20 @@ json executeGlob(const json& args) {
         };
     }
 
-    return json{
+    json result = {
         {"pattern", pattern},
         {"path", path},
+        {"case_sensitive", case_sensitive},
         {"matches", matched_files},
         {"count", matched_files.size()},
         {"success", true}
     };
+    
+    if (truncated) {
+        result["truncated"] = true;
+    }
+    
+    return result;
 }
 
 json executeGrep(const json& args) {
@@ -1051,6 +1161,8 @@ json executeGrep(const json& args) {
     std::string include = args.value("include", "");
     bool case_sensitive = args.value("case_sensitive", false);
     bool line_numbers = args.value("line_numbers", true);
+    bool use_regex = args.value("regex", false);
+    int max_matches = args.value("max_matches", 10000);
 
     if (pattern.empty()) {
         return json{
@@ -1060,27 +1172,50 @@ json executeGrep(const json& args) {
     }
 
     std::vector<json> matches;
+    int total_matches = 0;
+    bool truncated = false;
     
     try {
         if (std::filesystem::is_regular_file(path)) {
             // 搜索单个文件
-            auto file_matches = searchInFile(path, pattern, case_sensitive, line_numbers);
+            auto file_matches = searchInFileRegex(path, pattern, use_regex, 
+                                                  case_sensitive, line_numbers, 
+                                                  total_matches, max_matches);
             matches.insert(matches.end(), file_matches.begin(), file_matches.end());
         } else if (std::filesystem::is_directory(path)) {
             // 搜索目录中的文件
             for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
+                if (total_matches >= max_matches) {
+                    truncated = true;
+                    break;
+                }
+                
                 if (entry.is_regular_file()) {
                     std::string filename = entry.path().filename().string();
                     
-                    // 如果指定了include模式，检查文件是否匹配
-                    if (!include.empty() && !matchPattern(filename, include)) {
-                        continue;
+                    // include 过滤
+                    if (!include.empty()) {
+                        std::string include_pattern = include;
+                        if (!case_sensitive) {
+                            std::transform(filename.begin(), filename.end(), filename.begin(), ::tolower);
+                            std::transform(include_pattern.begin(), include_pattern.end(), include_pattern.begin(), ::tolower);
+                        }
+                        if (!matchPattern(filename, include_pattern)) {
+                            continue;
+                        }
                     }
                     
-                    auto file_matches = searchInFile(entry.path().string(), pattern, case_sensitive, line_numbers);
+                    auto file_matches = searchInFileRegex(entry.path().string(), pattern, use_regex,
+                                                          case_sensitive, line_numbers,
+                                                          total_matches, max_matches);
                     matches.insert(matches.end(), file_matches.begin(), file_matches.end());
                 }
             }
+        } else {
+            return json{
+                {"error", "Path is neither file nor directory: " + path},
+                {"success", false}
+            };
         }
     } catch (const std::exception& e) {
         return json{
@@ -1089,15 +1224,22 @@ json executeGrep(const json& args) {
         };
     }
 
-    return json{
+    json result = {
         {"pattern", pattern},
         {"path", path},
-        {"include", include},
+        {"regex", use_regex},
         {"case_sensitive", case_sensitive},
+        {"include", include},
         {"matches", matches},
         {"count", matches.size()},
         {"success", true}
     };
+    
+    if (truncated) {
+        result["truncated"] = true;
+    }
+    
+    return result;
 }
 
 json executeMultiEdit(const json& args) {
@@ -1291,8 +1433,14 @@ json executeListDirectory(const json& args) {
     std::string path = args.value("path", ".");
     bool recursive = args.value("recursive", false);
     bool show_hidden = args.value("show_hidden", false);
-    std::string file_types = args.value("file_types", "all");
+    std::string kinds = args.value("kinds", "all");
+    std::string ext_filter = args.value("ext_filter", "");
     bool size_info = args.value("size_info", true);
+    std::string sort_by = args.value("sort_by", "name");
+    std::string order = args.value("order", "asc");
+    int limit = args.value("limit", 0);
+    int offset = args.value("offset", 0);
+    int max_results = args.value("max_results", 50000);
 
     if (!file_exists(path)) {
         return json{
@@ -1300,68 +1448,69 @@ json executeListDirectory(const json& args) {
             {"success", false}
         };
     }
+    
+    if (!std::filesystem::is_directory(path)) {
+        return json{
+            {"error", "Path is not a directory: " + path},
+            {"success", false}
+        };
+    }
 
     std::vector<json> file_list;
     
+    // 解析扩展名过滤器
+    std::set<std::string> allowed_exts;
+    if (!ext_filter.empty()) {
+        auto exts = split_string(ext_filter, ',');
+        for (auto& ext : exts) {
+            std::string trimmed = trim(ext);
+            if (!trimmed.empty()) {
+                if (trimmed[0] != '.') trimmed = "." + trimmed;
+                allowed_exts.insert(trimmed);
+            }
+        }
+    }
+    
     try {
         auto process_entry = [&](const std::filesystem::directory_entry& entry) {
-            std::string filename = entry.path().filename().string();
-            
-            // 跳过隐藏文件（如果设置）
-            if (!show_hidden && filename[0] == '.') {
-                return;
+            if (file_list.size() >= static_cast<size_t>(max_results)) {
+                return false; // 达到上限
             }
             
-            // 文件类型过滤
-            if (file_types != "all") {
-                std::string extension = entry.path().extension().string();
-                if (!extension.empty() && extension[0] == '.') {
-                    extension = extension.substr(1);  // 移除点
+            std::string filename = entry.path().filename().string();
+            
+            // 隐藏文件过滤
+            if (!show_hidden && !filename.empty() && filename[0] == '.') {
+                return true; // 继续
+            }
+            
+            // 类型过滤
+            bool is_dir = entry.is_directory();
+            bool is_file = entry.is_regular_file();
+            
+            if (kinds == "files" && !is_file) return true;
+            if (kinds == "dirs" && !is_dir) return true;
+            
+            // 扩展名过滤（仅对文件）
+            if (!allowed_exts.empty() && is_file) {
+                std::string ext = entry.path().extension().string();
+                if (allowed_exts.find(ext) == allowed_exts.end()) {
+                    return true;
                 }
-                
-                bool type_match = false;
-                if (file_types == "source") {
-                    static const std::set<std::string> source_exts = {
-                        "cpp", "h", "hpp", "c", "py", "js", "ts", "java", "go", "rs", "php", "rb"
-                    };
-                    type_match = source_exts.count(extension) > 0;
-                } else if (file_types == "data") {
-                    static const std::set<std::string> data_exts = {
-                        "csv", "json", "xml", "yaml", "yml", "sql", "db", "sqlite"
-                    };
-                    type_match = data_exts.count(extension) > 0;
-                } else if (file_types == "docs") {
-                    static const std::set<std::string> doc_exts = {
-                        "md", "txt", "pdf", "doc", "docx", "rtf", "html", "rst"
-                    };
-                    type_match = doc_exts.count(extension) > 0;
-                } else {
-                    // 自定义扩展名列表
-                    auto custom_exts = split_string(file_types, ',');
-                    for (auto& ext : custom_exts) {
-                        ext = trim(ext);
-                        if (ext == extension) {
-                            type_match = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!type_match) return;
             }
             
             json file_info = {
                 {"name", filename},
                 {"path", entry.path().string()},
-                {"type", entry.is_directory() ? "directory" : "file"}
+                {"type", is_dir ? "directory" : "file"}
             };
             
-            if (size_info && entry.is_regular_file()) {
+            if (size_info && is_file) {
                 try {
                     auto file_size = std::filesystem::file_size(entry);
                     file_info["size"] = file_size;
                     
-                    // 人类可读的大小
+                    // 人类可读大小
                     const char* units[] = {"B", "KB", "MB", "GB", "TB"};
                     double size = static_cast<double>(file_size);
                     int unit = 0;
@@ -1375,7 +1524,7 @@ json executeListDirectory(const json& args) {
                     file_info["human_size"] = ss.str();
                 } catch (...) {
                     file_info["size"] = 0;
-                    file_info["human_size"] = "unknown";
+                    file_info["human_size"] = "0 B";
                 }
                 
                 try {
@@ -1389,46 +1538,102 @@ json executeListDirectory(const json& args) {
                     std::ostringstream time_ss;
                     time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
                     file_info["modified"] = time_ss.str();
+                    file_info["modified_timestamp"] = time_t;
                 } catch (...) {
-                    file_info["modified"] = "unknown";
+                    file_info["modified"] = "";
+                    file_info["modified_timestamp"] = 0;
                 }
             }
             
             file_list.push_back(file_info);
+            return true; // 继续
         };
+        
+        bool truncated = false;
         
         if (recursive) {
             for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
-                process_entry(entry);
+                if (!process_entry(entry)) {
+                    truncated = true;
+                    break;
+                }
             }
         } else {
             for (auto& entry : std::filesystem::directory_iterator(path)) {
-                process_entry(entry);
+                if (!process_entry(entry)) {
+                    truncated = true;
+                    break;
+                }
             }
         }
         
-        // 按名称排序
-        std::sort(file_list.begin(), file_list.end(), 
-            [](const json& a, const json& b) {
-                return a["name"].get<std::string>() < b["name"].get<std::string>();
-            });
+        // 排序
+        if (sort_by == "name") {
+            std::sort(file_list.begin(), file_list.end(), 
+                [&order](const json& a, const json& b) {
+                    bool less = a["name"].get<std::string>() < b["name"].get<std::string>();
+                    return order == "asc" ? less : !less;
+                });
+        } else if (sort_by == "size" && size_info) {
+            std::sort(file_list.begin(), file_list.end(), 
+                [&order](const json& a, const json& b) {
+                    uint64_t size_a = a.contains("size") ? a["size"].get<uint64_t>() : 0;
+                    uint64_t size_b = b.contains("size") ? b["size"].get<uint64_t>() : 0;
+                    bool less = size_a < size_b;
+                    return order == "asc" ? less : !less;
+                });
+        } else if (sort_by == "modified" && size_info) {
+            std::sort(file_list.begin(), file_list.end(), 
+                [&order](const json& a, const json& b) {
+                    int64_t time_a = a.contains("modified_timestamp") ? a["modified_timestamp"].get<int64_t>() : 0;
+                    int64_t time_b = b.contains("modified_timestamp") ? b["modified_timestamp"].get<int64_t>() : 0;
+                    bool less = time_a < time_b;
+                    return order == "asc" ? less : !less;
+                });
+        }
+        
+        // 分页
+        std::vector<json> paged_list;
+        if (limit > 0 || offset > 0) {
+            size_t start = static_cast<size_t>(offset);
+            size_t end = limit > 0 ? start + static_cast<size_t>(limit) : file_list.size();
             
+            for (size_t i = start; i < std::min(end, file_list.size()); ++i) {
+                paged_list.push_back(file_list[i]);
+            }
+        } else {
+            paged_list = file_list;
+        }
+        
+        // 清理不需要的 modified_timestamp 字段
+        for (auto& item : paged_list) {
+            if (item.contains("modified_timestamp")) {
+                item.erase("modified_timestamp");
+            }
+        }
+        
+        json result = {
+            {"path", path},
+            {"recursive", recursive},
+            {"show_hidden", show_hidden},
+            {"kinds", kinds},
+            {"files", paged_list},
+            {"count", paged_list.size()},
+            {"success", true}
+        };
+        
+        if (truncated) {
+            result["truncated"] = true;
+        }
+        
+        return result;
+        
     } catch (const std::exception& e) {
         return json{
             {"error", "Failed to list directory: " + std::string(e.what())},
             {"success", false}
         };
     }
-
-    return json{
-        {"path", path},
-        {"recursive", recursive},
-        {"show_hidden", show_hidden},
-        {"file_types", file_types},
-        {"files", file_list},
-        {"count", file_list.size()},
-        {"success", true}
-    };
 }
 
 json executeFileStats(const json& args) {

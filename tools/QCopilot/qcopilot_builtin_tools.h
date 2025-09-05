@@ -31,11 +31,16 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions();
 
 // 辅助函数
 bool matchPattern(const std::string& text, const std::string& pattern);
-std::vector<json> searchInFile(
+
+// 使用 Regex 模式在文件中匹配
+std::vector<json> searchInFileRegex(
     const std::string& filepath,
-    const std::string& pattern, 
+    const std::string& pattern,
+    bool use_regex,
     bool case_sensitive,
-    bool line_numbers);
+    bool line_numbers,
+    int& total_matches,
+    int max_matches);
 
 // 各个内置工具的具体实现函数，静态函数，完全独立
 json executeGetCurrentTime(const json& args);
