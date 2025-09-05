@@ -22,7 +22,7 @@ namespace BuiltinTools {
 // 获取内置工具的定义
 std::vector<ToolDefinition> getBuiltinToolDefinitions() {
     std::vector<ToolDefinition> definitions;
-    
+
     // get_current_time tool
     definitions.push_back({
         "get_current_time",
@@ -41,7 +41,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // calculate tool
     definitions.push_back({
         "calculate",
@@ -60,7 +60,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // read_file tool
     definitions.push_back({
         "read_file",
@@ -80,7 +80,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // write_file tool
     definitions.push_back({
         "write_file",
@@ -101,7 +101,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // glob tool
     definitions.push_back({
         "glob",
@@ -109,21 +109,21 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "glob"},
-                {"description", "Cross-platform filename pattern discovery utility for locating regular files by wildcard rules within a base directory. Essential for build pipelines, code search pre-filters, dataset selection, and batch operations where fast filename filtering is needed at scale. Capabilities: (1) Non-recursive or recursive traversal (triggered by the presence of '**' in the pattern; '**' only toggles recursion, actual filename matching still uses '*') (2) Match on the final filename segment using '*' for prefix/suffix/infix patterns (3) Case sensitivity control for cross-OS behavior (4) Soft cap on results via 'max_results' with 'truncated=true' when reached (5) Works with absolute or relative 'path' and both '/' and '\\' separators. Typical scenarios: preparing input manifests for compilers/converters, narrowing very large trees before grep/search, collecting assets for packaging. Examples: args {'path':'src','pattern':'**/*.cpp'} (recursively list C++ sources under src); args {'pattern':'*.md','case_sensitive':false,'max_results':50} (case-insensitive markdown in cwd, capped at 50); args {'path':'data','pattern':'backup_*_2025.*'} (find year-tagged backups); args {'path':'.','pattern':'**/Dockerfile'} (locate Dockerfiles anywhere below cwd)."},
+                {"description", "Advanced file pattern matching tool for discovering files using glob patterns with wildcard support. This tool is essential for file system navigation, project organization, and batch file operations. KEY FEATURES: 1) PATTERN MATCHING - Uses '*' wildcard for flexible filename matching (e.g., '*.txt' finds all text files, 'test_*' finds files starting with 'test_', '*_backup.*' finds backup files) 2) RECURSIVE SEARCH - Include '**' in pattern to enable recursive directory traversal (e.g., '**/*.cpp' searches all subdirectories for C++ files) 3) CASE SENSITIVITY - Control case-sensitive matching for cross-platform compatibility 4) RESULT LIMITING - Set max_results to prevent overwhelming output from large directories. COMMON USE CASES: • Finding source code files: pattern='**/*.py' (all Python files), pattern='src/**/*.h' (header files in src) • Locating configuration files: pattern='*.conf', pattern='**/config.*' • Searching for specific file types: pattern='*.log' (log files), pattern='*.json' (JSON files) • Finding files by name patterns: pattern='test_*', pattern='*_backup.*', pattern='README.*' • Project file discovery: pattern='**/*.md' (documentation), pattern='**/Makefile' (build files). PATTERN SYNTAX: Use '*' for any characters, '**' for recursive search. The tool matches against the final filename component, not the full path. Examples: {'pattern': '*.txt'} finds text files in current directory, {'pattern': '**/*.cpp', 'path': 'src'} recursively finds C++ files under src directory, {'pattern': 'test_*', 'case_sensitive': false} finds test files ignoring case."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
                         {"pattern",        {{"type","string"},  {"description","Glob pattern; '*' for wildcard. If the pattern contains '**', recursion is enabled (note: '**' only toggles recursion; filename matching still uses '*')."}}},
                         {"path",           {{"type","string"},  {"description","Base directory. Absolute or relative. Default '.'."}, {"default","."}}},
                         {"case_sensitive", {{"type","boolean"}, {"description","Case-sensitive filename matching. Default true."}, {"default", true}}},
-                        {"max_results",    {{"type","integer"}, {"description","Soft cap on returned matches; sets 'truncated=true' when reached. Default 10000."}, {"default", 10000}}}
+                        {"max_results",    {{"type","integer"}, {"description","Soft cap on returned matches; sets 'truncated=true' when reached. Default 100."}, {"default", 100}}}
                     }},
                     {"required", {"pattern"}}
                 }}
             }}
         }
     });
-    
+
     // grep tool
     definitions.push_back({
         "grep",
@@ -148,7 +148,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // multiedit tool
     definitions.push_back({
         "multiedit",
@@ -168,7 +168,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // edit tool
     definitions.push_back({
         "edit",
@@ -190,7 +190,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // bash tool
     definitions.push_back({
         "bash",
@@ -211,7 +211,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     // list_directory tool
     definitions.push_back({
         "list_directory",
@@ -240,8 +240,8 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
-    // file_stats tool  
+
+    // file_stats tool
     definitions.push_back({
         "file_stats",
         {
@@ -261,7 +261,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             }}
         }
     });
-    
+
     return definitions;
 }
 
@@ -272,53 +272,53 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
     functions["get_current_time"] = [](const json& args) {
         return executeGetCurrentTime(args);
     };
-    
+
     functions["calculate"] = [](const json& args) {
         return executeCalculate(args);
     };
-    
+
     functions["read_file"] = [](const json& args) {
         return executeReadFile(args);
     };
-    
+
     functions["write_file"] = [](const json& args) {
         return executeWriteFile(args);
     };
-    
+
     functions["glob"] = [](const json& args) {
         return executeGlob(args);
     };
-    
+
     functions["grep"] = [](const json& args) {
         return executeGrep(args);
     };
-    
+
     functions["multiedit"] = [](const json& args) {
         return executeMultiEdit(args);
     };
-    
+
     functions["edit"] = [](const json& args) {
         return executeEdit(args);
     };
-    
+
     functions["bash"] = [](const json& args) {
         return executeBash(args);
     };
-    
+
     functions["list_directory"] = [](const json& args) {
         return executeListDirectory(args);
     };
-    
+
     functions["file_stats"] = [](const json& args) {
         return executeFileStats(args);
     };
-    
+
     return functions;
 }
 
 /********各个内置工具使用到的函数********/
 
-// 前向声明内部函数 
+// 前向声明内部函数
 static double evaluateExpression(const std::string& expr);
 static double parseExpression(const std::string& expr, size_t& pos);
 static double parseTerm(const std::string& expr, size_t& pos);
@@ -336,30 +336,30 @@ static double evaluateExpression(const std::string& expr) {
     if (expr.empty()) {
         throw std::runtime_error("Empty expression");
     }
-    
+
     size_t pos = 0;
     double result = parseExpression(expr, pos);
-    
+
     // 检查是否还有未处理的字符
     skipWhitespace(expr, pos);
     if (pos < expr.length()) {
         throw std::runtime_error("Unexpected characters at end of expression: " + expr.substr(pos));
     }
-    
+
     return result;
 }
 // 解析表达式（处理 +, - 运算符）
 static double parseExpression(const std::string& expr, size_t& pos) {
     double result = parseTerm(expr, pos);
-    
+
     while (pos < expr.length()) {
         skipWhitespace(expr, pos);
-        
+
         if (pos < expr.length() && (expr[pos] == '+' || expr[pos] == '-')) {
             char op = expr[pos];
             pos++;
             double right = parseTerm(expr, pos);
-            
+
             if (op == '+') {
                 result += right;
             } else if (op == '-') {
@@ -369,21 +369,21 @@ static double parseExpression(const std::string& expr, size_t& pos) {
             break;
         }
     }
-    
+
     return result;
 }
 // 解析项（处理 *, /, % 运算符）
 static double parseTerm(const std::string& expr, size_t& pos) {
     double result = parseFactor(expr, pos);
-    
+
     while (pos < expr.length()) {
         skipWhitespace(expr, pos);
-        
+
         if (pos < expr.length() && (expr[pos] == '*' || expr[pos] == '/' || expr[pos] == '%')) {
             char op = expr[pos];
             pos++;
             double right = parseFactor(expr, pos);
-            
+
             if (op == '*') {
                 result *= right;
             } else if (op == '/') {
@@ -401,29 +401,29 @@ static double parseTerm(const std::string& expr, size_t& pos) {
             break;
         }
     }
-    
+
     return result;
 }
 // 解析因子（数字、常量、函数、括号表达式）
 static double parseFactor(const std::string& expr, size_t& pos) {
     skipWhitespace(expr, pos);
-    
+
     if (pos >= expr.length()) {
         throw std::runtime_error("Unexpected end of expression");
     }
-    
+
     // 处理负号
     if (expr[pos] == '-') {
         pos++;
         return -parseFactor(expr, pos);
     }
-    
+
     // 处理正号
     if (expr[pos] == '+') {
         pos++;
         return parseFactor(expr, pos);
     }
-    
+
     // 处理括号
     if (expr[pos] == '(') {
         pos++; // 跳过 '('
@@ -434,22 +434,22 @@ static double parseFactor(const std::string& expr, size_t& pos) {
         pos++; // 跳过 ')'
         return result;
     }
-    
+
     // 解析数字或标识符
     size_t start = pos;
-    
+
     // 检查是否是数学常量或函数
     if (std::isalpha(expr[pos])) {
         while (pos < expr.length() && std::isalnum(expr[pos])) {
             pos++;
         }
-        
+
         std::string identifier = expr.substr(start, pos - start);
-        
+
         // 数学常量
         if (identifier == "pi") return PI;
         else if (identifier == "e") return E;
-        
+
         // 数学函数
         if (isFunction(identifier)) {
             return parseFunction(identifier, expr, pos);
@@ -457,16 +457,16 @@ static double parseFactor(const std::string& expr, size_t& pos) {
             throw std::runtime_error("Unknown identifier: " + identifier);
         }
     }
-    
+
     // 解析数字（包括小数和科学计数法）
     if (std::isdigit(expr[pos]) || expr[pos] == '.') {
-        while (pos < expr.length() && 
-               (std::isdigit(expr[pos]) || expr[pos] == '.' || 
-                expr[pos] == 'e' || expr[pos] == 'E' || 
+        while (pos < expr.length() &&
+               (std::isdigit(expr[pos]) || expr[pos] == '.' ||
+                expr[pos] == 'e' || expr[pos] == 'E' ||
                 expr[pos] == '+' || expr[pos] == '-')) {
             pos++;
         }
-        
+
         std::string numStr = expr.substr(start, pos - start);
         try {
             return std::stod(numStr);
@@ -474,49 +474,49 @@ static double parseFactor(const std::string& expr, size_t& pos) {
             throw std::runtime_error("Invalid number format: " + numStr);
         }
     }
-    
+
     throw std::runtime_error("Unexpected character: " + std::string(1, expr[pos]));
 }
 // 解析数学函数调用
 static double parseFunction(const std::string& funcName, const std::string& expr, size_t& pos) {
     // 跳过函数名
     pos += funcName.length();
-    
+
     // 期望左括号
     if (pos >= expr.length() || expr[pos] != '(') {
         throw std::runtime_error("Expected '(' after function name");
     }
     pos++; // 跳过 '('
-    
+
     // pow 函数需要两个参数
     if (funcName == "pow") {
         double arg1 = parseExpression(expr, pos);
-        
+
         // 期望逗号
         if (pos >= expr.length() || expr[pos] != ',') {
             throw std::runtime_error("Expected ',' in pow function");
         }
         pos++; // 跳过 ','
-        
+
         double arg2 = parseExpression(expr, pos);
-        
+
         // 期望右括号
         if (pos >= expr.length() || expr[pos] != ')') {
             throw std::runtime_error("Expected ')' after function arguments");
         }
         pos++; // 跳过 ')'
-        
+
         return std::pow(arg1, arg2);
     } else {
         // 单参数函数
         double arg = parseExpression(expr, pos);
-        
+
         // 期望右括号
         if (pos >= expr.length() || expr[pos] != ')') {
             throw std::runtime_error("Expected ')' after function argument");
         }
         pos++; // 跳过 ')'
-        
+
         // 调用相应的数学函数
         if (funcName == "sin") return std::sin(arg);
         else if (funcName == "cos") return std::cos(arg);
@@ -562,7 +562,7 @@ static void skipWhitespace(const std::string& expr, size_t& pos) {
 // 检查字符串是否是数学函数
 static bool isFunction(const std::string& name) {
     static const std::set<std::string> functions = {
-        "sin", "cos", "tan", "sqrt", "log", "ln", "exp", "abs", 
+        "sin", "cos", "tan", "sqrt", "log", "ln", "exp", "abs",
         "floor", "ceil", "round", "pow", "asin", "acos", "atan",
         "sinh", "cosh", "tanh"
     };
@@ -572,17 +572,17 @@ static bool isFunction(const std::string& name) {
 bool matchPattern(const std::string& text, const std::string& pattern) {
     // 简化的模式匹配实现，支持*通配符
     if (pattern == "*") return true;
-    
+
     size_t star_pos = pattern.find('*');
     if (star_pos == std::string::npos) {
         // 没有通配符，直接比较
         return text == pattern;
     }
-    
+
     if (star_pos == 0) {
         // *在开头
         std::string suffix = pattern.substr(1);
-        return text.length() >= suffix.length() && 
+        return text.length() >= suffix.length() &&
                text.substr(text.length() - suffix.length()) == suffix;
     } else if (star_pos == pattern.length() - 1) {
         // *在末尾
@@ -607,14 +607,14 @@ std::vector<json> searchInFileRegex(
     bool line_numbers,
     int& total_matches,
     int max_matches) {
-    
+
     std::vector<json> matches;
     std::string content;
-    
+
     if (!read_file_content(filepath, content)) {
         return matches;
     }
-    
+
     // 准备正则表达式（如果需要）
     std::regex regex_pattern;
     if (use_regex) {
@@ -629,49 +629,49 @@ std::vector<json> searchInFileRegex(
             return matches;
         }
     }
-    
+
     std::istringstream iss(content);
     std::string line;
     int line_num = 1;
-    
+
     while (std::getline(iss, line) && total_matches < max_matches) {
         bool found = false;
-        
+
         if (use_regex) {
             found = std::regex_search(line, regex_pattern);
         } else {
             // 子串搜索
             std::string search_line = line;
             std::string search_pattern = pattern;
-            
+
             if (!case_sensitive) {
                 std::transform(search_line.begin(), search_line.end(), search_line.begin(), ::tolower);
                 std::transform(search_pattern.begin(), search_pattern.end(), search_pattern.begin(), ::tolower);
             }
-            
+
             found = (search_line.find(search_pattern) != std::string::npos);
         }
-        
+
         if (found) {
             json match = {
                 {"file", filepath},
                 {"line_content", line}
             };
-            
+
             if (line_numbers) {
                 match["line_number"] = line_num;
             }
-            
+
             matches.push_back(match);
             total_matches++;
-            
+
             if (total_matches >= max_matches) {
                 break;
             }
         }
         line_num++;
     }
-    
+
     return matches;
 }
 
@@ -742,7 +742,7 @@ json executeCalculate(const json& args) {
 
     // 基本字符验证：确保只包含允许的字符
     for (char c : expression) {
-        if (!std::isalnum(c) && !std::isspace(c) && 
+        if (!std::isalnum(c) && !std::isspace(c) &&
             c != '+' && c != '-' && c != '*' && c != '/' && c != '%' &&
             c != '(' && c != ')' && c != '.' && c != ',' && c != '^') {
             return json{
@@ -761,7 +761,7 @@ json executeCalculate(const json& args) {
                 cleanExpr += c;
             }
         }
-        
+
         // 检查清理后的表达式是否为空
         if (cleanExpr.empty()) {
             return json{
@@ -769,7 +769,7 @@ json executeCalculate(const json& args) {
                 {"success", false}
             };
         }
-        
+
         // 基本语法检查：检查括号是否匹配
         int parentheses_count = 0;
         for (char c : cleanExpr) {
@@ -788,9 +788,9 @@ json executeCalculate(const json& args) {
                 {"success", false}
             };
         }
-        
+
         double result = evaluateExpression(cleanExpr);
-        
+
         // 检查结果是否有效
         if (std::isnan(result)) {
             return json{
@@ -798,7 +798,7 @@ json executeCalculate(const json& args) {
                 {"success", false}
             };
         }
-        
+
         if (std::isinf(result)) {
             return json{
                 {"error", "Mathematical operation resulted in infinity"},
@@ -861,7 +861,7 @@ json executeReadFile(const json& args) {
     // 使用 filesystem 库进行更完整的路径和文件检查
     try {
         std::filesystem::path fs_path(path);
-        
+
         // 检查路径是否存在
         if (!std::filesystem::exists(fs_path)) {
             return json{
@@ -869,7 +869,7 @@ json executeReadFile(const json& args) {
                 {"success", false}
             };
         }
-        
+
         // 检查是否是目录而不是文件
         if (std::filesystem::is_directory(fs_path)) {
             return json{
@@ -877,7 +877,7 @@ json executeReadFile(const json& args) {
                 {"success", false}
             };
         }
-        
+
         // 检查是否是常规文件
         if (!std::filesystem::is_regular_file(fs_path)) {
             return json{
@@ -885,18 +885,18 @@ json executeReadFile(const json& args) {
                 {"success", false}
             };
         }
-        
+
         // 获取文件大小并检查是否过大
         auto file_size = std::filesystem::file_size(fs_path);
         const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
-        
+
         if (file_size > MAX_FILE_SIZE) {
             return json{
                 {"error", "File too large (maximum 100MB): " + std::to_string(file_size) + " bytes"},
                 {"success", false}
             };
         }
-        
+
         // 检查文件权限（是否可读）
         auto perms = std::filesystem::status(fs_path).permissions();
         if ((perms & std::filesystem::perms::owner_read) == std::filesystem::perms::none &&
@@ -907,7 +907,7 @@ json executeReadFile(const json& args) {
                 {"success", false}
             };
         }
-        
+
         std::string content;
         if (!read_file_content(path, content)) {
             return json{
@@ -915,7 +915,7 @@ json executeReadFile(const json& args) {
                 {"success", false}
             };
         }
-        
+
         // 获取文件的实际路径（解析符号链接等）
         std::string canonical_path;
         try {
@@ -923,17 +923,17 @@ json executeReadFile(const json& args) {
         } catch (const std::exception&) {
             canonical_path = std::filesystem::absolute(fs_path).string();
         }
-        
+
         // 获取文件修改时间
         std::string last_modified;
         try {
             auto ftime = std::filesystem::last_write_time(fs_path);
             auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                ftime - std::filesystem::file_time_type::clock::now() + 
+                ftime - std::filesystem::file_time_type::clock::now() +
                 std::chrono::system_clock::now()
             );
             auto time_t = std::chrono::system_clock::to_time_t(sctp);
-            
+
             std::ostringstream time_ss;
             time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
             last_modified = time_ss.str();
@@ -951,7 +951,7 @@ json executeReadFile(const json& args) {
             {"last_modified", last_modified},
             {"success", true}
         };
-        
+
     } catch (const std::filesystem::filesystem_error& e) {
         return json{
             {"error", "Filesystem error: " + std::string(e.what())},
@@ -1021,6 +1021,14 @@ json executeWriteFile(const json& args) {
 }
 
 json executeGlob(const json& args) {
+    /*
+    1、功能解释：文件匹配工具，用于根据通配符模式在指定路径中搜索文件。
+    2、参数说明：
+        2.1 pattern (必需参数) - 文件匹配模式，支持通配符
+        2.2 path (可选，默认 ".") - 搜索路径
+        2.3 case_sensitive (可选，默认 true) - 是否区分大小写
+        2.4 max_results (可选，默认 10000) - 最大返回结果数
+    */
     std::string pattern = args.value("pattern", "");
     std::string path = args.value("path", ".");
     bool case_sensitive = args.value("case_sensitive", true);
@@ -1042,11 +1050,11 @@ json executeGlob(const json& args) {
 
     std::vector<std::string> matched_files;
     bool truncated = false;
-    
+
     try {
         // ** 仅作为递归开关，实际匹配仍使用 * 模式
         bool recursive = (pattern.find("**") != std::string::npos);
-        
+
         // 提取文件名模式（移除路径部分）
         std::string file_pattern = pattern;
         // 如果包含 **，将其简化为 * 用于文件名匹配
@@ -1054,37 +1062,37 @@ json executeGlob(const json& args) {
         if (star_star_pos != std::string::npos) {
             file_pattern.replace(star_star_pos, 2, "*");
         }
-        
+
         // 提取纯文件名部分用于匹配
         size_t last_slash = file_pattern.find_last_of("/\\");
         if (last_slash != std::string::npos) {
             file_pattern = file_pattern.substr(last_slash + 1);
         }
-        
+
         auto match_file = [&](const std::filesystem::path& entry_path) {
             if (!std::filesystem::is_regular_file(entry_path)) {
                 return;
             }
-            
+
             if (matched_files.size() >= static_cast<size_t>(max_results)) {
                 truncated = true;
                 return;
             }
-            
+
             std::string filename = entry_path.filename().string();
             std::string pattern_to_match = file_pattern;
-            
+
             // 大小写不敏感时统一转换为小写
             if (!case_sensitive) {
                 std::transform(filename.begin(), filename.end(), filename.begin(), ::tolower);
                 std::transform(pattern_to_match.begin(), pattern_to_match.end(), pattern_to_match.begin(), ::tolower);
             }
-            
+
             if (matchPattern(filename, pattern_to_match)) {
                 matched_files.push_back(entry_path.string());
             }
         };
-        
+
         if (recursive) {
             for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
                 if (truncated) break;
@@ -1111,11 +1119,11 @@ json executeGlob(const json& args) {
         {"count", matched_files.size()},
         {"success", true}
     };
-    
+
     if (truncated) {
         result["truncated"] = true;
     }
-    
+
     return result;
 }
 
@@ -1138,12 +1146,12 @@ json executeGrep(const json& args) {
     std::vector<json> matches;
     int total_matches = 0;
     bool truncated = false;
-    
+
     try {
         if (std::filesystem::is_regular_file(path)) {
             // 搜索单个文件
-            auto file_matches = searchInFileRegex(path, pattern, use_regex, 
-                                                  case_sensitive, line_numbers, 
+            auto file_matches = searchInFileRegex(path, pattern, use_regex,
+                                                  case_sensitive, line_numbers,
                                                   total_matches, max_matches);
             matches.insert(matches.end(), file_matches.begin(), file_matches.end());
         } else if (std::filesystem::is_directory(path)) {
@@ -1153,10 +1161,10 @@ json executeGrep(const json& args) {
                     truncated = true;
                     break;
                 }
-                
+
                 if (entry.is_regular_file()) {
                     std::string filename = entry.path().filename().string();
-                    
+
                     // include 过滤
                     if (!include.empty()) {
                         std::string include_pattern = include;
@@ -1168,7 +1176,7 @@ json executeGrep(const json& args) {
                             continue;
                         }
                     }
-                    
+
                     auto file_matches = searchInFileRegex(entry.path().string(), pattern, use_regex,
                                                           case_sensitive, line_numbers,
                                                           total_matches, max_matches);
@@ -1198,17 +1206,17 @@ json executeGrep(const json& args) {
         {"count", matches.size()},
         {"success", true}
     };
-    
+
     if (truncated) {
         result["truncated"] = true;
     }
-    
+
     return result;
 }
 
 json executeMultiEdit(const json& args) {
     std::string file_path = args.value("file_path", "");
-    
+
     if (file_path.empty()) {
         return json{
             {"error", "file_path is required"},
@@ -1259,12 +1267,12 @@ json executeMultiEdit(const json& args) {
 
         size_t pos = 0;
         int replacements = 0;
-        
+
         while ((pos = content.find(old_string, pos)) != std::string::npos) {
             content.replace(pos, old_string.length(), new_string);
             pos += new_string.length();
             replacements++;
-            
+
             if (!replace_all) break;
         }
 
@@ -1280,7 +1288,7 @@ json executeMultiEdit(const json& args) {
 
     // 写入修改后的内容
     bool write_success = write_file_content(file_path, content);
-    
+
     return json{
         {"file_path", file_path},
         {"total_edits", args["edits"].size()},
@@ -1323,12 +1331,12 @@ json executeEdit(const json& args) {
     // 执行替换
     size_t pos = 0;
     int replacements = 0;
-    
+
     while ((pos = content.find(old_string, pos)) != std::string::npos) {
         content.replace(pos, old_string.length(), new_string);
         pos += new_string.length();
         replacements++;
-        
+
         if (!replace_all) break;
     }
 
@@ -1343,7 +1351,7 @@ json executeEdit(const json& args) {
 
     // 写入修改后的内容
     bool write_success = write_file_content(file_path, content);
-    
+
     return json{
         {"file_path", file_path},
         {"old_string", old_string},
@@ -1377,9 +1385,9 @@ json executeBash(const json& args) {
     auto exec_result = execute_command(command);
     bool command_success = exec_result.first;
     std::string result = exec_result.second;
-    
+
     // 检查命令是否成功（使用execute_command的返回值和输出内容）
-    bool success = command_success && 
+    bool success = command_success &&
                    result.find("command not found") == std::string::npos &&
                    result.find("No such file") == std::string::npos &&
                    result.find("Permission denied") == std::string::npos;
@@ -1412,7 +1420,7 @@ json executeListDirectory(const json& args) {
             {"success", false}
         };
     }
-    
+
     if (!std::filesystem::is_directory(path)) {
         return json{
             {"error", "Path is not a directory: " + path},
@@ -1421,7 +1429,7 @@ json executeListDirectory(const json& args) {
     }
 
     std::vector<json> file_list;
-    
+
     // 解析扩展名过滤器
     std::set<std::string> allowed_exts;
     if (!ext_filter.empty()) {
@@ -1434,27 +1442,27 @@ json executeListDirectory(const json& args) {
             }
         }
     }
-    
+
     try {
         auto process_entry = [&](const std::filesystem::directory_entry& entry) {
             if (file_list.size() >= static_cast<size_t>(max_results)) {
                 return false; // 达到上限
             }
-            
+
             std::string filename = entry.path().filename().string();
-            
+
             // 隐藏文件过滤
             if (!show_hidden && !filename.empty() && filename[0] == '.') {
                 return true; // 继续
             }
-            
+
             // 类型过滤
             bool is_dir = entry.is_directory();
             bool is_file = entry.is_regular_file();
-            
+
             if (kinds == "files" && !is_file) return true;
             if (kinds == "dirs" && !is_dir) return true;
-            
+
             // 扩展名过滤（仅对文件）
             if (!allowed_exts.empty() && is_file) {
                 std::string ext = entry.path().extension().string();
@@ -1462,18 +1470,18 @@ json executeListDirectory(const json& args) {
                     return true;
                 }
             }
-            
+
             json file_info = {
                 {"name", filename},
                 {"path", entry.path().string()},
                 {"type", is_dir ? "directory" : "file"}
             };
-            
+
             if (size_info && is_file) {
                 try {
                     auto file_size = std::filesystem::file_size(entry);
                     file_info["size"] = file_size;
-                    
+
                     // 人类可读大小
                     const char* units[] = {"B", "KB", "MB", "GB", "TB"};
                     double size = static_cast<double>(file_size);
@@ -1482,7 +1490,7 @@ json executeListDirectory(const json& args) {
                         size /= 1024;
                         unit++;
                     }
-                    
+
                     std::ostringstream ss;
                     ss << std::fixed << std::setprecision(1) << size << " " << units[unit];
                     file_info["human_size"] = ss.str();
@@ -1490,15 +1498,15 @@ json executeListDirectory(const json& args) {
                     file_info["size"] = 0;
                     file_info["human_size"] = "0 B";
                 }
-                
+
                 try {
                     auto ftime = std::filesystem::last_write_time(entry);
                     auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                        ftime - std::filesystem::file_time_type::clock::now() + 
+                        ftime - std::filesystem::file_time_type::clock::now() +
                         std::chrono::system_clock::now()
                     );
                     auto time_t = std::chrono::system_clock::to_time_t(sctp);
-                    
+
                     std::ostringstream time_ss;
                     time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
                     file_info["modified"] = time_ss.str();
@@ -1508,13 +1516,13 @@ json executeListDirectory(const json& args) {
                     file_info["modified_timestamp"] = 0;
                 }
             }
-            
+
             file_list.push_back(file_info);
             return true; // 继续
         };
-        
+
         bool truncated = false;
-        
+
         if (recursive) {
             for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
                 if (!process_entry(entry)) {
@@ -1530,16 +1538,16 @@ json executeListDirectory(const json& args) {
                 }
             }
         }
-        
+
         // 排序
         if (sort_by == "name") {
-            std::sort(file_list.begin(), file_list.end(), 
+            std::sort(file_list.begin(), file_list.end(),
                 [&order](const json& a, const json& b) {
                     bool less = a["name"].get<std::string>() < b["name"].get<std::string>();
                     return order == "asc" ? less : !less;
                 });
         } else if (sort_by == "size" && size_info) {
-            std::sort(file_list.begin(), file_list.end(), 
+            std::sort(file_list.begin(), file_list.end(),
                 [&order](const json& a, const json& b) {
                     uint64_t size_a = a.contains("size") ? a["size"].get<uint64_t>() : 0;
                     uint64_t size_b = b.contains("size") ? b["size"].get<uint64_t>() : 0;
@@ -1547,7 +1555,7 @@ json executeListDirectory(const json& args) {
                     return order == "asc" ? less : !less;
                 });
         } else if (sort_by == "modified" && size_info) {
-            std::sort(file_list.begin(), file_list.end(), 
+            std::sort(file_list.begin(), file_list.end(),
                 [&order](const json& a, const json& b) {
                     int64_t time_a = a.contains("modified_timestamp") ? a["modified_timestamp"].get<int64_t>() : 0;
                     int64_t time_b = b.contains("modified_timestamp") ? b["modified_timestamp"].get<int64_t>() : 0;
@@ -1555,27 +1563,27 @@ json executeListDirectory(const json& args) {
                     return order == "asc" ? less : !less;
                 });
         }
-        
+
         // 分页
         std::vector<json> paged_list;
         if (limit > 0 || offset > 0) {
             size_t start = static_cast<size_t>(offset);
             size_t end = limit > 0 ? start + static_cast<size_t>(limit) : file_list.size();
-            
+
             for (size_t i = start; i < std::min(end, file_list.size()); ++i) {
                 paged_list.push_back(file_list[i]);
             }
         } else {
             paged_list = file_list;
         }
-        
+
         // 清理不需要的 modified_timestamp 字段
         for (auto& item : paged_list) {
             if (item.contains("modified_timestamp")) {
                 item.erase("modified_timestamp");
             }
         }
-        
+
         json result = {
             {"path", path},
             {"recursive", recursive},
@@ -1585,13 +1593,13 @@ json executeListDirectory(const json& args) {
             {"count", paged_list.size()},
             {"success", true}
         };
-        
+
         if (truncated) {
             result["truncated"] = true;
         }
-        
+
         return result;
-        
+
     } catch (const std::exception& e) {
         return json{
             {"error", "Failed to list directory: " + std::string(e.what())},
@@ -1604,36 +1612,36 @@ json executeFileStats(const json& args) {
     std::string path = args.value("path", "");
     bool detailed = args.value("detailed", false);
     bool checksum = args.value("checksum", false);
-    
+
     if (path.empty()) {
         return json{
             {"error", "Path is required"},
             {"success", false}
         };
     }
-    
+
     if (!file_exists(path)) {
         return json{
             {"error", "Path not found: " + path},
             {"success", false}
         };
     }
-    
+
     json stats = {
         {"path", path},
         {"exists", true}
     };
-    
+
     try {
         std::filesystem::path fs_path(path);
         stats["absolute_path"] = std::filesystem::absolute(fs_path).string();
         stats["filename"] = fs_path.filename().string();
-        
+
         if (std::filesystem::is_regular_file(fs_path)) {
             stats["type"] = "file";
             auto file_size = std::filesystem::file_size(fs_path);
             stats["size"] = file_size;
-            
+
             // 人类可读大小
             const char* units[] = {"B", "KB", "MB", "GB", "TB"};
             double size = static_cast<double>(file_size);
@@ -1645,21 +1653,21 @@ json executeFileStats(const json& args) {
             std::ostringstream ss;
             ss << std::fixed << std::setprecision(1) << size << " " << units[unit];
             stats["human_size"] = ss.str();
-            
+
             // 文件扩展名
             if (fs_path.has_extension()) {
                 stats["extension"] = fs_path.extension().string();
             }
-            
+
         } else if (std::filesystem::is_directory(fs_path)) {
             stats["type"] = "directory";
-            
+
             // 计算目录中的文件数量
             if (detailed) {
                 size_t file_count = 0;
                 size_t dir_count = 0;
                 uintmax_t total_size = 0;
-                
+
                 try {
                     for (auto& entry : std::filesystem::recursive_directory_iterator(fs_path)) {
                         if (entry.is_regular_file()) {
@@ -1669,40 +1677,40 @@ json executeFileStats(const json& args) {
                             dir_count++;
                         }
                     }
-                    
+
                     stats["file_count"] = file_count;
                     stats["directory_count"] = dir_count;
                     stats["total_size"] = total_size;
                 } catch (...) {
                     stats["file_count"] = "unknown";
-                    stats["directory_count"] = "unknown"; 
+                    stats["directory_count"] = "unknown";
                     stats["total_size"] = "unknown";
                 }
             }
         } else {
             stats["type"] = "other";
         }
-        
+
         // 时间戳信息
         auto ftime = std::filesystem::last_write_time(fs_path);
         auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-            ftime - std::filesystem::file_time_type::clock::now() + 
+            ftime - std::filesystem::file_time_type::clock::now() +
             std::chrono::system_clock::now()
         );
         auto time_t = std::chrono::system_clock::to_time_t(sctp);
-        
+
         std::ostringstream time_ss;
         time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
         stats["last_modified"] = time_ss.str();
         stats["last_modified_timestamp"] = time_t;
-        
+
         // 详细信息
         if (detailed) {
             auto perms = std::filesystem::status(fs_path).permissions();
             std::string perm_str;
-            
+
             perm_str += (perms & std::filesystem::perms::owner_read) != std::filesystem::perms::none ? "r" : "-";
-            perm_str += (perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none ? "w" : "-";  
+            perm_str += (perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none ? "w" : "-";
             perm_str += (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none ? "x" : "-";
             perm_str += (perms & std::filesystem::perms::group_read) != std::filesystem::perms::none ? "r" : "-";
             perm_str += (perms & std::filesystem::perms::group_write) != std::filesystem::perms::none ? "w" : "-";
@@ -1710,10 +1718,10 @@ json executeFileStats(const json& args) {
             perm_str += (perms & std::filesystem::perms::others_read) != std::filesystem::perms::none ? "r" : "-";
             perm_str += (perms & std::filesystem::perms::others_write) != std::filesystem::perms::none ? "w" : "-";
             perm_str += (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none ? "x" : "-";
-            
+
             stats["permissions"] = perm_str;
         }
-        
+
         // 校验和计算（仅对文件）
         if (checksum && std::filesystem::is_regular_file(fs_path)) {
             std::string content;
@@ -1721,14 +1729,14 @@ json executeFileStats(const json& args) {
                 // 简单的哈希值计算（这里使用一个简化版本）
                 std::hash<std::string> hasher;
                 size_t hash_value = hasher(content);
-                
+
                 std::ostringstream hash_ss;
                 hash_ss << std::hex << hash_value;
                 stats["hash"] = hash_ss.str();
                 stats["content_length"] = content.length();
             }
         }
-        
+
     } catch (const std::exception& e) {
         return json{
             {"error", "Failed to get file stats: " + std::string(e.what())},
@@ -1736,7 +1744,7 @@ json executeFileStats(const json& args) {
             {"success", false}
         };
     }
-    
+
     stats["success"] = true;
     return stats;
 }

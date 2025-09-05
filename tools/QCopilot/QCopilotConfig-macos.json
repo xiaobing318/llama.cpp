@@ -1,0 +1,939 @@
+{
+    "qcopilot_host": "127.0.0.1",
+    "qcopilot_port": 8081,
+    "base_server_host": "127.0.0.1",
+    "base_server_port": 8080,
+    "base_server_path": "/Users/xbyang/dev/github_repos/llama.cpp/build-arm64-apple-clang-debug/bin/Debug/llama-server",
+    "model_path": "/Users/xbyang/data/models/gpt-oss-20b-Q8_0.gguf",
+    "n_ctx": 10240,
+    "n_gpu_layers": 99,
+    "auto_start_base_server": true,
+    "log_level":"INFO",
+    "tools": [
+        {
+            "type": "function",
+            "executable": "shapefile_converter",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/shapefile_converter.exe",
+            "executable_linux": "/usr/local/bin/shapefile_converter",
+            "function": {
+                "name": "shapefile_converter",
+                "description": "Convert ESRI Shapefile attribute text encoding (e.g., GBK/GB2312) to UTF-8 (or another target encoding). Supports single-file conversion or batch/recursive directory processing, and automatically handles companion files (.shx, .dbf, .prj, etc.). WHEN TO USE: apply when Shapefile labels/attributes show garbled characters due to mismatched code pages; prefer this tool for bulk folder conversion.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_path": {
+                            "type": "string",
+                            "description": "Path to a Shapefile (.shp) or a directory containing Shapefiles. If a directory is provided, all *.shp files inside are processed.",
+                            "minLength": 1
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Optional destination path. If input is a file, this may be a target .shp path; if input is a folder, this may be an output folder. If omitted, outputs are written alongside inputs with a _utf8 suffix."
+                        },
+                        "r_flag": {
+                            "type": "string",
+                            "description": "Add -r flag for recursive processing",
+                            "enum": [
+                                "-r"
+                            ]
+                        },
+                        "s_flag": {
+                            "type": "string",
+                            "description": "Add -s flag for source encoding",
+                            "enum": [
+                                "-s"
+                            ],
+                            "default": "-s"
+                        },
+                        "source_encoding": {
+                            "type": "string",
+                            "description": "Source encoding name for DBF attributes. Typical values: GBK, GB2312, CP936.",
+                            "minLength": 2,
+                            "maxLength": 40,
+                            "pattern": "^[A-Za-z0-9.-]+$",
+                            "default": "GBK"
+                        },
+                        "t_flag": {
+                            "type": "string",
+                            "description": "Add -t flag for target encoding",
+                            "enum": [
+                                "-t"
+                            ],
+                            "default": "-t"
+                        },
+                        "target_encoding": {
+                            "type": "string",
+                            "description": "Target encoding name. Common values: UTF-8, ASCII, etc.",
+                            "minLength": 2,
+                            "maxLength": 40,
+                            "pattern": "^[A-Za-z0-9.-]+$",
+                            "default": "UTF-8"
+                        },
+                        "v_flag": {
+                            "type": "string",
+                            "description": "Add -v flag for verbose output",
+                            "enum": [
+                                "-v"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "input_path",
+                        "s_flag",
+                        "t_flag"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "shapefile_converter {r_flag} {s_flag} {source_encoding} {t_flag} {target_encoding} {v_flag} \"{input_path}\" {output_path}"
+        },
+        {
+            "type": "function",
+            "executable": "ogrinfo",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogrinfo.exe",
+            "executable_linux": "/usr/bin/ogrinfo",
+            "function": {
+                "name": "ogr_info_basic",
+                "description": "Checks for vector data sources supported by OGR. Typically used to list layers or print summary information. This tool is useful for reprojecting a single shapefile or multiple shapefiles (organized as directories), converting data formats, and obtaining information such as the coordinate reference system, projected coordinate system, schema, feature count, and spatial extent. It is best suited for data validation, preprocessing, and pipeline inspection. Using summary mode (-so) can improve efficiency.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dataset": {
+                            "type": "string",
+                            "description": "Required. The datasource path (file, directory, or database connection string). Examples: Shapefile (.shp), GeoPackage (.gpkg), FileGDB, PostGIS connection."
+                        },
+                        "list_all_layers": {
+                            "type": "string",
+                            "description": "If true, enables -al (all layers). Lists all layers in the datasource. When combined with -so, prints only summary information for each layer instead of dumping all features.",
+                            "default": "-al"
+                        },
+                        "summary_only": {
+                            "type": "string",
+                            "description": "If true, enables -so (summary only). Prints only summary information (projection, schema, feature count, extent). Recommended for large datasets to avoid excessive feature dumps.",
+                            "default": "-so"
+                        }
+                    },
+                    "required": [
+                        "dataset",
+                        "list_all_layers",
+                        "summary_only"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {list_all_layers} {summary_only} \"{dataset}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_convert_format_basic",
+                "description": "Convert a vector dataset from one format to another without changing CRS/geometry. WHEN TO USE: simple format conversion (e.g., SHP ⇄ GPKG ⇄ GeoJSON).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "description": "Input datasource path.",
+                            "minLength": 1
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Output datasource path.",
+                            "minLength": 1
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "GDAL output driver name (-f).",
+                            "enum": [
+                                "GPKG",
+                                "ESRI Shapefile",
+                                "GeoJSON",
+                                "MapInfo File",
+                                "CSV",
+                                "KML",
+                                "GML",
+                                "DXF"
+                            ],
+                            "default": "GPKG"
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "description": "Replace existing output layer/dataset if present.",
+                            "enum": [
+                                "-overwrite"
+                            ],
+                            "default": "-overwrite"
+                        },
+                        "lco_encoding_flag": {
+                            "type": "string",
+                            "description": "Pass ENCODING layer creation option when supported (e.g., Shapefile/CSV).",
+                            "enum": [
+                                "-lco"
+                            ],
+                            "default": "-lco"
+                        },
+                        "encoding": {
+                            "type": "string",
+                            "description": "Target text encoding value for -lco ENCODING=...",
+                            "enum": [
+                                "UTF-8",
+                                "GBK",
+                                "GB2312",
+                                "ISO-8859-1"
+                            ],
+                            "default": "UTF-8"
+                        },
+                        "oo_encoding_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-oo"
+                            ],
+                            "description": "Pass ENCODING open option for input driver when supported (e.g., Shapefile/CSV).",
+                            "default": "-oo"
+                        },
+                        "source_encoding": {
+                            "type": "string",
+                            "description": "Source text encoding value for -oo ENCODING=...",
+                            "enum": [
+                                "UTF-8",
+                                "GBK",
+                                "GB2312",
+                                "ISO-8859-1"
+                            ],
+                            "default": "UTF-8"
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "output_format",
+                        "overwrite_flag",
+                        "lco_encoding_flag",
+                        "encoding",
+                        "oo_encoding_flag",
+                        "source_encoding"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath {overwrite_flag} -f \"{output_format}\" {lco_encoding_flag} ENCODING={encoding} {oo_encoding_flag} ENCODING={source_encoding} \"{output_file}\" \"{input_file}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_write_shp_to_gpkg_layer",
+                "description": "Write a single Shapefile layer into a target GeoPackage layer. Supports safe update (-update), overwrite of the target layer only (-overwrite), or appending (-append). Optional geometry normalization (-nlt), SRS assignment (-a_srs), and common GPKG layer creation options (-lco).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_shapefile": {
+                            "type": "string",
+                            "description": "Path to input .shp.",
+                            "minLength": 1,
+                            "pattern": "^.*\\.shp$"
+                        },
+                        "output_gpkg": {
+                            "type": "string",
+                            "description": "Path to output .gpkg.",
+                            "minLength": 1,
+                            "pattern": "^.*\\.gpkg$"
+                        },
+                        "target_layer_name_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-nln"
+                            ],
+                            "default": "-nln",
+                            "description": "Set output layer name."
+                        },
+                        "target_layer_name": {
+                            "type": "string",
+                            "description": "Layer name to create/target in GPKG.",
+                            "minLength": 1
+                        },
+                        "update_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-update"
+                            ],
+                            "description": "Open destination GPKG in update mode to preserve existing layers."
+                        },
+                        "append_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-append"
+                            ],
+                            "description": "Append features into an existing target layer (schema must be compatible)."
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ],
+                            "description": "Overwrite the target layer if it exists (other layers remain intact)."
+                        },
+                        "nlt_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-nlt"
+                            ],
+                            "description": "Geometry type control (use with nlt_value).",
+                            "default": "-nlt"
+                        },
+                        "nlt_value": {
+                            "type": "string",
+                            "description": "Geometry type or behavior.",
+                            "enum": [
+                                "POINT",
+                                "LINESTRING",
+                                "POLYGON",
+                                "MULTIPOINT",
+                                "MULTILINESTRING",
+                                "MULTIPOLYGON",
+                                "PROMOTE_TO_MULTI"
+                            ]
+                        },
+                        "a_srs_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-a_srs"
+                            ],
+                            "description": "Assign SRS to output layer without reprojecting (use if source .prj is missing)."
+                        },
+                        "a_srs": {
+                            "type": "string",
+                            "description": "SRS to assign, e.g., EPSG:4326 or WKT/PROJ string."
+                        },
+                        "lco_flag_1": {
+                            "type": "string",
+                            "enum": [
+                                "-lco"
+                            ],
+                            "description": "Layer creation option flag (1st)."
+                        },
+                        "lco_kv_1": {
+                            "type": "string",
+                            "description": "Key=Value for 1st -lco. Common (GPKG): GEOMETRY_NAME=geom | SPATIAL_INDEX=YES|NO | FID=id"
+                        },
+                        "lco_flag_2": {
+                            "type": "string",
+                            "enum": [
+                                "-lco"
+                            ],
+                            "description": "Layer creation option flag (2nd)."
+                        },
+                        "lco_kv_2": {
+                            "type": "string",
+                            "description": "Key=Value for 2nd -lco."
+                        },
+                        "lco_flag_3": {
+                            "type": "string",
+                            "enum": [
+                                "-lco"
+                            ],
+                            "description": "Layer creation option flag (3rd)."
+                        },
+                        "lco_kv_3": {
+                            "type": "string",
+                            "description": "Key=Value for 3rd -lco."
+                        }
+                    },
+                    "required": [
+                        "input_shapefile",
+                        "output_gpkg",
+                        "target_layer_name_flag",
+                        "target_layer_name"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"GPKG\" {update_flag} {append_flag} {overwrite_flag} {nlt_flag} {nlt_value} {a_srs_flag} {a_srs} {lco_flag_1} {lco_kv_1} {lco_flag_2} {lco_kv_2} {lco_flag_3} {lco_kv_3} {target_layer_name_flag} \"{target_layer_name}\" \"{output_gpkg}\" \"{input_shapefile}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_reproject_shapefile",
+                "description": "Reproject a single ESRI Shapefile (.shp) to a target CRS (non-recursive). Encoding is preserved only if explicitly set via -oo/-lco; by default this tool passes UTF-8 to both sides to keep behavior consistent with your directory tool.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_shp": {
+                            "type": "string",
+                            "description": "Path to the input .shp file.",
+                            "minLength": 1,
+                            "pattern": "^.*\\.shp$"
+                        },
+                        "output_shp": {
+                            "type": "string",
+                            "description": "Path to the output .shp file.",
+                            "minLength": 1,
+                            "pattern": "^.*\\.shp$"
+                        },
+                        "t_srs_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-t_srs"
+                            ],
+                            "default": "-t_srs",
+                            "description": "Flag for target CRS."
+                        },
+                        "t_srs": {
+                            "type": "string",
+                            "description": "Target CRS, e.g. EPSG:4326, EPSG:3857, WKT, or PROJ string.",
+                            "minLength": 3
+                        },
+                        "s_srs_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-s_srs"
+                            ],
+                            "description": "Flag to override the source CRS if missing or incorrect."
+                        },
+                        "s_srs": {
+                            "type": "string",
+                            "description": "Source CRS (used only if s_srs_flag is set)."
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ],
+                            "description": "Overwrite the output layer/file if it already exists."
+                        },
+                        "skipfailures_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-skipfailures"
+                            ],
+                            "description": "Skip invalid features and continue processing."
+                        },
+                        "oo_encoding_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-oo"
+                            ],
+                            "description": "Input open option flag. Use together with oo_encoding_kv to force-read DBF encoding.",
+                            "default": "-oo"
+                        },
+                        "oo_encoding_kv": {
+                            "type": "string",
+                            "description": "Key=Value for input open option, e.g. ENCODING=GBK or ENCODING=UTF-8.",
+                            "default": "ENCODING=UTF-8"
+                        },
+                        "lco_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-lco"
+                            ],
+                            "description": "Layer creation option flag. Use together with lco_encoding_kv to force output DBF encoding.",
+                            "default": "-lco"
+                        },
+                        "lco_encoding_kv": {
+                            "type": "string",
+                            "description": "Key=Value for layer creation option, e.g. ENCODING=GBK or ENCODING=UTF-8.",
+                            "default": "ENCODING=UTF-8"
+                        }
+                    },
+                    "required": [
+                        "input_shp",
+                        "output_shp",
+                        "t_srs_flag",
+                        "t_srs",
+                        "oo_encoding_flag",
+                        "oo_encoding_kv",
+                        "lco_flag",
+                        "lco_encoding_kv"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"ESRI Shapefile\" {overwrite_flag} {skipfailures_flag} {oo_encoding_flag} {oo_encoding_kv} {s_srs_flag} {s_srs} {t_srs_flag} {t_srs} {lco_flag} {lco_encoding_kv} \"{output_shp}\" \"{input_shp}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_reproject_shapefile_dir",
+                "description": "Reproject all Shapefiles inside a directory (non-recursive). Treat the input directory as a Shapefile dataset (each .shp is a layer) and write to an output directory as Shapefiles. Encoding is preserved by default (no encoding options passed unless explicitly provided).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_dir": {
+                            "type": "string",
+                            "description": "Path to the input directory containing .shp files.",
+                            "minLength": 1
+                        },
+                        "output_dir": {
+                            "type": "string",
+                            "description": "Path to the output directory. It will be created if it does not exist.",
+                            "minLength": 1
+                        },
+                        "t_srs_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-t_srs"
+                            ],
+                            "default": "-t_srs",
+                            "description": "Flag for target CRS."
+                        },
+                        "t_srs": {
+                            "type": "string",
+                            "description": "Target CRS, e.g. EPSG:4326, EPSG:3857, WKT, or PROJ string.",
+                            "minLength": 3
+                        },
+                        "s_srs_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-s_srs"
+                            ],
+                            "description": "Flag to override the source CRS if missing or incorrect."
+                        },
+                        "s_srs": {
+                            "type": "string",
+                            "description": "Source CRS (used only if s_srs_flag is set)."
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ],
+                            "description": "Overwrite layers in the output directory if they already exist."
+                        },
+                        "skipfailures_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-skipfailures"
+                            ],
+                            "description": "Skip invalid features and continue processing."
+                        },
+                        "oo_encoding_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-oo"
+                            ],
+                            "description": "Input open option flag (optional). Use together with oo_encoding_kv if you need to force-read DBF encoding.",
+                            "default": "-oo"
+                        },
+                        "oo_encoding_kv": {
+                            "type": "string",
+                            "description": "Key=Value for input open option, e.g. ENCODING=GBK (used only if oo_encoding_flag is present).",
+                            "default": "ENCODING=UTF-8"
+                        },
+                        "lco_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-lco"
+                            ],
+                            "description": "Layer creation option flag (optional). Use together with lco_encoding_kv if you need to force output DBF encoding.",
+                            "default": "-lco"
+                        },
+                        "lco_encoding_kv": {
+                            "type": "string",
+                            "description": "Key=Value for layer creation option, e.g. ENCODING=GBK (used only if lco_flag is present).",
+                            "default": "ENCODING=UTF-8"
+                        }
+                    },
+                    "required": [
+                        "input_dir",
+                        "output_dir",
+                        "t_srs_flag",
+                        "t_srs",
+                        "oo_encoding_flag",
+                        "oo_encoding_kv",
+                        "lco_flag",
+                        "lco_encoding_kv"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"ESRI Shapefile\" {overwrite_flag} {skipfailures_flag} {oo_encoding_flag} {oo_encoding_kv} {s_srs_flag} {s_srs} {t_srs_flag} {t_srs} {lco_flag} {lco_encoding_kv} \"{output_dir}\" \"{input_dir}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_filter_by_attributes",
+                "description": "Filter features by attribute expression using -where and optionally choose a subset of fields with -select. WHEN TO USE: extract a subset by SQL-like predicate.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Input datasource."
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Output datasource."
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "description": "GDAL output driver (-f).",
+                            "default": "GPKG"
+                        },
+                        "where_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-where"
+                            ],
+                            "default": "-where",
+                            "description": "Attribute filter flag."
+                        },
+                        "where": {
+                            "type": "string",
+                            "description": "Attribute expression, e.g. \"POP > 10000 AND TYPE='city'\".",
+                            "minLength": 1
+                        },
+                        "select_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-select"
+                            ],
+                            "description": "Field subset flag."
+                        },
+                        "select_fields": {
+                            "type": "string",
+                            "description": "Comma-separated field list for -select.",
+                            "minLength": 1
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ],
+                            "description": "Replace output if exists."
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "where_flag",
+                        "where"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"{output_format}\" {overwrite_flag} {select_flag} \"{select_fields}\" {where_flag} \"{where}\" \"{output_file}\" \"{input_file}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_spatial_filter_bbox",
+                "description": "Select features that intersect a bounding box using -spat (no geometry clipping). WHEN TO USE: fast AOI filtering by rectangle.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "default": "GPKG"
+                        },
+                        "spat_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-spat"
+                            ],
+                            "default": "-spat",
+                            "description": "Spatial filter flag."
+                        },
+                        "xmin": {
+                            "type": "number"
+                        },
+                        "ymin": {
+                            "type": "number"
+                        },
+                        "xmax": {
+                            "type": "number"
+                        },
+                        "ymax": {
+                            "type": "number"
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "spat_flag",
+                        "xmin",
+                        "ymin",
+                        "xmax",
+                        "ymax"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"{output_format}\" {overwrite_flag} {spat_flag} {xmin} {ymin} {xmax} {ymax} \"{output_file}\" \"{input_file}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_clip_by_bbox",
+                "description": "Clip geometries to a bounding box using -clipsrc (output geometries are trimmed to the box). WHEN TO USE: produce geometry strictly within rectangular AOI.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "default": "GPKG"
+                        },
+                        "clipsrc_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-clipsrc"
+                            ],
+                            "default": "-clipsrc",
+                            "description": "Clip source to bbox."
+                        },
+                        "xmin": {
+                            "type": "number"
+                        },
+                        "ymin": {
+                            "type": "number"
+                        },
+                        "xmax": {
+                            "type": "number"
+                        },
+                        "ymax": {
+                            "type": "number"
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "clipsrc_flag",
+                        "xmin",
+                        "ymin",
+                        "xmax",
+                        "ymax"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"{output_format}\" {overwrite_flag} {clipsrc_flag} {xmin} {ymin} {xmax} {ymax} \"{output_file}\" \"{input_file}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_append_to_gpkg",
+                "description": "Append features into an existing GeoPackage layer using -update -append. WHEN TO USE: incremental loads / merging data into an existing table.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_gpkg": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^.*\\.gpkg$"
+                        },
+                        "update_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-update"
+                            ],
+                            "default": "-update",
+                            "description": "Open destination in update mode."
+                        },
+                        "append_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-append"
+                            ],
+                            "default": "-append",
+                            "description": "Append to existing layer."
+                        },
+                        "target_layer_name_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-nln"
+                            ],
+                            "default": "-nln",
+                            "description": "Destination layer name (must exist unless layer creation options are given)."
+                        },
+                        "target_layer_name": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_gpkg",
+                        "update_flag",
+                        "append_flag",
+                        "target_layer_name_flag",
+                        "target_layer_name"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"GPKG\" {update_flag} {append_flag} {target_layer_name_flag} \"{target_layer_name}\" \"{output_gpkg}\" \"{input_file}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_drop_field_sqlite",
+                "description": "Drop one or more fields using SQL ALTER TABLE with SQLite dialect. WHEN TO USE: permanently remove columns from a layer during translation.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "default": "GPKG"
+                        },
+                        "sql_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-sql"
+                            ],
+                            "default": "-sql"
+                        },
+                        "sql": {
+                            "type": "string",
+                            "description": "ALTER TABLE statements, e.g., \"ALTER TABLE src DROP COLUMN foo; ALTER TABLE src DROP COLUMN bar;\"",
+                            "minLength": 5
+                        },
+                        "dialect_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-dialect"
+                            ],
+                            "default": "-dialect"
+                        },
+                        "dialect": {
+                            "type": "string",
+                            "enum": [
+                                "SQLITE"
+                            ],
+                            "default": "SQLITE"
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "sql_flag",
+                        "sql",
+                        "dialect_flag",
+                        "dialect"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"{output_format}\" {overwrite_flag} {dialect_flag} {dialect} {sql_flag} \"{sql}\" \"{output_file}\" \"{input_file}\""
+        },
+        {
+            "type": "function",
+            "executable": "ogr2ogr",
+            "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
+            "executable_linux": "/usr/bin/ogr2ogr",
+            "function": {
+                "name": "ogr_explode_collections",
+                "description": "Convert geometry collections into individual simple features using -explodecollections. WHEN TO USE: normalize multi-part/collection geometries to single features.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "default": "GPKG"
+                        },
+                        "explode_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-explodecollections"
+                            ],
+                            "default": "-explodecollections"
+                        },
+                        "overwrite_flag": {
+                            "type": "string",
+                            "enum": [
+                                "-overwrite"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "input_file",
+                        "output_file",
+                        "explode_flag"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "command_template": "executableFilePath -f \"{output_format}\" {overwrite_flag} {explode_flag} \"{output_file}\" \"{input_file}\""
+        }
+    ]
+}

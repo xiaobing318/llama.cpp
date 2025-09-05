@@ -465,6 +465,8 @@ static bool validate_type(const json& value, const std::string& expected_type) {
         return value.is_string();
     } else if (expected_type == "number") {
         return value.is_number();
+    } else if (expected_type == "integer") {
+        return value.is_number_integer();
     } else if (expected_type == "boolean") {
         return value.is_boolean();
     } else if (expected_type == "object") {
