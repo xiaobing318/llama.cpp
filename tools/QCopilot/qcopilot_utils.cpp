@@ -24,8 +24,13 @@
 
 namespace fs = std::filesystem;
 
-// 如果配置中没有设置日志详细级别，这里默认将日志基准级别设置成 INFO 级别。
-LogLevel Logger::current_level_ = LogLevel::INFO;
+/*
+Notes:
+1、如果配置中没有设置日志详细级别，这里默认将日志基准级别设置成 INFO 级别，日志可以通过配置文件实现调整。
+2、这里将日志等级设置成 INFO 级别，意味着 INFO 及以上级别的日志都会被输出，而 DEBUG 级别的日志则会被忽略。
+3、这里将日志等级设置成 INFO 级别另外一个原因是不论哪一种配置下都是可以输出内置工具相关信息。
+*/
+LogLevel   Logger::current_level_ = LogLevel::INFO;
 std::mutex Logger::level_mutex_;
 
 void Logger::set_level(LogLevel level) {

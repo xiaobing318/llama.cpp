@@ -1509,13 +1509,6 @@ int main(int argc, char** argv) {
     // 初始化程序环境，包括设置 UTF-8 区域和在 Windows 上启用 UTF-8 控制台输出。
     common_init();
 
-    // 设置默认日志级别（根据编译模式）
-#ifdef NDEBUG
-    Logger::set_level(LogLevel::INFO);  // Release模式：只显示INFO及以上级别
-#else
-    Logger::set_level(LogLevel::DEBUG); // Debug模式：显示所有级别
-#endif
-
     // 解析命令行参数
     CommandLineArgs args;
     if (!parseCommandLine(argc, argv, args)) {
