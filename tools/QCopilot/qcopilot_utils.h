@@ -14,8 +14,8 @@ enum class LogLevel {
     DEBUG = 0,
     INFO = 1,
     WARN = 2,
-    ERROR = 3,
-    NONE = 4  // 完全禁用日志
+    ERR = 3,    // 避免与Windows ERROR宏冲突
+    NONE = 4    // 完全禁用日志
 };
 
 class Logger {
@@ -45,7 +45,7 @@ private:
     #define LOG_DBG(format, ...) Logger::log(LogLevel::DEBUG, __FILE__, __LINE__, format, ##__VA_ARGS__)
     #define LOG_INF(format, ...) Logger::log(LogLevel::INFO, __FILE__, __LINE__, format, ##__VA_ARGS__)
     #define LOG_WRN(format, ...) Logger::log(LogLevel::WARN, __FILE__, __LINE__, format, ##__VA_ARGS__)
-    #define LOG_ERR(format, ...) Logger::log(LogLevel::ERROR, __FILE__, __LINE__, format, ##__VA_ARGS__)
+    #define LOG_ERR(format, ...) Logger::log(LogLevel::ERR, __FILE__, __LINE__, format, ##__VA_ARGS__)
 #endif
 
 // Common initialization

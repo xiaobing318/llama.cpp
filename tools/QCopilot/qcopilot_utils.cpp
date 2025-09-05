@@ -57,7 +57,7 @@ const char* Logger::level_to_string(LogLevel level) {
         case LogLevel::DEBUG: return "DEBUG";
         case LogLevel::INFO:  return "INFO";
         case LogLevel::WARN:  return "WARN";
-        case LogLevel::ERROR: return "ERROR";
+        case LogLevel::ERR: return "ERROR";
         case LogLevel::NONE:  return "NONE";
         default:              return "UNKNOWN";
     }
@@ -70,7 +70,7 @@ LogLevel Logger::string_to_level(const std::string& level_str) {
     if (upper_str == "DEBUG") return LogLevel::DEBUG;
     if (upper_str == "INFO")  return LogLevel::INFO;
     if (upper_str == "WARN")  return LogLevel::WARN;
-    if (upper_str == "ERROR") return LogLevel::ERROR;
+    if (upper_str == "ERROR") return LogLevel::ERR;
     if (upper_str == "NONE")  return LogLevel::NONE;
     
     // 默认返回INFO级别
@@ -101,7 +101,7 @@ void Logger::log(LogLevel level, const char* file, int line, const char* format,
     
     // Format timestamp and header
     std::string timestamp = get_timestamp();
-    FILE* output = (level == LogLevel::ERROR) ? stderr : stdout;
+    FILE* output = (level == LogLevel::ERR) ? stderr : stdout;
     
     fprintf(output, "[%s] [%s] [%s:%d] ", 
             timestamp.c_str(), 
