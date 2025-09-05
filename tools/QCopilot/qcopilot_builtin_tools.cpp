@@ -939,6 +939,22 @@ json executeWriteFile(const json& args) {
         };
     }
 
+    // 路径安全检查：防止路径遍历攻击
+    if (path.find("..") != std::string::npos) {
+        return json{
+            { "error",   "Path traversal not allowed" },
+            { "success", false                        }
+        };
+    }
+
+    // 检查路径长度是否合理
+    if (path.length() > 4096) {
+        return json{
+            { "error",   "Path too long (maximum 4096 characters)" },
+            { "success", false                                     }
+        };
+    }
+
     std::string final_content = content;
     if (append && file_exists(path)) {
         std::string existing;
