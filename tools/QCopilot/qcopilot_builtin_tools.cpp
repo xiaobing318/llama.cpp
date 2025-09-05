@@ -109,14 +109,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "glob"},
-                {"description", R"(What it does — Cross-platform filename pattern matcher. Scans a base directory and returns regular files whose *filenames* match a wildcard. The token '**' is only a recursion switch; actual filename matching uses '*' (prefix/suffix/infix).
-    What it can do — (1) Non-recursive or recursive traversal (triggered by '**'); (2) Match by simple '*' wildcards on the final filename segment; (3) Toggle case sensitivity; (4) Cap results via 'max_results' and set 'truncated=true' when reached; (5) Work with absolute or relative 'path', supporting both '/' and '\' separators.
-    When to use — Bulk file discovery before downstream steps (e.g., feed results to grep, compilers, converters), selectively narrowing huge trees, or preparing input manifests.
-    Examples — 
-    - args: {'path':'src','pattern':'**/*.cpp'}  // recursively list all C++ sources under src
-    - args: {'pattern':'*.md','case_sensitive':false,'max_results':50}  // case-insensitive markdown in cwd, capped at 50
-    - args: {'path':'data','pattern':'backup_*_2025.*'}  // find year-tagged backups in a folder
-    - args: {'path':'.','pattern':'**/Dockerfile'}  // locate Dockerfiles anywhere beneath cwd)"},
+                {"description", "Cross-platform filename pattern discovery utility for locating regular files by wildcard rules within a base directory. Essential for build pipelines, code search pre-filters, dataset selection, and batch operations where fast filename filtering is needed at scale. Capabilities: (1) Non-recursive or recursive traversal (triggered by the presence of '**' in the pattern; '**' only toggles recursion, actual filename matching still uses '*') (2) Match on the final filename segment using '*' for prefix/suffix/infix patterns (3) Case sensitivity control for cross-OS behavior (4) Soft cap on results via 'max_results' with 'truncated=true' when reached (5) Works with absolute or relative 'path' and both '/' and '\\' separators. Typical scenarios: preparing input manifests for compilers/converters, narrowing very large trees before grep/search, collecting assets for packaging. Examples: args {'path':'src','pattern':'**/*.cpp'} (recursively list C++ sources under src); args {'pattern':'*.md','case_sensitive':false,'max_results':50} (case-insensitive markdown in cwd, capped at 50); args {'path':'data','pattern':'backup_*_2025.*'} (find year-tagged backups); args {'path':'.','pattern':'**/Dockerfile'} (locate Dockerfiles anywhere below cwd)."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
@@ -138,14 +131,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "grep"},
-                {"description", R"(What it does — Text search over a single file or an entire directory tree. Supports literal substring search or ECMAScript regular expressions. Optional filename filtering via a simple '*' pattern. Returns per-hit objects with 'file', 'line_content', and optionally 'line_number'. Respects 'max_matches' (sets 'truncated=true' when reached).
-    What it can do — (1) Recursive search across many files; (2) Literal or regex matching ('regex': true); (3) Case-insensitive or sensitive search; (4) Include only files whose basenames match 'include' (e.g., '*.cpp'); (5) Return line numbers for easy navigation.
-    When to use — Code navigation/refactors (find usages, class definitions), log mining (ERROR/FATAL bursts), configuration audits (flags/keys), security sweeps (secret patterns), and lightweight data extraction without external tools.
-    Examples — 
-    - args: {'path':'src','pattern':'TODO','include':'*.cpp'}  // find TODOs in C++ sources recursively
-    - args: {'path':'README.md','pattern':'\bclass\s+\w+','regex':true}  // regex for class definitions in a single file
-    - args: {'pattern':'ERROR|FATAL','regex':true,'case_sensitive':false}  // errors across current dir, case-insensitive
-    - args: {'path':'logs','pattern':'session_id=','include':'*.log','max_matches':1000}  // cap hits for performance)"},
+                {"description", "High-throughput text search utility for a single file or an entire directory tree. Supports literal substring search or ECMAScript regular expressions, optional filename include filter with '*', line numbers, case control, and global hit caps. Designed for code navigation/refactors, log mining, configuration audits, quick data extraction, and lightweight security sweeps without external tools. Capabilities: (1) Recursive directory search or single-file scan (2) Literal or regex matching via 'regex' (3) Case-insensitive or sensitive search (4) Basename filter using 'include' (e.g., '*.cpp') to reduce IO (5) Line numbers for direct navigation (6) 'max_matches' cap with 'truncated=true' when reached. Examples: args {'path':'src','pattern':'TODO','include':'*.cpp'} (find TODOs in C++ sources recursively); args {'path':'README.md','pattern':'\\bclass\\s+\\w+','regex':true} (regex for class definitions in a file); args {'pattern':'ERROR|FATAL','regex':true,'case_sensitive':false} (errors across current dir, case-insensitive); args {'path':'logs','pattern':'session_id=','include':'*.log','max_matches':1000} (cap hits for performance)."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
@@ -233,14 +219,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "list_directory"},
-                {"description", R"(What it does — Lists directory entries with optional recursion, hidden-item visibility, type filtering (files/dirs), extension allow-list, sorting, and pagination. Each entry may include size and modified time; human-readable size is included when requested.
-    What it can do — (1) Traverse one folder or the whole subtree; (2) Filter to files only or dirs only; (3) Restrict by extensions (e.g., 'cpp,h,py'); (4) Sort by name/size/modified with asc/desc; (5) Paginate via 'offset' and 'limit'; (6) Cap enumeration via 'max_results' and set 'truncated=true' when hit.
-    When to use — Project inventory, build preparation (collect inputs), housekeeping (find largest/oldest), packaging/backup manifests, or pre-filtering before heavy downstream steps.
-    Examples — 
-    - args: {'path':'.','kinds':'files','ext_filter':'cpp,h'}  // list C/C++ sources in cwd
-    - args: {'path':'data','recursive':true,'sort_by':'size','order':'desc','limit':100}  // top 100 largest under data
-    - args: {'path':'.','show_hidden':true,'kinds':'dirs'}  // include hidden directories
-    - args: {'path':'assets','sort_by':'modified','order':'desc','offset':50,'limit':25}  // paged recent items)"},
+                {"description", "Comprehensive directory enumeration utility with recursion, hidden-item visibility, kind filtering (files/dirs), extension allow-list, sorting, pagination, and optional size/timestamp enrichment. Ideal for project inventories, build prep, housekeeping (largest/oldest), packaging manifests, and pre-filters before heavier steps. Capabilities: (1) Single folder or full subtree traversal (2) Filter to 'files' or 'dirs' via 'kinds' (3) Restrict by extensions (e.g., 'cpp,h,py') via 'ext_filter' (4) Sort by 'name'/'size'/'modified' with 'asc'/'desc' (5) Paginate using 'offset' and 'limit' (6) Soft cap via 'max_results' and 'truncated=true' when reached (7) Optional size and human-readable sizes, plus modified time. Examples: args {'path':'.','kinds':'files','ext_filter':'cpp,h'} (list C/C++ sources in cwd); args {'path':'data','recursive':true,'sort_by':'size','order':'desc','limit':100} (top 100 largest under data); args {'path':'.','show_hidden':true,'kinds':'dirs'} (include hidden directories); args {'path':'assets','sort_by':'modified','order':'desc','offset':50,'limit':25} (paged recent items)."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
