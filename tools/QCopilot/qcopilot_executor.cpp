@@ -15,6 +15,8 @@
 // 4. 平台特定头文件
 #ifdef _WIN32
     // Windows platform specific headers
+    #define NOMINMAX
+    #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
 #else
     // Linux platform specific headers
