@@ -101,9 +101,6 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
     
-    
-    // Claude Code风格工具
-    
     // glob tool
     definitions.push_back({
         "glob",

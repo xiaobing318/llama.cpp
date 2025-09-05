@@ -12,11 +12,11 @@ using json = nlohmann::ordered_json;
 
 // Logging system
 enum class LogLevel {
-    DEBUG = 0,
-    INFO = 1,
-    WARN = 2,
-    ERR = 3,    // 避免与Windows ERROR宏冲突，如果命名为 ERROR 则会与 Windows 中的 ERROR 宏冲突。
-    NONE = 4    // 完全禁用日志
+    INFO = 0,
+    WARN = 1,
+    ERR = 2,    // 避免与Windows ERROR宏冲突，如果命名为 ERROR 则会与 Windows 中的 ERROR 宏冲突。
+    DEBUG = 3,
+    NONE  = 4,  // 完全禁用日志
 };
 
 class Logger {

@@ -24,7 +24,7 @@
 
 namespace fs = std::filesystem;
 
-// Logger implementation
+// 如果配置中没有设置日志详细级别，这里默认将日志基准级别设置成 INFO 级别。
 LogLevel Logger::current_level_ = LogLevel::INFO;
 std::mutex Logger::level_mutex_;
 
