@@ -11,6 +11,7 @@
 #include <mutex>
 #include <cstdarg>
 #include <cctype>
+#include <set>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -48,7 +49,7 @@ std::string Logger::get_timestamp() {
     auto time_t = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
-    
+
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
     ss << '.' << std::setfill('0') << std::setw(3) << ms.count();
@@ -69,13 +70,13 @@ const char* Logger::level_to_string(LogLevel level) {
 LogLevel Logger::string_to_level(const std::string& level_str) {
     std::string upper_str = level_str;
     std::transform(upper_str.begin(), upper_str.end(), upper_str.begin(), ::toupper);
-    
+
     if (upper_str == "DEBUG") return LogLevel::DEBUG;
     if (upper_str == "INFO")  return LogLevel::INFO;
     if (upper_str == "WARN")  return LogLevel::WARN;
     if (upper_str == "ERROR") return LogLevel::ERR;
     if (upper_str == "NONE")  return LogLevel::NONE;
-    
+
     // 默认返回INFO级别
     return LogLevel::INFO;
 }
@@ -92,32 +93,32 @@ void Logger::log(LogLevel level, const char* file, int line, const char* format,
             return;
         }
     }
-    
+
     // Thread-safe logging
     static std::mutex log_mutex;
     std::lock_guard<std::mutex> lock(log_mutex);
-    
+
     // Extract filename from path for cleaner output
     const char* filename = strrchr(file, '/');
     if (!filename) filename = strrchr(file, '\\');  // Windows path separator
     filename = filename ? filename + 1 : file;
-    
+
     // Format timestamp and header
     std::string timestamp = get_timestamp();
     FILE* output = (level == LogLevel::ERR) ? stderr : stdout;
-    
-    fprintf(output, "[%s] [%s] [%s:%d] ", 
-            timestamp.c_str(), 
-            level_to_string(level), 
-            filename, 
+
+    fprintf(output, "[%s] [%s] [%s:%d] ",
+            timestamp.c_str(),
+            level_to_string(level),
+            filename,
             line);
-    
+
     // Format and output the message
     va_list args;
     va_start(args, format);
     vfprintf(output, format, args);
     va_end(args);
-    
+
     // Ensure newline at the end of each log message
     fprintf(output, "\n");
     fflush(output);
@@ -164,11 +165,11 @@ std::vector<std::string> split_string(const std::string& str, char delimiter) {
     if (str.empty()) {
         return {};
     }
-    
+
     std::vector<std::string> tokens;
     // Reserve space for better performance
     tokens.reserve(std::count(str.begin(), str.end(), delimiter) + 1);
-    
+
     std::stringstream ss(str);
     std::string token;
     while (std::getline(ss, token, delimiter)) {
@@ -180,17 +181,17 @@ std::vector<std::string> split_string(const std::string& str, char delimiter) {
 std::string join_strings(const std::vector<std::string>& strings, const std::string& delimiter) {
     if (strings.empty()) return "";
     if (strings.size() == 1) return strings[0];
-    
+
     // Calculate total size for better performance
     size_t total_size = 0;
     for (const auto& str : strings) {
         total_size += str.size();
     }
     total_size += delimiter.size() * (strings.size() - 1);
-    
+
     std::string result;
     result.reserve(total_size);
-    
+
     result = strings[0];
     for (size_t i = 1; i < strings.size(); ++i) {
         result += delimiter;
@@ -199,11 +200,93 @@ std::string join_strings(const std::vector<std::string>& strings, const std::str
     return result;
 }
 
+std::string sanitize_string_for_json(const std::string& str) {
+    if (str.empty()) {
+        return str;
+    }
+    /*
+        清理字符串中的控制字符和无效UTF-8字节
+        1. 先验证整个字符串是否为有效UTF-8
+        2. 如果不是，则逐字符清理
+    */
+    bool is_valid_utf8 = true;
+    for (size_t i = 0; i < str.size(); ) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+
+        if (c < 0x80) {
+            // ASCII字符
+            i++;
+        } else if ((c & 0xE0) == 0xC0) {
+            // 2字节UTF-8
+            if (i + 1 >= str.size() || (static_cast<unsigned char>(str[i+1]) & 0xC0) != 0x80) {
+                is_valid_utf8 = false;
+                break;
+            }
+            i += 2;
+        } else if ((c & 0xF0) == 0xE0) {
+            // 3字节UTF-8
+            if (i + 2 >= str.size() ||
+                (static_cast<unsigned char>(str[i+1]) & 0xC0) != 0x80 ||
+                (static_cast<unsigned char>(str[i+2]) & 0xC0) != 0x80) {
+                is_valid_utf8 = false;
+                break;
+            }
+            i += 3;
+        } else if ((c & 0xF8) == 0xF0) {
+            // 4字节UTF-8
+            if (i + 3 >= str.size() ||
+                (static_cast<unsigned char>(str[i+1]) & 0xC0) != 0x80 ||
+                (static_cast<unsigned char>(str[i+2]) & 0xC0) != 0x80 ||
+                (static_cast<unsigned char>(str[i+3]) & 0xC0) != 0x80) {
+                is_valid_utf8 = false;
+                break;
+            }
+            i += 4;
+        } else {
+            is_valid_utf8 = false;
+            break;
+        }
+    }
+
+    // 如果整个字符串都是有效UTF-8，直接返回
+    if (is_valid_utf8) {
+        return str;
+    }
+
+    // 否则，逐字节处理并清理
+    std::string result;
+    result.reserve(str.size());
+
+    for (size_t i = 0; i < str.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+
+        if (c < 32) {
+            // 控制字符
+            if (c == '\n' || c == '\r' || c == '\t') {
+                result += c;
+            } else {
+                result += ' ';
+            }
+        } else if (c < 127) {
+            // 正常ASCII字符
+            result += c;
+        } else if (c == 127) {
+            // DEL字符
+            result += ' ';
+        } else {
+            // 高位字符，保留原始字节（应该是有效的UTF-8）
+            result += c;
+        }
+    }
+
+    return result;
+}
+
 bool file_exists(const std::string& path) {
     if (path.empty()) {
         return false;
     }
-    
+
     try {
         return fs::exists(path);
     } catch (const fs::filesystem_error& e) {
@@ -217,7 +300,7 @@ bool read_file_content(const std::string& path, std::string& content) {
         LOG_ERR("Empty path provided to read_file_content");
         return false;
     }
-    
+
     try {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
@@ -228,25 +311,25 @@ bool read_file_content(const std::string& path, std::string& content) {
         // 获取文件大小
         file.seekg(0, std::ios::end);
         std::streampos file_size = file.tellg();
-        
+
         // 检查 tellg() 是否失败
         if (file_size == std::streampos(-1)) {
             LOG_ERR("Failed to get file size for %s", path.c_str());
             return false;  // RAII will handle file close
         }
-        
+
         // 检查文件是否为空
         if (file_size == 0) {
             content.clear();
             return true;  // RAII will handle file close
         }
-        
+
         // 转换为 size_t 并检查是否超出合理范围
         size_t size = static_cast<size_t>(file_size);
         const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
-        
+
         if (size > MAX_FILE_SIZE) {
-            LOG_ERR("File %s is too large (%zu bytes, maximum %zu bytes)", 
+            LOG_ERR("File %s is too large (%zu bytes, maximum %zu bytes)",
                     path.c_str(), size, MAX_FILE_SIZE);
             return false;  // RAII will handle file close
         }
@@ -268,25 +351,25 @@ bool read_file_content(const std::string& path, std::string& content) {
 
         // 读取文件内容
         file.read(&content[0], size);
-        
+
         // 检查读取是否成功
         if (file.fail() && !file.eof()) {
-            LOG_ERR("Failed to read file %s (read %zu bytes out of %zu)", 
+            LOG_ERR("Failed to read file %s (read %zu bytes out of %zu)",
                     path.c_str(), static_cast<size_t>(file.gcount()), size);
             content.clear();
             return false;  // RAII will handle file close
         }
-        
+
         // 调整内容大小为实际读取的字节数
         size_t bytes_read = static_cast<size_t>(file.gcount());
         if (bytes_read != size) {
-            LOG_WRN("Read %zu bytes from file %s, expected %zu bytes", 
+            LOG_WRN("Read %zu bytes from file %s, expected %zu bytes",
                     bytes_read, path.c_str(), size);
             content.resize(bytes_read);
         }
 
         return true;  // RAII will handle file close
-        
+
     } catch (const std::ios_base::failure& e) {
         LOG_ERR("IO error reading file %s: %s", path.c_str(), e.what());
         content.clear();
@@ -315,16 +398,16 @@ bool write_file_content(const std::string& path, const std::string& content) {
         }
 
         file.write(content.c_str(), content.size());
-        
+
         // Check if write operation failed
         if (file.fail()) {
             LOG_ERR("Failed to write content to file %s", path.c_str());
             file.close();
             return false;
         }
-        
+
         file.close();
-        
+
         // Check if close operation failed
         if (file.fail()) {
             LOG_ERR("Failed to close file %s after writing", path.c_str());
@@ -337,6 +420,286 @@ bool write_file_content(const std::string& path, const std::string& content) {
         return false;
     } catch (const std::exception& e) {
         LOG_ERR("Unexpected error writing file %s: %s", path.c_str(), e.what());
+        return false;
+    }
+}
+
+bool read_text_file_with_encoding_and_range(
+    const std::string& path,
+    int start_line,
+    int end_line,
+    std::string& content,
+    int& lines_read,
+    int& actual_end_line) {
+    // 如果路径为空，直接返回错误
+    if (path.empty()) {
+        LOG_ERR("Empty path provided to read_text_file_with_encoding_and_range");
+        return false;
+    }
+
+    try {
+        // 使用二进制模式打开文件，避免文本模式的编码转换问题
+        std::ifstream file(path, std::ios::binary);
+        // 检查文件是否成功打开
+        if (!file.is_open()) {
+            LOG_ERR("Failed to open text file %s", path.c_str());
+            return false;
+        }
+
+        // 基于文件扩展名判断是否为文本文件
+        std::filesystem::path fs_path(path);
+        std::string extension = fs_path.extension().string();
+
+        // 转换为小写以便比较
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+        // 定义常见的文本文件扩展名
+        std::set<std::string> text_extensions = {
+            // 源代码文件
+            ".c", ".cpp", ".cxx", ".cc", ".c++", ".h", ".hpp", ".hxx", ".hh", ".h++",
+            ".py", ".pyw", ".java", ".js", ".jsx", ".ts", ".tsx", ".php", ".rb", ".go",
+            ".rs", ".swift", ".kt", ".scala", ".clj", ".hs", ".ml", ".fs", ".vb", ".cs",
+            ".pl", ".pm", ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+
+            // 配置文件
+            ".ini", ".conf", ".config", ".cfg", ".toml", ".yaml", ".yml", ".json",
+            ".xml", ".plist", ".properties", ".env", ".gitignore", ".gitconfig",
+
+            // 文档和标记语言
+            ".txt", ".md", ".markdown", ".rst", ".asciidoc", ".tex", ".rtf",
+            ".html", ".htm", ".xhtml", ".css", ".scss", ".sass", ".less",
+
+            // 数据文件
+            ".csv", ".tsv", ".sql", ".log", ".logs", ".out", ".err",
+
+            // 脚本和配置
+            ".makefile", ".cmake", ".dockerfile", ".vagrantfile",
+            ".gemfile", ".podfile", ".rakefile",
+
+            // 其他常见文本格式
+            ".diff", ".patch", ".asm", ".s", ".inc", ".def", ".idl",
+            ".proto", ".thrift", ".avro", ".graphql", ".gql",
+
+            // Web相关
+            ".vue", ".svelte", ".angular", ".jsp", ".asp", ".aspx", ".ejs", ".hbs",
+
+            // 模板文件
+            ".tpl", ".template", ".tmpl", ".mustache", ".handlebars",
+
+            // 数据交换格式
+            ".rss", ".atom", ".opml", ".kml", ".gpx", ".svg",
+
+            // 版本控制和项目文件
+            ".gitattributes", ".editorconfig", ".eslintrc", ".prettierrc",
+            ".babelrc", ".npmignore", ".dockerignore",
+
+            // 无扩展名的常见文件（通过文件名判断）
+            // 这些将在后面单独处理
+        };
+
+        // 检查扩展名是否在文本文件列表中
+        bool is_text_by_extension = text_extensions.find(extension) != text_extensions.end();
+
+        // 对于没有扩展名的文件，检查常见的文本文件名
+        if (extension.empty()) {
+            std::string filename = fs_path.filename().string();
+            std::transform(filename.begin(), filename.end(), filename.begin(), ::tolower);
+
+            std::set<std::string> text_filenames = {
+                "readme", "license", "copying", "changelog", "changes", "news",
+                "authors", "contributors", "install", "todo", "makefile",
+                "dockerfile", "vagrantfile", "gemfile", "rakefile", "podfile",
+                "cmakelists.txt", ".gitignore", ".gitconfig", ".editorconfig",
+                ".eslintrc", ".prettierrc", ".babelrc", ".npmignore", ".dockerignore"
+            };
+
+            is_text_by_extension = text_filenames.find(filename) != text_filenames.end();
+        }
+
+        // 如果根据扩展名判断不是文本文件，直接返回错误
+        if (!is_text_by_extension) {
+            LOG_ERR("File %s does not have a recognized text file extension", path.c_str());
+            return false;
+        }
+
+        // 读取整个文件内容
+        std::string file_content;
+        file.seekg(0, std::ios::end);
+        size_t file_size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        file_content.resize(file_size);
+        file.read(&file_content[0], file_size);
+
+        // 手动分割行
+        std::vector<std::string> lines;
+        std::istringstream iss(file_content);
+        std::string line;
+
+        while (std::getline(iss, line)) {
+            lines.push_back(line);
+        }
+
+        // 根据行范围提取内容
+        int current_line = 1;
+        lines_read = 0;
+        actual_end_line = end_line;
+
+        content.clear();
+        for (size_t i = 0; i < lines.size(); ++i) {
+            if (current_line >= start_line) {
+                if (lines_read > 0) {
+                    content += '\n';
+                }
+                content += lines[i];
+                lines_read++;
+
+                // 如果指定了结束行且到达了结束行，停止
+                if (end_line != -1 && current_line >= end_line) {
+                    actual_end_line = current_line;
+                    break;
+                }
+            }
+            current_line++;
+        }
+
+        // 如果end_line为-1或超出文件实际行数，更新actual_end_line
+        if (end_line == -1 || current_line <= end_line) {
+            actual_end_line = current_line - 1;
+        }
+
+        return true;
+
+    } catch (const std::ios_base::failure& e) {
+        LOG_ERR("IO error reading text file %s: %s", path.c_str(), e.what());
+        content.clear();
+        lines_read = 0;
+        return false;
+    } catch (const std::exception& e) {
+        LOG_ERR("Error reading text file %s: %s", path.c_str(), e.what());
+        content.clear();
+        lines_read = 0;
+        return false;
+    } catch (...) {
+        LOG_ERR("Unknown error reading text file %s", path.c_str());
+        content.clear();
+        lines_read = 0;
+        return false;
+    }
+}
+
+bool is_valid_utf8_file(const std::string& path) {
+    if (path.empty()) {
+        LOG_ERR("Empty path provided to is_valid_utf8_file");
+        return false;
+    }
+
+    try {
+        std::ifstream file(path, std::ios::binary);
+        if (!file.is_open()) {
+            LOG_ERR("Failed to open file for UTF-8 validation: %s", path.c_str());
+            return false;
+        }
+
+        // 获取文件大小
+        file.seekg(0, std::ios::end);
+        std::streampos file_size = file.tellg();
+        
+        if (file_size == std::streampos(-1)) {
+            LOG_ERR("Failed to get file size for UTF-8 validation: %s", path.c_str());
+            return false;
+        }
+
+        // 空文件被认为是有效的 UTF-8
+        if (file_size == 0) {
+            return true;
+        }
+
+        // 限制检查文件大小（防止内存溢出）
+        const size_t MAX_CHECK_SIZE = 10 * 1024 * 1024; // 10MB
+        size_t size = static_cast<size_t>(file_size);
+        if (size > MAX_CHECK_SIZE) {
+            size = MAX_CHECK_SIZE;
+            LOG_WRN("File too large for full UTF-8 validation, checking first %zu bytes: %s", 
+                    MAX_CHECK_SIZE, path.c_str());
+        }
+
+        // 回到文件开始位置
+        file.seekg(0, std::ios::beg);
+        if (file.fail()) {
+            LOG_ERR("Failed to seek to beginning for UTF-8 validation: %s", path.c_str());
+            return false;
+        }
+
+        // 读取文件内容
+        std::vector<unsigned char> buffer(size);
+        file.read(reinterpret_cast<char*>(buffer.data()), size);
+        
+        if (file.fail() && !file.eof()) {
+            LOG_ERR("Failed to read file for UTF-8 validation: %s", path.c_str());
+            return false;
+        }
+
+        size_t bytes_read = static_cast<size_t>(file.gcount());
+
+        // UTF-8 验证逻辑
+        for (size_t i = 0; i < bytes_read; ) {
+            unsigned char c = buffer[i];
+            
+            if (c < 0x80) {
+                // ASCII 字符 (0xxxxxxx)
+                i++;
+            } else if ((c & 0xE0) == 0xC0) {
+                // 2字节序列 (110xxxxx 10xxxxxx)
+                if (i + 1 >= bytes_read) return false;
+                if ((buffer[i + 1] & 0xC0) != 0x80) return false;
+                // 检查过短编码
+                if (c < 0xC2) return false;
+                i += 2;
+            } else if ((c & 0xF0) == 0xE0) {
+                // 3字节序列 (1110xxxx 10xxxxxx 10xxxxxx)
+                if (i + 2 >= bytes_read) return false;
+                if ((buffer[i + 1] & 0xC0) != 0x80) return false;
+                if ((buffer[i + 2] & 0xC0) != 0x80) return false;
+                // 检查过短编码和代理对
+                uint32_t codepoint = ((c & 0x0F) << 12) | 
+                                   ((buffer[i + 1] & 0x3F) << 6) | 
+                                   (buffer[i + 2] & 0x3F);
+                if (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+                    return false;
+                }
+                i += 3;
+            } else if ((c & 0xF8) == 0xF0) {
+                // 4字节序列 (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+                if (i + 3 >= bytes_read) return false;
+                if ((buffer[i + 1] & 0xC0) != 0x80) return false;
+                if ((buffer[i + 2] & 0xC0) != 0x80) return false;
+                if ((buffer[i + 3] & 0xC0) != 0x80) return false;
+                // 检查过短编码和超出范围的码点
+                uint32_t codepoint = ((c & 0x07) << 18) | 
+                                   ((buffer[i + 1] & 0x3F) << 12) |
+                                   ((buffer[i + 2] & 0x3F) << 6) | 
+                                   (buffer[i + 3] & 0x3F);
+                if (codepoint < 0x10000 || codepoint > 0x10FFFF) {
+                    return false;
+                }
+                i += 4;
+            } else {
+                // 无效的UTF-8起始字节
+                return false;
+            }
+        }
+
+        return true;
+
+    } catch (const std::ios_base::failure& e) {
+        LOG_ERR("IO error during UTF-8 validation of file %s: %s", path.c_str(), e.what());
+        return false;
+    } catch (const std::exception& e) {
+        LOG_ERR("Error during UTF-8 validation of file %s: %s", path.c_str(), e.what());
+        return false;
+    } catch (...) {
+        LOG_ERR("Unknown error during UTF-8 validation of file %s", path.c_str());
         return false;
     }
 }
@@ -364,7 +727,7 @@ std::pair<bool, std::string> execute_command(const std::string& command) {
         LOG_ERR("Empty command provided to execute_command");
         return {false, "ERROR: Empty command"};
     }
-    
+
     std::string result;
 
 #ifdef _WIN32
@@ -421,7 +784,7 @@ json safe_parse_json(const std::string& str) {
         LOG_WRN("Empty string provided to safe_parse_json");
         return json();
     }
-    
+
     try {
         return json::parse(str);
     } catch (const json::parse_error& e) {

@@ -45,13 +45,12 @@ std::vector<json> searchInFileRegex(
 // 各个内置工具的具体实现函数，静态函数，完全独立
 json executeGetCurrentTime(const json& args);
 json executeCalculate(const json& args);
-json executeReadFile(const json& args);
+json executeReadTextFile(const json& args);
 json executeWriteFile(const json& args);
 json executeGlob(const json& args);
 json executeGrep(const json& args);
-json executeMultiEdit(const json& args);
 json executeEdit(const json& args);
-json executeBash(const json& args);
 json executeListDirectory(const json& args);
 json executeFileStats(const json& args);
+json executeCheckUtf8Encoding(const json& args);
 } // namespace BuiltinTools

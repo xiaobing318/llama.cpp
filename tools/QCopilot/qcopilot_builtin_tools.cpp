@@ -61,19 +61,20 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
 
-    // read_file tool
+    // read_text_file tool
     definitions.push_back({
-        "read_file",
+        "read_text_file",
         {
             {"type", "function"},
             {"function", {
-                {"name", "read_file"},
-                {"description", "Comprehensive file reading utility for loading and processing various file types including text documents, configuration files, data files, and source code. Essential for data analysis workflows, configuration management, log analysis, and content processing. Primary use cases: 1) Loading configuration files (.ini, .conf, .json, .yaml) for application settings 2) Reading data files (.csv, .tsv, .txt) for analysis and processing 3) Accessing log files (.log) for debugging and monitoring 4) Loading source code (.py, .js, .cpp, .h) for analysis and documentation 5) Reading project files (.qgs, .qgz, .xml) for metadata extraction 6) Processing documentation (.md, .rst, .txt) for content management. Supports multiple text encodings and provides robust error handling for file system operations."},
+                {"name", "read_text_file"},
+                {"description", "Specialized UTF-8 text file reading utility for loading text documents with line range selection. Designed exclusively for UTF-8 encoded text files (not binary files). Primary use cases: 1) Reading UTF-8 configuration files (.ini, .conf, .json, .yaml) 2) Loading UTF-8 source code files (.py, .js, .cpp, .h) 3) Processing UTF-8 log files (.log) 4) Reading UTF-8 documentation (.md, .rst, .txt) 5) Extracting specific line ranges from large UTF-8 text files for analysis. Only supports UTF-8 character encoding. Does not read binary files or provide file metadata - focuses solely on UTF-8 text content extraction.Before using this tool, you need to use the built-in tool check_utf8_encoding to check whether the character set encoding of the file is UTF-8."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "Complete file path (absolute or relative) to the target file. Supports various formats including './data/config.json', '/home/user/logs/app.log', 'C:/Users/Name/Documents/file.txt', '../project/src/main.py'. Path separators are automatically handled across platforms."}}},
-                        {"encoding", {{"type", "string"}, {"description", "Text encoding specification for proper character interpretation: 'utf-8' (default, recommended for modern applications and international text), 'ascii' (for legacy English-only files), 'gbk' (for Chinese Windows systems), 'iso-8859-1' (for Western European text), 'cp1252' (Windows Western encoding). Auto-detects if not specified."}}}
+                        {"path", {{"type", "string"}, {"description", "The full file path (absolute or relative) of the target UTF-8 text file. For example: \"./config.txt\", \"/var/log/app.log\", \"C:/Documents/readme.md\". Only UTF-8 text files are supported; binary files will be rejected. Also, please carefully check that the full file path you are extracting contains no spaces."}}},
+                        {"start_line", {{"type", "integer"}, {"description", "Starting line number for range reading (1-based indexing). Default 1 (first line). Use with end_line to read specific sections of large files."}}},
+                        {"end_line", {{"type", "integer"}, {"description", "Ending line number for range reading (1-based indexing, inclusive). Default -1 (last line). Combined with start_line allows reading specific portions of files."}}}
                     }},
                     {"required", {"path"}}
                 }}
@@ -191,27 +192,6 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
 
-    // bash tool
-    definitions.push_back({
-        "bash",
-        {
-            {"type", "function"},
-            {"function", {
-                {"name", "bash"},
-                {"description", "Comprehensive system command execution interface providing access to shell/command-line operations across platforms. Enables automation, system administration, development workflow integration, and infrastructure management. Essential for DevOps pipelines, build automation, system monitoring, and development tool integration. Primary applications: 1) File system operations (create directories, move files, set permissions, archive data) 2) Process management (start/stop services, monitor resource usage, manage background tasks) 3) Development workflow automation (run build scripts, execute tests, deploy applications, manage dependencies) 4) System information gathering (check disk space, monitor performance, query system status) 5) Version control operations (git commands, repository management, branch operations) 6) Network operations (connectivity tests, file transfers, API calls) 7) Database operations (backups, imports, maintenance scripts). Includes safety measures and timeout controls for reliable automation. Cross-platform compatibility with Windows cmd/PowerShell and Unix shell environments."},
-                {"parameters", {
-                    {"type", "object"},
-                    {"properties", {
-                        {"command", {{"type", "string"}, {"description", "Shell command to execute with full argument list. Examples: 'ls -la /home/user' (list directory), 'git status --porcelain' (check git status), 'npm install --production' (install dependencies), 'docker ps -a' (list containers), 'python -m pytest tests/' (run tests), 'curl -s https://api.example.com/health' (health check). Use appropriate syntax for target platform (Unix: ls, ps, grep; Windows: dir, tasklist, findstr)."}}},
-                        {"timeout", {{"type", "number"}, {"description", "Maximum execution time in milliseconds before command termination. Defaults to 30000 (30 seconds). Use higher values for long-running operations like builds or data processing. Examples: 60000 for compile operations, 300000 for large file transfers, 10000 for quick queries."}}},
-                        {"description", {{"type", "string"}, {"description", "Human-readable description of the command's purpose for logging and audit trails. Examples: 'Build production assets', 'Check system disk usage', 'Deploy to staging server', 'Run integration tests'. Helps with debugging and operation tracking."}}}
-                    }},
-                    {"required", {"command"}}
-                }}
-            }}
-        }
-    });
-
     // list_directory tool
     definitions.push_back({
         "list_directory",
@@ -262,6 +242,25 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
 
+    // check_utf8_encoding tool
+    definitions.push_back({
+        "check_utf8_encoding",
+        {
+            {"type", "function"},
+            {"function", {
+                {"name", "check_utf8_encoding"},
+                {"description", "UTF-8 encoding validation tool for text files. Verifies whether a specified file contains valid UTF-8 encoded content. Essential for text processing workflows, data validation, and ensuring compatibility with UTF-8-only tools. Primary use cases: 1) Pre-processing validation before using UTF-8-only text tools 2) Data import validation to ensure encoding compatibility 3) File conversion workflow validation 4) International text content verification 5) Web content encoding validation. Performs comprehensive UTF-8 validation including proper byte sequences, overlong encodings, and invalid code points. Supports files up to 10MB for validation performance."},
+                {"parameters", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"path", {{"type", "string"}, {"description", "Complete file path (absolute or relative) to the file to validate for UTF-8 encoding. Examples: './document.txt', '/var/log/application.log', 'C:/Data/content.csv'. Only regular files are supported."}}}
+                    }},
+                    {"required", {"path"}}
+                }}
+            }}
+        }
+    });
+
     return definitions;
 }
 
@@ -277,8 +276,8 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
         return executeCalculate(args);
     };
 
-    functions["read_file"] = [](const json& args) {
-        return executeReadFile(args);
+    functions["read_text_file"] = [](const json& args) {
+        return executeReadTextFile(args);
     };
 
     functions["write_file"] = [](const json& args) {
@@ -293,16 +292,8 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
         return executeGrep(args);
     };
 
-    functions["multiedit"] = [](const json& args) {
-        return executeMultiEdit(args);
-    };
-
     functions["edit"] = [](const json& args) {
         return executeEdit(args);
-    };
-
-    functions["bash"] = [](const json& args) {
-        return executeBash(args);
     };
 
     functions["list_directory"] = [](const json& args) {
@@ -311,6 +302,10 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
 
     functions["file_stats"] = [](const json& args) {
         return executeFileStats(args);
+    };
+
+    functions["check_utf8_encoding"] = [](const json& args) {
+        return executeCheckUtf8Encoding(args);
     };
 
     return functions;
@@ -831,17 +826,33 @@ json executeCalculate(const json& args) {
     }
 }
 
-json executeReadFile(const json& args) {
+json executeReadTextFile(const json& args) {
+    //  从json参数中提取输入，如果有就获取，否则使用默认值
     std::string path = args.value("path", "");
-    std::string encoding = args.value("encoding", "utf-8");
+    int start_line = args.value("start_line", 1);
+    int end_line = args.value("end_line", -1);
 
+    // 判断输入的路径是否为空
     if (path.empty()) {
         return json{
             {"error", "Path is required"},
             {"success", false}
         };
     }
-
+    // 验证行号参数
+    if (start_line < 1) {
+        return json{
+            {"error", "start_line must be >= 1"},
+            {"success", false}
+        };
+    }
+    // end_line 为 -1 表示读取到文件末尾
+    if (end_line != -1 && end_line < start_line) {
+        return json{
+            {"error", "end_line must be >= start_line or -1 for end of file"},
+            {"success", false}
+        };
+    }
     // 路径安全检查：防止路径遍历攻击
     if (path.find("..") != std::string::npos) {
         return json{
@@ -849,7 +860,6 @@ json executeReadFile(const json& args) {
             {"success", false}
         };
     }
-
     // 检查路径长度是否合理
     if (path.length() > 4096) {
         return json{
@@ -865,7 +875,7 @@ json executeReadFile(const json& args) {
         // 检查路径是否存在
         if (!std::filesystem::exists(fs_path)) {
             return json{
-                {"error", "File or directory not found: " + path},
+                {"error", "File not found: " + path},
                 {"success", false}
             };
         }
@@ -873,7 +883,7 @@ json executeReadFile(const json& args) {
         // 检查是否是目录而不是文件
         if (std::filesystem::is_directory(fs_path)) {
             return json{
-                {"error", "Path is a directory, not a file: " + path},
+                {"error", "Path is a directory, not a text file: " + path},
                 {"success", false}
             };
         }
@@ -888,69 +898,56 @@ json executeReadFile(const json& args) {
 
         // 获取文件大小并检查是否过大
         auto file_size = std::filesystem::file_size(fs_path);
-        const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
-
+        // 100MB 限制
+        const size_t MAX_FILE_SIZE = 100 * 1024 * 1024;
+        // 如果文件过大，返回错误
         if (file_size > MAX_FILE_SIZE) {
             return json{
-                {"error", "File too large (maximum 100MB): " + std::to_string(file_size) + " bytes"},
+                {"error", "File too large for text reading (maximum 100MB): " + std::to_string(file_size) + " bytes"},
                 {"success", false}
             };
         }
 
-        // 检查文件权限（是否可读）
-        auto perms = std::filesystem::status(fs_path).permissions();
-        if ((perms & std::filesystem::perms::owner_read) == std::filesystem::perms::none &&
-            (perms & std::filesystem::perms::group_read) == std::filesystem::perms::none &&
-            (perms & std::filesystem::perms::others_read) == std::filesystem::perms::none) {
-            return json{
-                {"error", "File is not readable: " + path},
-                {"success", false}
-            };
-        }
-
+        // 读取文本文件内容
         std::string content;
-        if (!read_file_content(path, content)) {
+        int lines_read = 0;
+        int actual_end_line = end_line;
+        // 读取文件时进行错误处理
+        if (!read_text_file_with_encoding_and_range(path, start_line, end_line, content, lines_read, actual_end_line)) {
             return json{
-                {"error", "Failed to read file content: " + path},
+                {"error", "Failed to read UTF-8 text file. File may be binary or not UTF-8 encoded."},
                 {"success", false}
             };
         }
 
-        // 获取文件的实际路径（解析符号链接等）
-        std::string canonical_path;
-        try {
-            canonical_path = std::filesystem::canonical(fs_path).string();
-        } catch (const std::exception&) {
-            canonical_path = std::filesystem::absolute(fs_path).string();
+        // 对内容进行清理，确保JSON序列化安全
+        std::string safe_content = sanitize_string_for_json(content);
+
+        // 额外的安全措施：确保字符串长度合理，10MB限制
+        if (safe_content.size() > 10 * 1024 * 1024) {
+            LOG_WRN("Content too large (%zu bytes), truncating", safe_content.size());
+            safe_content = safe_content.substr(0, 10 * 1024 * 1024) + "...[truncated]";
         }
 
-        // 获取文件修改时间
-        std::string last_modified;
+        // 安全地构建JSON对象
+        json result;
+        result["success"] = true;
+        result["lines_read"] = lines_read;
+        result["start_line"] = start_line;
+        result["end_line"] = actual_end_line;
+
+        // 对路径字段进行清理
+        result["path"] = sanitize_string_for_json(path);
+
+        // 最后设置内容字段
         try {
-            auto ftime = std::filesystem::last_write_time(fs_path);
-            auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                ftime - std::filesystem::file_time_type::clock::now() +
-                std::chrono::system_clock::now()
-            );
-            auto time_t = std::chrono::system_clock::to_time_t(sctp);
-
-            std::ostringstream time_ss;
-            time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-            last_modified = time_ss.str();
-        } catch (const std::exception&) {
-            last_modified = "unknown";
+            result["content"] = safe_content;
+        } catch (const std::exception& e) {
+            LOG_ERR("Failed to set content field: %s", e.what());
+            result["content"] = "[content unavailable due to UTF-8 encoding issues]";
         }
-
-        return json{
-            {"path", path},
-            {"canonical_path", canonical_path},
-            {"content", content},
-            {"size", content.size()},
-            {"file_size", file_size},
-            {"encoding", encoding},
-            {"last_modified", last_modified},
-            {"success", true}
-        };
+        // 返回结果
+        return result;
 
     } catch (const std::filesystem::filesystem_error& e) {
         return json{
@@ -959,12 +956,12 @@ json executeReadFile(const json& args) {
         };
     } catch (const std::exception& e) {
         return json{
-            {"error", "Error reading file: " + std::string(e.what())},
+            {"error", "Error reading text file: " + std::string(e.what())},
             {"success", false}
         };
     } catch (...) {
         return json{
-            {"error", "Unknown error occurred while reading file"},
+            {"error", "Unknown error occurred while reading text file"},
             {"success", false}
         };
     }
@@ -1214,91 +1211,6 @@ json executeGrep(const json& args) {
     return result;
 }
 
-json executeMultiEdit(const json& args) {
-    std::string file_path = args.value("file_path", "");
-
-    if (file_path.empty()) {
-        return json{
-            {"error", "file_path is required"},
-            {"success", false}
-        };
-    }
-
-    if (!file_exists(file_path)) {
-        return json{
-            {"error", "File not found: " + file_path},
-            {"success", false}
-        };
-    }
-
-    if (!args.contains("edits") || !args["edits"].is_array()) {
-        return json{
-            {"error", "edits array is required"},
-            {"success", false}
-        };
-    }
-
-    // 读取文件内容
-    std::string content;
-    if (!read_file_content(file_path, content)) {
-        return json{
-            {"error", "Failed to read file"},
-            {"success", false}
-        };
-    }
-
-    std::string original_content = content;
-    json edit_results = json::array();
-    int successful_edits = 0;
-
-    // 执行每个编辑操作
-    for (const auto& edit : args["edits"]) {
-        if (!edit.contains("old_string") || !edit.contains("new_string")) {
-            edit_results.push_back({
-                {"error", "Edit missing old_string or new_string"},
-                {"success", false}
-            });
-            continue;
-        }
-
-        std::string old_string = edit["old_string"];
-        std::string new_string = edit["new_string"];
-        bool replace_all = edit.value("replace_all", false);
-
-        size_t pos = 0;
-        int replacements = 0;
-
-        while ((pos = content.find(old_string, pos)) != std::string::npos) {
-            content.replace(pos, old_string.length(), new_string);
-            pos += new_string.length();
-            replacements++;
-
-            if (!replace_all) break;
-        }
-
-        edit_results.push_back({
-            {"old_string", old_string},
-            {"new_string", new_string},
-            {"replacements", replacements},
-            {"success", replacements > 0}
-        });
-
-        if (replacements > 0) successful_edits++;
-    }
-
-    // 写入修改后的内容
-    bool write_success = write_file_content(file_path, content);
-
-    return json{
-        {"file_path", file_path},
-        {"total_edits", args["edits"].size()},
-        {"successful_edits", successful_edits},
-        {"edit_results", edit_results},
-        {"file_written", write_success},
-        {"success", write_success && successful_edits > 0}
-    };
-}
-
 json executeEdit(const json& args) {
     std::string file_path = args.value("file_path", "");
     std::string old_string = args.value("old_string", "");
@@ -1359,45 +1271,6 @@ json executeEdit(const json& args) {
         {"replacements", replacements},
         {"replace_all", replace_all},
         {"success", write_success}
-    };
-}
-
-json executeBash(const json& args) {
-    std::string command = args.value("command", "");
-    int timeout = args.value("timeout", 30000); // 30秒默认超时
-    std::string description = args.value("description", "");
-
-    if (command.empty()) {
-        return json{
-            {"error", "Command is required"},
-            {"success", false}
-        };
-    }
-
-    // 记录执行的命令
-    if (!description.empty()) {
-        LOG_INF("Executing bash command: %s - %s\n", description.c_str(), command.c_str());
-    } else {
-        LOG_INF("Executing bash command: %s\n", command.c_str());
-    }
-
-    // 执行命令
-    auto exec_result = execute_command(command);
-    bool command_success = exec_result.first;
-    std::string result = exec_result.second;
-
-    // 检查命令是否成功（使用execute_command的返回值和输出内容）
-    bool success = command_success &&
-                   result.find("command not found") == std::string::npos &&
-                   result.find("No such file") == std::string::npos &&
-                   result.find("Permission denied") == std::string::npos;
-
-    return json{
-        {"command", command},
-        {"description", description},
-        {"timeout", timeout},
-        {"output", result},
-        {"success", success}
     };
 }
 
@@ -1747,6 +1620,92 @@ json executeFileStats(const json& args) {
 
     stats["success"] = true;
     return stats;
+}
+
+json executeCheckUtf8Encoding(const json& args) {
+    std::string path = args.value("path", "");
+
+    if (path.empty()) {
+        return json{
+            {"error", "Path is required"},
+            {"success", false}
+        };
+    }
+
+    // 路径安全检查：防止路径遍历攻击
+    if (path.find("..") != std::string::npos) {
+        return json{
+            {"error", "Path traversal not allowed"},
+            {"success", false}
+        };
+    }
+
+    // 检查路径长度是否合理
+    if (path.length() > 4096) {
+        return json{
+            {"error", "Path too long (maximum 4096 characters)"},
+            {"success", false}
+        };
+    }
+
+    try {
+        std::filesystem::path fs_path(path);
+
+        // 检查路径是否存在
+        if (!std::filesystem::exists(fs_path)) {
+            return json{
+                {"error", "File not found: " + path},
+                {"success", false}
+            };
+        }
+
+        // 检查是否是目录而不是文件
+        if (std::filesystem::is_directory(fs_path)) {
+            return json{
+                {"error", "Path is a directory, not a file: " + path},
+                {"success", false}
+            };
+        }
+
+        // 检查是否是常规文件
+        if (!std::filesystem::is_regular_file(fs_path)) {
+            return json{
+                {"error", "Path is not a regular file: " + path},
+                {"success", false}
+            };
+        }
+
+        // 获取文件大小
+        auto file_size = std::filesystem::file_size(fs_path);
+
+        // 使用UTF-8验证函数检查文件
+        bool is_utf8 = is_valid_utf8_file(path);
+
+        // 构建结果
+        json result;
+        result["success"] = true;
+        result["is_utf8"] = is_utf8;
+        result["path"] = sanitize_string_for_json(path);
+        result["file_size"] = static_cast<int64_t>(file_size);
+
+        return result;
+
+    } catch (const std::filesystem::filesystem_error& e) {
+        return json{
+            {"error", "Filesystem error: " + std::string(e.what())},
+            {"success", false}
+        };
+    } catch (const std::exception& e) {
+        return json{
+            {"error", "Error checking UTF-8 encoding: " + std::string(e.what())},
+            {"success", false}
+        };
+    } catch (...) {
+        return json{
+            {"error", "Unknown error occurred while checking UTF-8 encoding"},
+            {"success", false}
+        };
+    }
 }
 
 } // namespace BuiltinTools

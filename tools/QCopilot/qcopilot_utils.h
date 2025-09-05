@@ -25,7 +25,7 @@ public:
     static LogLevel get_level();
     static void set_level_from_string(const std::string& level_str);
     static void log(LogLevel level, const char* file, int line, const char* format, ...);
-    
+
 private:
     static LogLevel current_level_;
     static std::mutex level_mutex_;
@@ -60,10 +60,19 @@ int64_t get_current_time_ms();
 std::string trim(const std::string& str);
 std::vector<std::string> split_string(const std::string& str, char delimiter);
 std::string join_strings(const std::vector<std::string>& strings, const std::string& delimiter);
+std::string sanitize_string_for_json(const std::string& str);
 
 // File utilities
 bool file_exists(const std::string& path);
 bool read_file_content(const std::string& path, std::string& content);
+bool read_text_file_with_encoding_and_range(
+    const std::string& path,
+    int start_line,
+    int end_line,
+    std::string& content,
+    int& lines_read,
+    int& actual_end_line);
+bool is_valid_utf8_file(const std::string& path);
 bool write_file_content(const std::string& path, const std::string& content);
 std::vector<std::string> list_directory(const std::string& path);
 
