@@ -136,32 +136,18 @@ struct CommandLineArgs {
 
 class SSEParser {
 public:
-    // 解析结果枚举
-    enum class ParseResult {
-        SUCCESS,
-        EMPTY_OR_DONE,
-        PARSE_ERROR
-    };
-
-    // 解析单个SSE数据块，返回解析状态
-    static std::pair<ParseResult, json> parseSSEChunk(const std::string& chunk) {
+    // 解析单个SSE数据块
+    static json parseSSEChunk(const std::string& chunk) {
         if (chunk.empty() || chunk == "[DONE]") {
-            return {ParseResult::EMPTY_OR_DONE, json{}};
+            return json{};
         }
 
         try {
-            json result = json::parse(chunk);
-            return {ParseResult::SUCCESS, std::move(result)};
+            return json::parse(chunk);
         } catch (const json::parse_error& e) {
-            LOG_WRN("SSE chunk解析失败: %s, 原始数据: %s", e.what(), chunk.c_str());
-            return {ParseResult::PARSE_ERROR, json{}};
+            LOG_WRN("SSE chunk解析失败: %s\n", e.what());
+            return json{};
         }
-    }
-
-    // 向后兼容的旧接口
-    static json parseSSEChunk_legacy(const std::string& chunk) {
-        auto [result, data] = parseSSEChunk(chunk);
-        return data;
     }
 
     // 从SSE流中提取所有数据块
