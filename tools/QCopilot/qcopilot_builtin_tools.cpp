@@ -71,7 +71,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "Complete file path (absolute or relative) to the target file. Supports various formats including './data/config.json', '/home/user/logs/app.log', 'C:\\\\Users\\\\Name\\\\Documents\\\\file.txt', '../project/src/main.py'. Path separators are automatically handled across platforms."}}},
+                        {"path", {{"type", "string"}, {"description", "Complete file path (absolute or relative) to the target file. Supports various formats including './data/config.json', '/home/user/logs/app.log', 'C:/Users/Name/Documents/file.txt', '../project/src/main.py'. Path separators are automatically handled across platforms."}}},
                         {"encoding", {{"type", "string"}, {"description", "Text encoding specification for proper character interpretation: 'utf-8' (default, recommended for modern applications and international text), 'ascii' (for legacy English-only files), 'gbk' (for Chinese Windows systems), 'iso-8859-1' (for Western European text), 'cp1252' (Windows Western encoding). Auto-detects if not specified."}}}
                     }},
                     {"required", {"path"}}
@@ -91,7 +91,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "Target file path (absolute or relative) where content will be written. Automatically creates parent directories if they don't exist. Examples: './output/results.csv', '/var/log/application.log', 'C:\\\\Projects\\\\scripts\\\\automation.py', '../config/settings.json'. Cross-platform path handling included."}}},
+                        {"path", {{"type", "string"}, {"description", "Target file path (absolute or relative) where content will be written. Automatically creates parent directories if they don't exist. Examples: './output/results.csv', '/var/log/application.log', 'C:/Projects/scripts/automation.py', '../config/settings.json'. Cross-platform path handling included."}}},
                         {"content", {{"type", "string"}, {"description", "Content to write to the file. Supports various formats including plain text, structured data (JSON, CSV, XML), source code, configuration syntax, and binary data encoded as text. Handles newlines and special characters appropriately."}}},
                         {"append", {{"type", "boolean"}, {"description", "Write mode selection: false (overwrite mode, default) completely replaces existing file content, ideal for generating new files and configuration updates; true (append mode) adds content to existing file end, perfect for log files, data collection, and incremental updates."}}}
                     }},
@@ -155,7 +155,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"file_path", {{"type", "string"}, {"description", "Target file path for editing operations. Must be an existing readable file. Examples: './src/main.py', '/etc/nginx/nginx.conf', 'C:\\\\Projects\\\\config\\\\app.json'. File is locked during editing to prevent concurrent modifications."}}},
+                        {"file_path", {{"type", "string"}, {"description", "Target file path for editing operations. Must be an existing readable file. Examples: './src/main.py', '/etc/nginx/nginx.conf', 'C:/Projects/config/app.json'. File is locked during editing to prevent concurrent modifications."}}},
                         {"edits", {{"type", "array"}, {"description", "Array of edit operations to perform sequentially. Each operation contains old_string, new_string, and optional replace_all fields."}}}
                     }},
                     {"required", {"file_path", "edits"}}
