@@ -42,10 +42,10 @@ private:
     #define LOG_ERR(...) do {} while(0)
 #else
     // 运行时日志级别控制
-    #define LOG_DBG(...) Logger::log(LogLevel::DEBUG, __FILE__, __LINE__, __VA_ARGS__)
-    #define LOG_INF(...) Logger::log(LogLevel::INFO, __FILE__, __LINE__, __VA_ARGS__)
-    #define LOG_WRN(...) Logger::log(LogLevel::WARN, __FILE__, __LINE__, __VA_ARGS__)
-    #define LOG_ERR(...) Logger::log(LogLevel::ERROR, __FILE__, __LINE__, __VA_ARGS__)
+    #define LOG_DBG(format, ...) Logger::log(LogLevel::DEBUG, __FILE__, __LINE__, format, ##__VA_ARGS__)
+    #define LOG_INF(format, ...) Logger::log(LogLevel::INFO, __FILE__, __LINE__, format, ##__VA_ARGS__)
+    #define LOG_WRN(format, ...) Logger::log(LogLevel::WARN, __FILE__, __LINE__, format, ##__VA_ARGS__)
+    #define LOG_ERR(format, ...) Logger::log(LogLevel::ERROR, __FILE__, __LINE__, format, ##__VA_ARGS__)
 #endif
 
 // Common initialization
