@@ -896,6 +896,7 @@ public:
         if (QCopilotConfig.n_gpu_layers >= 0) {
             cmd += " -ngl " + std::to_string(QCopilotConfig.n_gpu_layers);
         }
+        cmd += " --chat-template-kwargs '{\"reasoning_effort\":\"high\"}'";
 
 
         LOG_INF("正在启动 base-server......");
