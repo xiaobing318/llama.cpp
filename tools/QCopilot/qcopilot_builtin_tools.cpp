@@ -68,11 +68,11 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
             {"type", "function"},
             {"function", {
                 {"name", "read_text_file"},
-                {"description", "Specialized UTF-8 text file reading utility for loading text documents with line range selection. Designed exclusively for UTF-8 encoded text files (not binary files). Primary use cases: 1) Reading UTF-8 configuration files (.ini, .conf, .json, .yaml) 2) Loading UTF-8 source code files (.py, .js, .cpp, .h) 3) Processing UTF-8 log files (.log) 4) Reading UTF-8 documentation (.md, .rst, .txt) 5) Extracting specific line ranges from large UTF-8 text files for analysis. Only supports UTF-8 character encoding. Does not read binary files or provide file metadata - focuses solely on UTF-8 text content extraction.Before using this tool, you need to use the built-in tool check_utf8_encoding to check whether the character set encoding of the file is UTF-8."},
+                {"description", "Specialized UTF-8 text file reading utility for loading text documents with line range selection.  This tool is designed exclusively for UTF-8 encoded text files and will fail on non-UTF-8 files. Primary use cases: 1) Reading UTF-8 configuration files (.ini, .conf, .json, .yaml) 2) Loading UTF-8 source code files (.py, .js, .cpp, .h) 3) Processing UTF-8 log files (.log) 4) Reading UTF-8 documentation (.md, .rst, .txt) 5) Extracting specific line ranges from large UTF-8 text files for analysis. Does not read binary files or provide file metadata - focuses solely on UTF-8 text content extraction. IMPORTANT: Before using this tool, you must first use the built-in tool validate_utf8_file to verify whether the target file is in UTF-8 character encoding. If you need to know the total number of lines in the target file, use the built-in tool inspect_path to obtain the total number of lines in the target file.Workflow: validate_utf8_file → read_text_file or validate_utf8_file → inspect_path → read_text_file."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "The full file path (absolute or relative) of the target UTF-8 text file. For example: \"./config.txt\", \"/var/log/app.log\", \"C:/Documents/readme.md\". Only UTF-8 text files are supported; binary files will be rejected. Also, please carefully check that the full file path you are extracting contains no spaces."}}},
+                        {"path", {{"type", "string"}, {"description", "The full file path (absolute or relative) of the target UTF-8 text file. For example: './config.txt', '/var/log/app.log', 'C:/Documents/readme.md'. Only UTF-8 text files are supported; binary files will be rejected. Also, please carefully check that the full file path you are extracting contains no spaces."}}},
                         {"start_line", {{"type", "integer"}, {"description", "Starting line number for range reading (1-based indexing). Default 1 (first line). Use with end_line to read specific sections of large files."}}},
                         {"end_line", {{"type", "integer"}, {"description", "Ending line number for range reading (1-based indexing, inclusive). Default -1 (last line). Combined with start_line allows reading specific portions of files."}}}
                     }},
@@ -82,20 +82,20 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
 
-    // write_file tool
+    // write_text_file tool
     definitions.push_back({
-        "write_file",
+        "write_text_file",
         {
             {"type", "function"},
             {"function", {
-                {"name", "write_file"},
-                {"description", "Versatile file writing utility for creating and modifying various file types with support for both overwrite and append modes. Critical for code generation, data export, configuration management, and automated report generation. Key applications include: 1) Generating source code files (.py, .js, .cpp, .sql) for automated development workflows 2) Creating and updating configuration files (.ini, .conf, .json, .yaml) for application settings 3) Exporting processed data (.csv, .tsv, .txt, .xml) from analysis pipelines 4) Writing batch scripts (.sh, .bat, .ps1) for system automation 5) Maintaining log files (.log) with append mode for continuous monitoring 6) Generating documentation (.md, .html, .rst) and reports 7) Creating temporary files for inter-process communication. Features automatic directory creation and robust error handling."},
+                {"name", "write_text_file"},
+                {"description", "Specialized UTF-8 text file writing utility for creating and modifying UTF-8 encoded text files with robust encoding validation and error handling. IMPORTANT: For existing files, you MUST first use the validate_utf8_file built-in tool to verify UTF-8 encoding before writing. New files are automatically created with UTF-8 encoding. Single responsibility: writes UTF-8 text content only, does not read file metadata. Key applications: 1) Creating UTF-8 source code files (.py, .js, .cpp, .h, .sql) 2) Writing UTF-8 configuration files (.ini, .conf, .json, .yaml) 3) Generating UTF-8 documentation (.md, .rst, .txt) 4) Maintaining UTF-8 log files with append mode 5) Creating UTF-8 data files (.csv, .xml).  Workflow for existing files: validate_utf8_file → write_text_file. For new files: directly use write_text_file."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "Target file path (absolute or relative) where content will be written. Automatically creates parent directories if they don't exist. Examples: './output/results.csv', '/var/log/application.log', 'C:/Projects/scripts/automation.py', '../config/settings.json'. Cross-platform path handling included."}}},
-                        {"content", {{"type", "string"}, {"description", "Content to write to the file. Supports various formats including plain text, structured data (JSON, CSV, XML), source code, configuration syntax, and binary data encoded as text. Handles newlines and special characters appropriately."}}},
-                        {"append", {{"type", "boolean"}, {"description", "Write mode selection: false (overwrite mode, default) completely replaces existing file content, ideal for generating new files and configuration updates; true (append mode) adds content to existing file end, perfect for log files, data collection, and incremental updates."}}}
+                        {"path", {{"type", "string"}, {"description", "Target UTF-8 text file path (absolute or relative) where content will be written. Automatically creates parent directories if they don't exist. Examples: './config.txt', '/var/log/app.log', 'C:/Documents/readme.md'. Only UTF-8 text files are supported. Ensure the full file path contains no spaces for cross-platform compatibility."}}},
+                        {"content", {{"type", "string"}, {"description", "UTF-8 encoded text content to write to the file. Supports plain text, source code, configuration syntax, structured data (JSON, CSV, XML), and documentation formats. Handles newlines and UTF-8 special characters appropriately."}}},
+                        {"append", {{"type", "boolean"}, {"description", "Write mode selection: false (overwrite mode, default) completely replaces existing file content, ideal for generating new files and configuration updates; true (append mode) adds content to existing file end, perfect for log files, data collection, and incremental updates. For existing files in append mode, UTF-8 encoding validation is required."}}}
                     }},
                     {"required", {"path", "content"}}
                 }}
@@ -221,20 +221,20 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
 
-    // file_stats tool
+    // inspect_path tool
     definitions.push_back({
-        "file_stats",
+        "inspect_path",
         {
             {"type", "function"},
             {"function", {
-                {"name", "file_stats"},
-                {"description", "Comprehensive file and directory metadata analysis tool providing detailed information about file system objects. Essential for system administration, security auditing, backup verification, and development workflows. Retrieves complete file attributes including size, timestamps, permissions, ownership, and content type detection. Primary use cases: 1) Security auditing (check permissions, ownership, access patterns) 2) Backup and synchronization (verify file integrity, detect changes) 3) Performance analysis (identify large files, analyze disk usage) 4) Development debugging (check file modifications, verify builds) 5) System monitoring (track file system changes, detect anomalies) 6) Compliance reporting (document file attributes, access controls). Provides both human-readable and machine-parseable output formats."},
+                {"name", "inspect_path"},
+                {"description", "Cross-platform path inspection and file analysis utility for comprehensive path validation and metadata extraction. Designed exclusively for path validation, file type identification, and content analysis with UTF-8 text file support. IMPORTANT: Uses only C++ standard library for maximum compatibility across Windows and Linux systems. Primary use cases: 1) Path validation and existence verification before file operations 2) File type identification (file/directory/other) for workflow routing 3) Basic file metadata extraction (size, timestamps, permissions) 4) UTF-8 text file analysis including line counting for documentation and code files 5) Directory content summarization for project organization 6) Cross-platform file system inspection without platform-specific dependencies. Key features: path validation, absolute/relative path resolution, file type detection, size analysis with human-readable formats, modification timestamps, Unix-style permissions (detailed mode), and UTF-8 text line counting. Workflow: inspect_path → read_text_file/write_text_file (for confirmed text files)."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path", {{"type", "string"}, {"description", "Path to file or directory for analysis. Can be absolute ('/var/log/app.log') or relative ('./config.json'). For directories, provides summary statistics of contained files."}}},
-                        {"detailed", {{"type", "boolean"}, {"description", "Information depth: false (basic info - size, modified time, type) or true (comprehensive - permissions, ownership, checksums, content analysis). Default false for performance."}}},
-                        {"checksum", {{"type", "boolean"}, {"description", "Include file integrity checksums (MD5/SHA) for verification and change detection. Useful for security auditing and backup verification. Default false due to computation overhead."}}}
+                        {"path", {{"type", "string"}, {"description", "Target path for inspection (absolute or relative). Examples: './config.txt', '/var/log/app.log', 'C:/Documents/readme.md', '../src/main.cpp'. Supports cross-platform path formats. The tool validates path syntax and existence before analysis."}}},
+                        {"detailed", {{"type", "boolean"}, {"description", "Analysis depth: false (basic inspection - path validation, type identification, size, modified time) or true (comprehensive analysis - includes permissions, directory statistics, and enhanced metadata). Default false for optimal performance. Detailed mode provides Unix-style permission strings and recursive directory analysis."}}},
+                        {"text_analysis", {{"type", "boolean"}, {"description", "Enable UTF-8 text file analysis including line counting and content statistics. Only applicable to regular files that can be read as text. Provides line count, character count for text files. Default false to avoid unnecessary file reading. Useful for code files, documentation, configuration files."}}}
                     }},
                     {"required", {"path"}}
                 }}
@@ -242,13 +242,13 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
         }
     });
 
-    // check_utf8_encoding tool
+    // validate_utf8_file tool
     definitions.push_back({
-        "check_utf8_encoding",
+        "validate_utf8_file",
         {
             {"type", "function"},
             {"function", {
-                {"name", "check_utf8_encoding"},
+                {"name", "validate_utf8_file"},
                 {"description", "UTF-8 encoding validation tool for text files. Verifies whether a specified file contains valid UTF-8 encoded content. Essential for text processing workflows, data validation, and ensuring compatibility with UTF-8-only tools. Primary use cases: 1) Pre-processing validation before using UTF-8-only text tools 2) Data import validation to ensure encoding compatibility 3) File conversion workflow validation 4) International text content verification 5) Web content encoding validation. Performs comprehensive UTF-8 validation including proper byte sequences, overlong encodings, and invalid code points. Supports files up to 10MB for validation performance."},
                 {"parameters", {
                     {"type", "object"},
@@ -280,8 +280,8 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
         return executeReadTextFile(args);
     };
 
-    functions["write_file"] = [](const json& args) {
-        return executeWriteFile(args);
+    functions["write_text_file"] = [](const json& args) {
+        return executeWriteTextFile(args);
     };
 
     functions["glob"] = [](const json& args) {
@@ -300,11 +300,11 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
         return executeListDirectory(args);
     };
 
-    functions["file_stats"] = [](const json& args) {
-        return executeFileStats(args);
+    functions["inspect_path"] = [](const json& args) {
+        return executeInspectPath(args);
     };
 
-    functions["check_utf8_encoding"] = [](const json& args) {
+    functions["validate_utf8_file"] = [](const json& args) {
         return executeCheckUtf8Encoding(args);
     };
 
@@ -967,54 +967,95 @@ json executeReadTextFile(const json& args) {
     }
 }
 
-json executeWriteFile(const json& args) {
+json executeWriteTextFile(const json& args) {
+    /*
+    功能说明：专用于UTF-8文本文件写入的工具，支持覆盖/追加两种模式
+    注意事项：
+    1. 对于已存在的文件，使用前应先用validate_utf8_file检查编码
+    2. 新建文件自动创建为UTF-8编码
+    3. 具备完善的错误处理和日志记录
+    4. 单一责任：只写入内容，不读取文件状态信息
+    */
+
     std::string path = args.value("path", "");
     std::string content = args.value("content", "");
     bool append = args.value("append", false);
 
+    // 参数验证
     if (path.empty()) {
+        LOG_ERR("write_text_file: Empty path provided");
         return json{
             {"error", "Path is required"},
             {"success", false}
         };
     }
+    // 内容允许为空，但记录警告日志，因为有可能只是创建一个空文件
+    if (content.empty()) {
+        LOG_WRN("write_text_file: Empty content provided for path: %s", path.c_str());
+    }
 
     // 路径安全检查：防止路径遍历攻击
     if (path.find("..") != std::string::npos) {
+        LOG_ERR("write_text_file: Path traversal attack detected: %s", path.c_str());
         return json{
-            { "error",   "Path traversal not allowed" },
-            { "success", false                        }
+            {"error", "Path traversal not allowed"},
+            {"success", false}
         };
     }
 
     // 检查路径长度是否合理
     if (path.length() > 4096) {
+        LOG_ERR("write_text_file: Path too long (%zu characters): %s", path.length(), path.c_str());
         return json{
-            { "error",   "Path too long (maximum 4096 characters)" },
-            { "success", false                                     }
-        };
-    }
-
-    std::string final_content = content;
-    if (append && file_exists(path)) {
-        std::string existing;
-        if (read_file_content(path, existing)) {
-            final_content = existing + content;
-        }
-    }
-
-    if (!write_file_content(path, final_content)) {
-        return json{
-            {"error", "Failed to write file"},
+            {"error", "Path too long (maximum 4096 characters)"},
             {"success", false}
         };
     }
 
-    return json{
-        {"path", path},
-        {"bytes_written", final_content.size()},
-        {"success", true}
-    };
+    try {
+        bool file_existed = file_exists(path);
+
+        // 对于已存在的文件，记录日志提醒应先检查编码
+        if (file_existed) {
+            LOG_INF("write_text_file: Writing to existing file: %s (mode: %s)",
+                path.c_str(), append ? "append" : "overwrite");
+        } else {
+            LOG_INF("write_text_file: Creating new UTF-8 text file: %s", path.c_str());
+        }
+
+        bool write_success;
+        if (append && file_existed) {
+            // 追加模式：直接以追加方式打开文件
+            write_success = append_file_content(path, content);
+        } else {
+            // 覆盖模式或新文件：直接写入
+            write_success = write_file_content(path, content);
+        }
+
+        if (!write_success) {
+            LOG_ERR("write_text_file: Failed to write content to file: %s", path.c_str());
+            return json{
+                {"error", "Failed to write file"},
+                {"success", false}
+            };
+        }
+
+        LOG_INF("write_text_file: Successfully wrote %zu bytes to: %s", content.size(), path.c_str());
+        return json{
+            {"path", path},
+            {"bytes_written", content.size()},
+            {"mode", append ? "append" : "overwrite"},
+            {"file_existed", file_existed},
+            {"success", true}
+        };
+
+    } catch (const std::exception& e) {
+        LOG_ERR("write_text_file: Unexpected error writing file %s: %s", path.c_str(), e.what());
+        return json{
+            {"error", "Unexpected error during file write: " + std::string(e.what())},
+            {"success", false}
+        };
+    }
 }
 
 json executeGlob(const json& args) {
@@ -1481,11 +1522,22 @@ json executeListDirectory(const json& args) {
     }
 }
 
-json executeFileStats(const json& args) {
+json executeInspectPath(const json& args) {
+    /*
+    功能说明：跨平台路径检查和文件分析工具
+    主要功能：
+    1. 路径有效性验证
+    2. 文件类型识别（文件/目录/其他）
+    3. 基本元数据获取（大小、时间戳、权限）
+    4. UTF-8文本文件行数统计
+    5. 目录内容统计
+    */
+
     std::string path = args.value("path", "");
     bool detailed = args.value("detailed", false);
-    bool checksum = args.value("checksum", false);
+    bool text_analysis = args.value("text_analysis", false);
 
+    // 参数验证
     if (path.empty()) {
         return json{
             {"error", "Path is required"},
@@ -1493,27 +1545,47 @@ json executeFileStats(const json& args) {
         };
     }
 
-    if (!file_exists(path)) {
+    // 路径安全检查：防止路径遍历攻击
+    if (path.find("..") != std::string::npos) {
         return json{
-            {"error", "Path not found: " + path},
+            {"error", "Path traversal not allowed"},
             {"success", false}
         };
     }
 
-    json stats = {
-        {"path", path},
-        {"exists", true}
-    };
+    // 检查路径长度是否合理
+    if (path.length() > 4096) {
+        return json{
+            {"error", "Path too long (maximum 4096 characters)"},
+            {"success", false}
+        };
+    }
 
     try {
         std::filesystem::path fs_path(path);
-        stats["absolute_path"] = std::filesystem::absolute(fs_path).string();
-        stats["filename"] = fs_path.filename().string();
 
+        // 检查路径是否存在
+        if (!std::filesystem::exists(fs_path)) {
+            return json{
+                {"error", "Path not found: " + path},
+                {"success", false}
+            };
+        }
+
+        json result = {
+            {"path", path},
+            {"exists", true},
+            {"absolute_path", std::filesystem::absolute(fs_path).string()},
+            {"filename", fs_path.filename().string()}
+        };
+
+        // 文件类型识别
         if (std::filesystem::is_regular_file(fs_path)) {
-            stats["type"] = "file";
+            result["type"] = "file";
+
+            // 文件大小信息
             auto file_size = std::filesystem::file_size(fs_path);
-            stats["size"] = file_size;
+            result["size"] = file_size;
 
             // 人类可读大小
             const char* units[] = {"B", "KB", "MB", "GB", "TB"};
@@ -1525,17 +1597,46 @@ json executeFileStats(const json& args) {
             }
             std::ostringstream ss;
             ss << std::fixed << std::setprecision(1) << size << " " << units[unit];
-            stats["human_size"] = ss.str();
+            result["human_size"] = ss.str();
 
             // 文件扩展名
             if (fs_path.has_extension()) {
-                stats["extension"] = fs_path.extension().string();
+                result["extension"] = fs_path.extension().string();
+            }
+
+            // UTF-8文本文件分析
+            if (text_analysis) {
+                std::string content;
+                if (read_file_content(path, content)) {
+                    // 统计行数
+                    size_t line_count = 1; // 至少有一行
+                    if (!content.empty()) {
+                        line_count = std::count(content.begin(), content.end(), '\n') + 1;
+                        // 如果文件以换行符结尾，行数减1
+                        if (content.back() == '\n' && content.size() > 1) {
+                            line_count--;
+                        }
+                    } else {
+                        line_count = 0; // 空文件
+                    }
+
+                    result["text_stats"] = {
+                        {"line_count", line_count},
+                        {"character_count", content.size()},
+                        {"is_text_readable", true}
+                    };
+                } else {
+                    result["text_stats"] = {
+                        {"is_text_readable", false},
+                        {"error", "Cannot read file as text (may be binary or encoding issue)"}
+                    };
+                }
             }
 
         } else if (std::filesystem::is_directory(fs_path)) {
-            stats["type"] = "directory";
+            result["type"] = "directory";
 
-            // 计算目录中的文件数量
+            // 目录统计（详细模式）
             if (detailed) {
                 size_t file_count = 0;
                 size_t dir_count = 0;
@@ -1551,75 +1652,77 @@ json executeFileStats(const json& args) {
                         }
                     }
 
-                    stats["file_count"] = file_count;
-                    stats["directory_count"] = dir_count;
-                    stats["total_size"] = total_size;
-                } catch (...) {
-                    stats["file_count"] = "unknown";
-                    stats["directory_count"] = "unknown";
-                    stats["total_size"] = "unknown";
+                    result["directory_stats"] = {
+                        {"file_count", file_count},
+                        {"subdirectory_count", dir_count},
+                        {"total_size", total_size}
+                    };
+                } catch (const std::exception& e) {
+                    result["directory_stats"] = {
+                        {"error", "Failed to analyze directory contents: " + std::string(e.what())}
+                    };
                 }
             }
         } else {
-            stats["type"] = "other";
+            result["type"] = "other";
         }
 
         // 时间戳信息
-        auto ftime = std::filesystem::last_write_time(fs_path);
-        auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-            ftime - std::filesystem::file_time_type::clock::now() +
-            std::chrono::system_clock::now()
-        );
-        auto time_t = std::chrono::system_clock::to_time_t(sctp);
+        try {
+            auto ftime = std::filesystem::last_write_time(fs_path);
+            auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                ftime - std::filesystem::file_time_type::clock::now() +
+                std::chrono::system_clock::now()
+            );
+            auto time_t = std::chrono::system_clock::to_time_t(sctp);
 
-        std::ostringstream time_ss;
-        time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-        stats["last_modified"] = time_ss.str();
-        stats["last_modified_timestamp"] = time_t;
-
-        // 详细信息
-        if (detailed) {
-            auto perms = std::filesystem::status(fs_path).permissions();
-            std::string perm_str;
-
-            perm_str += (perms & std::filesystem::perms::owner_read) != std::filesystem::perms::none ? "r" : "-";
-            perm_str += (perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none ? "w" : "-";
-            perm_str += (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none ? "x" : "-";
-            perm_str += (perms & std::filesystem::perms::group_read) != std::filesystem::perms::none ? "r" : "-";
-            perm_str += (perms & std::filesystem::perms::group_write) != std::filesystem::perms::none ? "w" : "-";
-            perm_str += (perms & std::filesystem::perms::group_exec) != std::filesystem::perms::none ? "x" : "-";
-            perm_str += (perms & std::filesystem::perms::others_read) != std::filesystem::perms::none ? "r" : "-";
-            perm_str += (perms & std::filesystem::perms::others_write) != std::filesystem::perms::none ? "w" : "-";
-            perm_str += (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none ? "x" : "-";
-
-            stats["permissions"] = perm_str;
+            std::ostringstream time_ss;
+            time_ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+            result["last_modified"] = time_ss.str();
+            result["last_modified_timestamp"] = time_t;
+        } catch (...) {
+            result["last_modified"] = "unknown";
+            result["last_modified_timestamp"] = 0;
         }
 
-        // 校验和计算（仅对文件）
-        if (checksum && std::filesystem::is_regular_file(fs_path)) {
-            std::string content;
-            if (read_file_content(path, content)) {
-                // 简单的哈希值计算（这里使用一个简化版本）
-                std::hash<std::string> hasher;
-                size_t hash_value = hasher(content);
+        // 详细权限信息（跨平台Unix风格）
+        if (detailed) {
+            try {
+                auto perms = std::filesystem::status(fs_path).permissions();
+                std::string perm_str;
 
-                std::ostringstream hash_ss;
-                hash_ss << std::hex << hash_value;
-                stats["hash"] = hash_ss.str();
-                stats["content_length"] = content.length();
+                perm_str += (perms & std::filesystem::perms::owner_read) != std::filesystem::perms::none ? "r" : "-";
+                perm_str += (perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none ? "w" : "-";
+                perm_str += (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none ? "x" : "-";
+                perm_str += (perms & std::filesystem::perms::group_read) != std::filesystem::perms::none ? "r" : "-";
+                perm_str += (perms & std::filesystem::perms::group_write) != std::filesystem::perms::none ? "w" : "-";
+                perm_str += (perms & std::filesystem::perms::group_exec) != std::filesystem::perms::none ? "x" : "-";
+                perm_str += (perms & std::filesystem::perms::others_read) != std::filesystem::perms::none ? "r" : "-";
+                perm_str += (perms & std::filesystem::perms::others_write) != std::filesystem::perms::none ? "w" : "-";
+                perm_str += (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none ? "x" : "-";
+
+                result["permissions"] = perm_str;
+            } catch (...) {
+                result["permissions"] = "unknown";
             }
         }
 
+        result["success"] = true;
+        return result;
+
+    } catch (const std::filesystem::filesystem_error& e) {
+        return json{
+            {"error", "Filesystem error: " + std::string(e.what())},
+            {"path", path},
+            {"success", false}
+        };
     } catch (const std::exception& e) {
         return json{
-            {"error", "Failed to get file stats: " + std::string(e.what())},
+            {"error", "Failed to inspect path: " + std::string(e.what())},
             {"path", path},
             {"success", false}
         };
     }
-
-    stats["success"] = true;
-    return stats;
 }
 
 json executeCheckUtf8Encoding(const json& args) {

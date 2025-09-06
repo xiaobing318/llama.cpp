@@ -74,6 +74,7 @@ bool read_text_file_with_encoding_and_range(
     int& actual_end_line);
 bool is_valid_utf8_file(const std::string& path);
 bool write_file_content(const std::string& path, const std::string& content);
+bool append_file_content(const std::string& path, const std::string& content);
 std::vector<std::string> list_directory(const std::string& path);
 
 // Process utilities

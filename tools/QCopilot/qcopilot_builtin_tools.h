@@ -46,11 +46,11 @@ std::vector<json> searchInFileRegex(
 json executeGetCurrentTime(const json& args);
 json executeCalculate(const json& args);
 json executeReadTextFile(const json& args);
-json executeWriteFile(const json& args);
+json executeWriteTextFile(const json& args);
 json executeGlob(const json& args);
 json executeGrep(const json& args);
 json executeEdit(const json& args);
 json executeListDirectory(const json& args);
-json executeFileStats(const json& args);
+json executeInspectPath(const json& args);
 json executeCheckUtf8Encoding(const json& args);
 } // namespace BuiltinTools

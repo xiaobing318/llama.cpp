@@ -424,6 +424,41 @@ bool write_file_content(const std::string& path, const std::string& content) {
     }
 }
 
+bool append_file_content(const std::string& path, const std::string& content) {
+    try {
+        std::ofstream file(path, std::ios::binary | std::ios::app);
+        if (!file.is_open()) {
+            LOG_ERR("Failed to open file %s for appending", path.c_str());
+            return false;
+        }
+
+        file.write(content.c_str(), content.size());
+
+        // Check if write operation failed
+        if (file.fail()) {
+            LOG_ERR("Failed to append content to file %s", path.c_str());
+            file.close();
+            return false;
+        }
+
+        file.close();
+
+        // Check if close operation failed
+        if (file.fail()) {
+            LOG_ERR("Failed to close file %s after appending", path.c_str());
+            return false;
+        }
+
+        return true;
+    } catch (const std::ios_base::failure& e) {
+        LOG_ERR("IO error appending to file %s: %s", path.c_str(), e.what());
+        return false;
+    } catch (const std::exception& e) {
+        LOG_ERR("Unexpected error appending to file %s: %s", path.c_str(), e.what());
+        return false;
+    }
+}
+
 bool read_text_file_with_encoding_and_range(
     const std::string& path,
     int start_line,
@@ -544,6 +579,7 @@ bool read_text_file_with_encoding_and_range(
         int current_line = 1;
         lines_read = 0;
         actual_end_line = end_line;
+        bool reached_end_line = false; // 标志是否到达指定的结束行
 
         content.clear();
         for (size_t i = 0; i < lines.size(); ++i) {
@@ -557,14 +593,15 @@ bool read_text_file_with_encoding_and_range(
                 // 如果指定了结束行且到达了结束行，停止
                 if (end_line != -1 && current_line >= end_line) {
                     actual_end_line = current_line;
+                    reached_end_line = true;
                     break;
                 }
             }
             current_line++;
         }
 
-        // 如果end_line为-1或超出文件实际行数，更新actual_end_line
-        if (end_line == -1 || current_line <= end_line) {
+        // 只有在end_line为-1（读取到文件末尾）或者没有达到指定的结束行时，才更新actual_end_line
+        if (end_line == -1 || !reached_end_line) {
             actual_end_line = current_line - 1;
         }
 
