@@ -24,40 +24,43 @@
     #include <errno.h>       // errno
 #endif
 
+// 构造函数
 ToolExecutor::ToolExecutor() {
     //  在构造 ToolExecutor 实体的时候自动注册内置工具。
     registerBuiltinTools();
 }
 
+// 注册内置工具
 void ToolExecutor::registerBuiltinTools() {
     // 使用新的内置工具模块获取工具定义和函数
     auto definitions = BuiltinTools::getBuiltinToolDefinitions();
     auto functions = BuiltinTools::getBuiltinToolFunctions();
-    
+
     // 注册所有内置工具
     for (const auto& definition : definitions) {
         const std::string& name = definition.name;
-        
+
         // 注册工具定义
         tool_definitions[name] = definition.definition;
-        
+
         // 注册工具执行函数
         if (functions.find(name) != functions.end()) {
             builtinTools[name] = functions[name];
         }
-        
+
         // 输出日志
-        LOG_INF("成功注册内置工具： %s - %s\n",
+        LOG_INF("成功注册内置工具: %s - %s",
             name.c_str(),
             tool_definitions[name]["function"]["description"].get<std::string>().c_str());
     }
 }
 
+// 注册外部工具
 bool ToolExecutor::registerExternalTools(const json& tool_definition) {
     // 使用增强的验证函数进行全面的工具定义检查
     std::string error_message;
     if (!validateToolDefinition(tool_definition, error_message)) {
-        LOG_ERR("工具定义验证失败: %s\n", error_message.c_str());
+        LOG_ERR("工具定义验证失败: %s", error_message.c_str());
         return false;
     }
 
@@ -67,16 +70,17 @@ bool ToolExecutor::registerExternalTools(const json& tool_definition) {
 
     // 检查是否已经注册了同名的工具，如果已经存在，则直接返回不需要进行注册。
     if (hasTool(name)){
-        LOG_WRN("工具注册表中已经存在名称为 %s 的工具，请检查配置表中工具定义是否重复。\n", name.c_str());
+        LOG_WRN("工具注册表中已经存在名称为 %s 的工具，请检查配置表中工具定义是否重复", name.c_str());
         return true;
     }
 
     // 经过上述检查后说明配置文件中的当前工具定义是有效的，将其保存到内存中的工具定义映射中。
     tool_definitions[name] = tool_definition;
-    LOG_INF("成功注册外部工具： %s - %s\n", name.c_str(), function["description"].get<std::string>().c_str());
+    LOG_INF("成功注册外部工具: %s - %s", name.c_str(), function["description"].get<std::string>().c_str());
     return true;
 }
 
+// 执行工具
 json ToolExecutor::execute(const std::string& name, const json& arguments) {
     // 首先检查是否为内置工具
     auto it = builtinTools.find(name);
@@ -101,7 +105,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
             return it->second(arguments);
 
         } catch (const std::exception& e) {
-            LOG_ERR("Tool execution failed: %s\n", e.what());
+            LOG_ERR("Tool execution failed: %s", e.what());
             return json{
                 {"error", e.what()},
                 {"success", false}
@@ -151,7 +155,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
                 return executeExternalTool(executable, arguments, command_template);
 
             } catch (const std::exception& e) {
-                LOG_ERR("External tool execution failed: %s\n", e.what());
+                LOG_ERR("External tool execution failed: %s", e.what());
                 return json{
                     {"error", e.what()},
                     {"success", false}
@@ -167,10 +171,12 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) {
     };
 }
 
+// 检查工具是否存在
 bool ToolExecutor::hasTool(const std::string& name) const {
     return builtinTools.find(name) != builtinTools.end() || tool_definitions.find(name) != tool_definitions.end();
 }
 
+// 获取所有注册的工具定义
 json ToolExecutor::getTools() const {
     json result = json::array();
     for (const auto& [name, definition] : tool_definitions) {
@@ -179,13 +185,12 @@ json ToolExecutor::getTools() const {
     return result;
 }
 
-
-// ExternalTools
-
+// 使用默认命令模板执行外部工具（向外部工具的标准输入传递JSON参数）
 json ToolExecutor::executeExternalTool(const std::string& executable, const json& arguments) {
     return executeExternalTool(executable, arguments, "");
 }
 
+// 使用命令模板执行外部工具
 json ToolExecutor::executeExternalTool(const std::string& executable, const json& arguments, const std::string& command_template) {
     try {
         // 构建命令行
@@ -198,7 +203,7 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             cmd = executable;
         }
 
-        LOG_INF(" QCopilot 执行外部工具: %s\n", cmd.c_str());
+        LOG_INF("QCopilot 执行外部工具: %s", cmd.c_str());
 
         // 使用跨平台的方式执行外部命令并捕获输出
 #ifdef _WIN32
@@ -365,7 +370,17 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
             // 等待子进程结束
             int status;
             waitpid(pid, &status, 0);
-            int exit_code = WEXITSTATUS(status);
+            
+            int exit_code = 0;
+            if (WIFEXITED(status)) {
+                exit_code = WEXITSTATUS(status);
+            } else if (WIFSIGNALED(status)) {
+                // 进程被信号终止
+                exit_code = 128 + WTERMSIG(status);
+            } else {
+                // 其他异常情况
+                exit_code = -1;
+            }
 
             if (exit_code != 0) {
                 return json{
@@ -390,7 +405,7 @@ json ToolExecutor::executeExternalTool(const std::string& executable, const json
 #endif
 
     } catch (const std::exception& e) {
-        LOG_ERR("External tool execution error: %s\n", e.what());
+        LOG_ERR("External tool execution error: %s", e.what());
         return json{
             {"error", e.what()},
             {"success", false}
@@ -503,7 +518,7 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
             // 简单替换：{param_name}
             if (param_exists && !param_value.is_null()) {
                 if (param_value.is_string()) {
-                    replacement = param_value.get<std::string>();
+                    replacement = escapeShellArgument(param_value.get<std::string>());
                 } else {
                     replacement = param_value.dump();
                 }
@@ -553,7 +568,7 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
                 std::vector<std::string> items;
                 for (const auto& item : param_value) {
                     if (item.is_string()) {
-                        items.push_back("\"" + item.get<std::string>() + "\"");
+                        items.push_back(escapeShellArgument(item.get<std::string>()));
                     } else {
                         items.push_back(item.dump());
                     }
@@ -574,6 +589,7 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
     return result;
 }
 
+// 辅助函数：验证工具名称格式
 bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::string& error_message) const {
     // 1. 检查顶层结构
     if (!tool_definition.is_object()) {
@@ -653,7 +669,7 @@ bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::stri
         }
         // 检查'type'字段是否为字符串且值为'object'
         if (!parameters["type"].is_string() || parameters["type"].get<std::string>() != "object") {
-            error_message = "工具定义的'type'字段必须为'function'";
+            error_message = "parameters的'type'字段必须为'object'";
             return false;
         }
         // 检查properties字段是否存在

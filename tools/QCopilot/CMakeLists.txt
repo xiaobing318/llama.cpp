@@ -7,6 +7,7 @@ set(TARGET qcopilot)
 #[[
 1、定义目标的源文件列表和公共资源文件列表。
 2、PUBLIC_ASSETS 包含需要嵌入到可执行文件中的前端资源文件。
+3、BUILTIN_TOOLS_SRCS 包含所有内置工具的源文件。
 ]]
 set(TARGET_SRCS
     qcopilot.cpp
@@ -14,6 +15,35 @@ set(TARGET_SRCS
     qcopilot_executor.cpp
     qcopilot_builtin_tools.cpp
 )
+
+# 内置工具源文件
+set(BUILTIN_TOOLS_SRCS
+    # 通用工具
+    builtinTools/common/common_utils.cpp
+    builtinTools/common/pattern_matcher.cpp
+
+    # 时间工具
+    builtinTools/timeTools/get_current_time.cpp
+
+    # 数学工具
+    builtinTools/mathTools/calculate.cpp
+    builtinTools/mathTools/expression_parser.cpp
+
+    # 文件工具
+    builtinTools/fileTools/fileTools_utils.cpp
+    builtinTools/fileTools/read_text_file.cpp
+    builtinTools/fileTools/write_text_file.cpp
+    builtinTools/fileTools/validate_utf8_file.cpp
+
+    # 系统工具
+    builtinTools/systemTools/systemTools_utils.cpp
+    builtinTools/systemTools/list_directory.cpp
+    builtinTools/systemTools/inspect_path.cpp
+)
+
+# 将内置工具源文件添加到目标源文件列表
+list(APPEND TARGET_SRCS ${BUILTIN_TOOLS_SRCS})
+
 set(PUBLIC_ASSETS
     index.html.gz
     # 目前没有用到这个 HTML 文件，但是在 llama-server 中使用到了即在 llama-server 还在启动后端模型的时候前端需要加载提示信息。
@@ -42,7 +72,8 @@ endforeach()
    - qcopilot.cpp: 主程序入口和HTTP服务器
    - qcopilot_utils.cpp: 通用工具函数库
    - qcopilot_executor.cpp: 工具执行器核心逻辑
-   - qcopilot_builtin_tools.cpp: 内置工具实现（文件操作、数学计算、系统命令等）
+   - qcopilot_builtin_tools.cpp: 内置工具注册和管理（重构后的版本）
+   - builtinTools/**/*.cpp: 各个内置工具的具体实现（按功能分类模块化）
    - 生成的前端资源头文件
 2、编译单元指的是源代码中的一个独立的文件，它可以被单独编译并生成一个目标文件，可以包含头文件、源文件和其他资源。
 ]]
@@ -57,6 +88,8 @@ add_executable(${TARGET} ${TARGET_SRCS})
 target_include_directories(${TARGET} PRIVATE
     # 向编译系统传递该头文件查找路径是为了能够包含 qcopilot_utils.h/qcopilot_executor.h 头文件
     ${CMAKE_CURRENT_SOURCE_DIR}
+    # 向编译系统传递该头文件查找路径是为了能够包含 builtinTools 目录下的头文件
+    ${CMAKE_CURRENT_SOURCE_DIR}/builtinTools
     # 向编译系统传递该头文件查找路径是为了能够包含 index.html.gz.hpp/loading.html.hpp 头文件
     ${CMAKE_CURRENT_BINARY_DIR}
     # 向编译系统传递该头文件查找路径是为了能够包含 json.hpp/json_fwd.hpp 头文件

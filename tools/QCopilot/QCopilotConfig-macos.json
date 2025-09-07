@@ -8,7 +8,7 @@
     "n_ctx": 10240,
     "n_gpu_layers": 99,
     "auto_start_base_server": true,
-    "log_level":"INFO",
+    "log_level":"DEBUG",
     "tools": [
         {
             "type": "function",
