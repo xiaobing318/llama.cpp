@@ -1,5 +1,4 @@
 #include "write_text_file.h"
-#include "fileTools_utils.h"
 #include "../common/common_utils.h"
 
 namespace BuiltinTools {
@@ -28,6 +27,7 @@ ToolDefinition getWriteTextFileDefinition() {
 }
 
 json executeWriteTextFile(const json& args) {
+    // 从json参数中提取输入，如果有则赋值，反之则使用默认值
     std::string path = args.value("path", "");
     std::string content = args.value("content", "");
     bool append = args.value("append", false);
@@ -45,6 +45,7 @@ json executeWriteTextFile(const json& args) {
     }
 
     try {
+        // 检查文件是否已存在
         bool file_existed = BuiltinTools::Utils::fileExists(path);
 
         // 对于已存在的文件，记录日志提醒应先检查编码
@@ -62,14 +63,14 @@ json executeWriteTextFile(const json& args) {
             // 覆盖模式或新文件：直接写入
             write_success = BuiltinTools::Utils::writeFileContent(path, content);
         }
-
+        // 写入失败则报错
         if (!write_success) {
             LOG_ERR("write_text_file: Failed to write content to file '%s'", path.c_str());
             return BuiltinTools::Utils::createErrorResponse("Failed to write file");
         }
 
         LOG_INF("write_text_file: Successfully wrote %zu bytes to file '%s'", content.size(), path.c_str());
-
+        // 返回成功结果
         json result = BuiltinTools::Utils::createSuccessResponse();
         result["path"] = path;
         result["bytes_written"] = content.size();

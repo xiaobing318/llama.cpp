@@ -1,5 +1,4 @@
 #include "read_text_file.h"
-#include "fileTools_utils.h"
 #include "../common/common_utils.h"
 #include <filesystem>
 
@@ -29,21 +28,23 @@ ToolDefinition getReadTextFileDefinition() {
 }
 
 json executeReadTextFile(const json& args) {
+    // 从json参数中提取输入，如果有则赋值，反之则使用默认值
     std::string path = args.value("path", "");
     int start_line = args.value("start_line", 1);
     int end_line = args.value("end_line", -1);
 
-    // 参数验证
+    // 验证路径参数是否有效
     std::string error_message;
     if (!BuiltinTools::Utils::validatePath(path, error_message)) {
         return BuiltinTools::Utils::createErrorResponse(error_message);
     }
 
-    // 验证行号参数
+    // 验证行号参数（TODO:需要得到一个文件总行数然后做更精确的参数有效性验证）
     if (start_line < 1) {
         return BuiltinTools::Utils::createErrorResponse("start_line must be >= 1");
     }
 
+    // end_line 可以是 -1（表示读到文件末尾），否则必须 >= start_line
     if (end_line != -1 && end_line < start_line) {
         return BuiltinTools::Utils::createErrorResponse("end_line must be >= start_line or -1 for end of file");
     }
@@ -69,8 +70,9 @@ json executeReadTextFile(const json& args) {
 
         // 获取文件大小并检查是否过大
         auto file_size = std::filesystem::file_size(fs_path);
-        const size_t MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB 限制
-
+        // 100MB 限制
+        const size_t MAX_FILE_SIZE = 100 * 1024 * 1024;
+        // 超过限制则报错
         if (file_size > MAX_FILE_SIZE) {
             return BuiltinTools::Utils::createErrorResponse("File too large for text reading (maximum 100MB): " + std::to_string(file_size) + " bytes");
         }
@@ -79,8 +81,8 @@ json executeReadTextFile(const json& args) {
         std::string content;
         int lines_read = 0;
         int actual_end_line = end_line;
-
-        if (!BuiltinTools::Utils::readTextFileWithEncodingAndRange(path, start_line, end_line, content, lines_read, actual_end_line)) {
+        // 读取文件内容，失败则报错
+        if (!BuiltinTools::Utils::readTextFileWithRange(path, start_line, end_line, content, lines_read, actual_end_line)) {
             return BuiltinTools::Utils::createErrorResponse("Failed to read UTF-8 text file. File may be binary or not UTF-8 encoded.");
         }
 

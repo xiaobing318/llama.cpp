@@ -9,18 +9,20 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
 
     // 时间工具
     definitions.push_back(TimeTools::getGetCurrentTimeDefinition());
-    
+
     // 数学工具
     definitions.push_back(MathTools::getCalculateDefinition());
-    
+
     // 文件工具
     definitions.push_back(FileTools::getReadTextFileDefinition());
     definitions.push_back(FileTools::getWriteTextFileDefinition());
     definitions.push_back(FileTools::getValidateUtf8FileDefinition());
-        
+
     // 系统工具
     definitions.push_back(SystemTools::getListDirectoryDefinition());
-    definitions.push_back(SystemTools::getInspectPathDefinition());
+    definitions.push_back(SystemTools::getPathStatDefinition());
+    definitions.push_back(SystemTools::getGrepDefinition());
+    definitions.push_back(SystemTools::getGlobDefinition());
 
     return definitions;
 }
@@ -31,10 +33,10 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
 
     // 从工具定义中获取名称，确保一致性
     auto definitions = getBuiltinToolDefinitions();
-    
+
     for (const auto& def : definitions) {
         const std::string& name = def.name;
-        
+
         // 根据工具名称映射到对应的执行函数
         if (name == "get_current_time") {
             functions[name] = [](const json& args) {
@@ -66,9 +68,19 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
                 return SystemTools::executeListDirectory(args);
             };
         }
-        else if (name == "inspect_path") {
+        else if (name == "path_stat") {
             functions[name] = [](const json& args) {
-                return SystemTools::executeInspectPath(args);
+                return SystemTools::executePathStat(args);
+            };
+        }
+        else if (name == "grep") {
+            functions[name] = [](const json& args) {
+                return SystemTools::executeGrep(args);
+            };
+        }
+        else if (name == "glob") {
+            functions[name] = [](const json& args) {
+                return SystemTools::executeGlob(args);
             };
         }
         else {

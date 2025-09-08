@@ -14,7 +14,9 @@
 #include "builtinTools/fileTools/write_text_file.h"
 #include "builtinTools/fileTools/validate_utf8_file.h"
 #include "builtinTools/systemTools/list_directory.h"
-#include "builtinTools/systemTools/inspect_path.h"
+#include "builtinTools/systemTools/path_stat.h"
+#include "builtinTools/systemTools/grep.h"
+#include "builtinTools/systemTools/glob.h"
 
 using json = nlohmann::ordered_json;
 

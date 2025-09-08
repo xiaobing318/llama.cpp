@@ -28,12 +28,12 @@ ToolDefinition getGetCurrentTimeDefinition() {
 }
 
 json executeGetCurrentTime(const json& args) {
+    // 提取参数，设置默认值
     std::string format = args.value("format", "ISO8601");
     std::string timezone = args.value("timezone", "local");
-
+    // 获取当前系统时间
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
-
     // 根据时区参数选择合适的时间转换函数
     std::tm* time_info = nullptr;
     if (timezone == "UTC") {

@@ -1,5 +1,4 @@
 #include "validate_utf8_file.h"
-#include "fileTools_utils.h"
 #include "../common/common_utils.h"
 #include <filesystem>
 
@@ -29,8 +28,8 @@ ToolDefinition getValidateUtf8FileDefinition() {
 json executeValidateUtf8File(const json& args) {
     std::string path = args.value("path", "");
 
-    // 参数验证
     std::string error_message;
+    // 验证路径合法性
     if (!BuiltinTools::Utils::validatePath(path, error_message)) {
         LOG_ERR("validate_utf8_file: Path validation failed for '%s': %s", path.c_str(), error_message.c_str());
         return BuiltinTools::Utils::createErrorResponse(error_message);

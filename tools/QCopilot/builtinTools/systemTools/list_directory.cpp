@@ -1,37 +1,40 @@
 #include "list_directory.h"
 #include "systemTools_utils.h"
 #include "../common/common_utils.h"
+
 #include <filesystem>
 #include <algorithm>
-#include <set>
-#include <iomanip>
-#include <sstream>
+#include <vector>
+#include <string>
+#include <system_error>
+
+#if defined(_WIN32)
+  #ifndef NOMINMAX
+  #define NOMINMAX
+  #endif
+  #include <windows.h>
+#endif
 
 namespace BuiltinTools {
 namespace SystemTools {
 
 ToolDefinition getListDirectoryDefinition() {
+    // 单行 description，避免多行 JSON 文本问题
     return {
         "list_directory",
         {
             {"type", "function"},
             {"function", {
                 {"name", "list_directory"},
-                {"description", "Comprehensive directory enumeration utility with recursion, hidden-item visibility, kind filtering (files/dirs), extension allow-list, sorting, pagination, and optional size/timestamp enrichment. Ideal for project inventories, build prep, housekeeping (largest/oldest), packaging manifests, and pre-filters before heavier steps. Capabilities: (1) Single folder or full subtree traversal (2) Filter to 'files' or 'dirs' via 'kinds' (3) Restrict by extensions (e.g., 'cpp,h,py') via 'ext_filter' (4) Sort by 'name'/'size'/'modified' with 'asc'/'desc' (5) Paginate using 'offset' and 'limit' (6) Soft cap via 'max_results' and 'truncated=true' when reached (7) Optional size and human-readable sizes, plus modified time. Examples: args {'path':'.','kinds':'files','ext_filter':'cpp,h'} (list C/C++ sources in cwd); args {'path':'data','recursive':true,'sort_by':'size','order':'desc','limit':100} (top 100 largest under data); args {'path':'.','show_hidden':true,'kinds':'dirs'} (include hidden directories); args {'path':'assets','sort_by':'modified','order':'desc','offset':50,'limit':25} (paged recent items)."},
+                {"description", "List contents of a directory with optional recursion, hidden-item visibility, and size reporting. Cross-platform (Windows/Linux). Use cases: quick inventory, pre-check before heavy operations. Parameters: path (required), recursive (bool, default false), show_hidden (bool, default false), include_size (bool, default true), max_results (int, soft cap, default 50000). Returns: files[], count, truncated flag."},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {
-                        {"path",        {{"type","string"},  {"description","Directory to list. Absolute or relative."}}},
-                        {"recursive",   {{"type","boolean"}, {"description","Recurse into subdirectories. Default false."}, {"default", false}}},
-                        {"show_hidden", {{"type","boolean"}, {"description","Include entries whose names start with '.'. Default false."}, {"default", false}}},
-                        {"kinds",       {{"type","string"},  {"enum", {"all","files","dirs"}}, {"description","Filter by kind: 'all' | 'files' | 'dirs'. Default 'all'."}, {"default","all"}}},
-                        {"ext_filter",  {{"type","string"},  {"description","Comma-separated extension allow-list (without dots), e.g., 'cpp,h,py'. Applies to files only."}}},
-                        {"size_info",   {{"type","boolean"}, {"description","Include 'size' and human-readable size for files. Default true."}, {"default", true}}},
-                        {"sort_by",     {{"type","string"},  {"enum", {"name","size","modified"}}, {"description","Sort field. Default 'name'."}, {"default","name"}}},
-                        {"order",       {{"type","string"},  {"enum", {"asc","desc"}}, {"description","Sort order. Default 'asc'."}, {"default","asc"}}},
-                        {"limit",       {{"type","integer"}, {"description","Return at most this many items (pagination). Default 0 = no explicit limit."}, {"default", 0}}},
-                        {"offset",      {{"type","integer"}, {"description","Skip this many items before returning (pagination). Default 0."}, {"default", 0}}},
-                        {"max_results", {{"type","integer"}, {"description","Internal soft cap during enumeration; sets 'truncated=true' if reached. Default 50000."}, {"default", 50000}}}
+                        {"path",         {{"type","string"},  {"description","Directory to list (absolute or relative)."}}},
+                        {"recursive",    {{"type","boolean"}, {"description","Recurse into subdirectories. Default false."}, {"default", false}}},
+                        {"show_hidden",  {{"type","boolean"}, {"description","Include hidden files/directories. Default false."}, {"default", false}}},
+                        {"include_size", {{"type","boolean"}, {"description","Include size for regular files (adds 'size' and 'human_size'). Default true."}, {"default", true}}},
+                        {"max_results",  {{"type","integer"}, {"description","Soft limit of returned entries; result sets 'truncated=true' if reached. Default 50000."}, {"default", 50000}}}
                     }},
                     {"required", {"path"}}
                 }}
@@ -40,198 +43,162 @@ ToolDefinition getListDirectoryDefinition() {
     };
 }
 
-json executeListDirectory(const json& args) {
-    std::string path = args.value("path", ".");
-    bool recursive = args.value("recursive", false);
-    bool show_hidden = args.value("show_hidden", false);
-    std::string kinds = args.value("kinds", "all");
-    std::string ext_filter = args.value("ext_filter", "");
-    bool size_info = args.value("size_info", true);
-    std::string sort_by = args.value("sort_by", "name");
-    std::string order = args.value("order", "asc");
-    int limit = args.value("limit", 0);
-    int offset = args.value("offset", 0);
-    int max_results = args.value("max_results", 50000);
+// 平台无关/有关的小工具函数
+static inline bool isDotHiddenName(const std::filesystem::path& p) {
+    auto name = p.filename().string();
+    return !name.empty() && name[0] == '.';
+}
 
-    // 参数验证
+#if defined(_WIN32)
+static bool isHiddenWin(const std::filesystem::path& p) {
+    // 使用宽字符以兼容非 ASCII 路径
+    std::wstring ws = p.wstring();
+    DWORD attrs = GetFileAttributesW(ws.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES) return false;
+    // HIDDEN 或 SYSTEM 都视为“隐藏”
+    return (attrs & FILE_ATTRIBUTE_HIDDEN) || (attrs & FILE_ATTRIBUTE_SYSTEM);
+}
+#endif
+
+static bool isHiddenCrossPlatform(const std::filesystem::path& p) {
+#if defined(_WIN32)
+    // Windows：使用文件属性；另外也兼容以 “.” 开头的约定
+    return isHiddenWin(p) || isDotHiddenName(p);
+#else
+    // Linux/Unix：以 “.” 开头
+    return isDotHiddenName(p);
+#endif
+}
+
+// 安全获取文件大小（失败返回 false）
+static bool tryGetFileSize(const std::filesystem::path& p, uint64_t& out_size) {
+    std::error_code ec;
+    auto sz = std::filesystem::file_size(p, ec);
+    if (ec) return false;
+    out_size = static_cast<uint64_t>(sz);
+    return true;
+}
+
+// 主执行逻辑
+json executeListDirectory(const json& args) {
+
+    // 解析参数
+    const std::string path = args.value("path", ".");
+    const bool recursive = args.value("recursive", false);
+    const bool show_hidden = args.value("show_hidden", false);
+    const bool include_size = args.value("include_size", true);
+    const int  max_results = args.value("max_results", 50000);
+
+    // 基础校验
     std::string error_message;
     if (!Utils::validateSystemPath(path, error_message)) {
         LOG_ERR("list_directory: Path validation failed for '%s': %s", path.c_str(), error_message.c_str());
         return BuiltinTools::Utils::createErrorResponse(error_message);
     }
-
     if (!BuiltinTools::Utils::fileExists(path)) {
         LOG_ERR("list_directory: Directory not found: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Directory not found: " + path);
     }
-
     if (!std::filesystem::is_directory(path)) {
         LOG_ERR("list_directory: Path is not a directory: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Path is not a directory: " + path);
     }
 
-    std::vector<json> file_list;
+    // 枚举选项：跳过权限拒绝；不跟随符号链接（避免递归环）
+    const auto opts = std::filesystem::directory_options::skip_permission_denied;
 
-    // 解析扩展名过滤器
-    std::set<std::string> allowed_exts;
-    if (!ext_filter.empty()) {
-        auto exts = BuiltinTools::Utils::splitString(ext_filter, ',');
-        for (auto& ext : exts) {
-            std::string trimmed = BuiltinTools::Utils::trimString(ext);
-            if (!trimmed.empty()) {
-                if (trimmed[0] != '.') trimmed = "." + trimmed;
-                allowed_exts.insert(trimmed);
-            }
+    std::vector<json> out_items;
+    out_items.reserve(1024);
+
+    bool truncated = false;
+    size_t produced = 0;
+
+    // 封装一次性处理逻辑
+    auto process_entry = [&](const std::filesystem::directory_entry& entry,
+                             const std::filesystem::path& root) -> void {
+        if (produced >= static_cast<size_t>(max_results)) {
+            truncated = true;
+            return;
         }
-    }
 
-    try {
-        auto process_entry = [&](const std::filesystem::directory_entry& entry) {
-            if (file_list.size() >= static_cast<size_t>(max_results)) {
-                return false; // 达到上限
-            }
+        // 非抛异常方式获取状态，减少 I/O 异常影响
+        std::error_code ec;
+        const auto st = entry.symlink_status(ec);
+        if (ec) return;
 
-            std::string filename = entry.path().filename().string();
+        const auto p  = entry.path();
+        const bool is_dir  = std::filesystem::is_directory(st);
+        const bool is_file = std::filesystem::is_regular_file(st);
+        const bool is_sym  = std::filesystem::is_symlink(st);
 
-            // 隐藏文件过滤
-            if (!show_hidden && !filename.empty() && filename[0] == '.') {
-                return true; // 继续
-            }
+        // 隐藏项处理（对文件 & 目录都生效）
+        if (!show_hidden && isHiddenCrossPlatform(p)) {
+            return;
+        }
 
-            // 类型过滤
-            bool is_dir = entry.is_directory();
-            bool is_file = entry.is_regular_file();
-
-            if (kinds == "files" && !is_file) return true;
-            if (kinds == "dirs" && !is_dir) return true;
-
-            // 扩展名过滤（仅对文件）
-            if (!allowed_exts.empty() && is_file) {
-                std::string ext = entry.path().extension().string();
-                if (allowed_exts.find(ext) == allowed_exts.end()) {
-                    return true;
-                }
-            }
-
-            json file_info = {
-                {"name", filename},
-                {"path", entry.path().string()},
-                {"type", is_dir ? "directory" : "file"}
-            };
-
-            if (size_info && is_file) {
-                try {
-                    auto file_size = std::filesystem::file_size(entry);
-                    file_info["size"] = file_size;
-                    file_info["human_size"] = Utils::formatFileSize(file_size);
-                } catch (const std::exception& e) {
-                    LOG_WRN("list_directory: Failed to get file size for '%s': %s", entry.path().string().c_str(), e.what());
-                    file_info["size"] = 0;
-                    file_info["human_size"] = "0 B";
-                }
-
-                try {
-                    auto ftime = std::filesystem::last_write_time(entry);
-                    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                        ftime - std::filesystem::file_time_type::clock::now() +
-                        std::chrono::system_clock::now()
-                    );
-                    auto time_t = std::chrono::system_clock::to_time_t(sctp);
-
-                    file_info["modified"] = Utils::formatTimeStamp(sctp);
-                    file_info["modified_timestamp"] = time_t;
-                } catch (const std::exception& e) {
-                    LOG_WRN("list_directory: Failed to get modification time for '%s': %s", entry.path().string().c_str(), e.what());
-                    file_info["modified"] = "";
-                    file_info["modified_timestamp"] = 0;
-                }
-            }
-
-            file_list.push_back(file_info);
-            return true; // 继续
+        json item = {
+            {"name", p.filename().string()},
+            {"path", p.string()},
+            {"type", is_dir ? "directory" : (is_file ? "file" : (is_sym ? "symlink" : "other"))},
+            {"is_hidden", isHiddenCrossPlatform(p)}
         };
 
-        bool truncated = false;
+        if (include_size && is_file) {
+            uint64_t sz = 0;
+            if (tryGetFileSize(p, sz)) {
+                item["size"] = sz;
+                item["human_size"] = Utils::formatFileSize(sz);
+            } else {
+                // 文件大小不可读时给个占位
+                item["size"] = 0;
+                item["human_size"] = "0 B";
+            }
+        }
 
+        out_items.push_back(std::move(item));
+        ++produced;
+    };
+
+    try {
         if (recursive) {
-            for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
-                if (!process_entry(entry)) {
-                    truncated = true;
-                    break;
+            // 递归枚举：对隐藏目录的“剪枝”也要生效
+            for (std::filesystem::recursive_directory_iterator it(path, opts), end; it != end; ++it) {
+                if (produced >= static_cast<size_t>(max_results)) { truncated = true; break; }
+
+                // 如果遇到隐藏目录且未开启 show_hidden，则跳过并阻止深入
+                if (!show_hidden) {
+                    std::error_code ec;
+                    if (it->is_directory(ec) && !ec && isHiddenCrossPlatform(it->path())) {
+                        it.disable_recursion_pending();
+                        continue;
+                    }
                 }
+
+                process_entry(*it, path);
             }
         } else {
-            for (auto& entry : std::filesystem::directory_iterator(path)) {
-                if (!process_entry(entry)) {
-                    truncated = true;
-                    break;
-                }
+            for (std::filesystem::directory_iterator it(path, opts), end; it != end; ++it) {
+                if (produced >= static_cast<size_t>(max_results)) { truncated = true; break; }
+                process_entry(*it, path);
             }
         }
-
-        // 排序
-        if (sort_by == "name") {
-            std::sort(file_list.begin(), file_list.end(),
-                [&order](const json& a, const json& b) {
-                    bool less = a["name"].get<std::string>() < b["name"].get<std::string>();
-                    return order == "asc" ? less : !less;
-                });
-        } else if (sort_by == "size" && size_info) {
-            std::sort(file_list.begin(), file_list.end(),
-                [&order](const json& a, const json& b) {
-                    uint64_t size_a = a.contains("size") ? a["size"].get<uint64_t>() : 0;
-                    uint64_t size_b = b.contains("size") ? b["size"].get<uint64_t>() : 0;
-                    bool less = size_a < size_b;
-                    return order == "asc" ? less : !less;
-                });
-        } else if (sort_by == "modified" && size_info) {
-            std::sort(file_list.begin(), file_list.end(),
-                [&order](const json& a, const json& b) {
-                    int64_t time_a = a.contains("modified_timestamp") ? a["modified_timestamp"].get<int64_t>() : 0;
-                    int64_t time_b = b.contains("modified_timestamp") ? b["modified_timestamp"].get<int64_t>() : 0;
-                    bool less = time_a < time_b;
-                    return order == "asc" ? less : !less;
-                });
-        }
-
-        // 分页
-        std::vector<json> paged_list;
-        if (limit > 0 || offset > 0) {
-            size_t start = static_cast<size_t>(offset);
-            size_t end = limit > 0 ? start + static_cast<size_t>(limit) : file_list.size();
-
-            for (size_t i = start; i < std::min(end, file_list.size()); ++i) {
-                paged_list.push_back(file_list[i]);
-            }
-        } else {
-            paged_list = file_list;
-        }
-
-        // 清理不需要的 modified_timestamp 字段
-        for (auto& item : paged_list) {
-            if (item.contains("modified_timestamp")) {
-                item.erase("modified_timestamp");
-            }
-        }
-
-        json result = BuiltinTools::Utils::createSuccessResponse();
-        result["path"] = path;
-        result["recursive"] = recursive;
-        result["show_hidden"] = show_hidden;
-        result["kinds"] = kinds;
-        result["files"] = paged_list;
-        result["count"] = paged_list.size();
-
-        if (truncated) {
-            result["truncated"] = true;
-        }
-
-        return result;
-
     } catch (const std::exception& e) {
-        LOG_ERR("list_directory: Failed to list directory '%s': %s", path.c_str(), e.what());
+        LOG_ERR("list_directory: Failed to list '%s': %s", path.c_str(), e.what());
         return BuiltinTools::Utils::createErrorResponse("Failed to list directory: " + std::string(e.what()));
     }
+
+    // 组织返回
+    json result = BuiltinTools::Utils::createSuccessResponse();
+    result["path"] = path;
+    result["recursive"] = recursive;
+    result["show_hidden"] = show_hidden;
+    result["include_size"] = include_size;
+    result["max_results"] = max_results;
+    result["files"] = std::move(out_items);
+    result["count"] = result["files"].size();
+    if (truncated) result["truncated"] = true;
+
+    return result;
 }
 
 } // namespace SystemTools

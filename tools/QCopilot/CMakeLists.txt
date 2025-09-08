@@ -20,17 +20,16 @@ set(TARGET_SRCS
 set(BUILTIN_TOOLS_SRCS
     # 通用工具
     builtinTools/common/common_utils.cpp
-    builtinTools/common/pattern_matcher.cpp
 
     # 时间工具
     builtinTools/timeTools/get_current_time.cpp
 
     # 数学工具
+    builtinTools/mathTools/MathTools_utils.cpp
     builtinTools/mathTools/calculate.cpp
     builtinTools/mathTools/expression_parser.cpp
 
     # 文件工具
-    builtinTools/fileTools/fileTools_utils.cpp
     builtinTools/fileTools/read_text_file.cpp
     builtinTools/fileTools/write_text_file.cpp
     builtinTools/fileTools/validate_utf8_file.cpp
@@ -38,7 +37,9 @@ set(BUILTIN_TOOLS_SRCS
     # 系统工具
     builtinTools/systemTools/systemTools_utils.cpp
     builtinTools/systemTools/list_directory.cpp
-    builtinTools/systemTools/inspect_path.cpp
+    builtinTools/systemTools/path_stat.cpp
+    builtinTools/systemTools/glob.cpp
+    builtinTools/systemTools/grep.cpp
 )
 
 # 将内置工具源文件添加到目标源文件列表

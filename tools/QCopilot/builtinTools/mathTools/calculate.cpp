@@ -1,6 +1,7 @@
 #include "calculate.h"
 #include "expression_parser.h"
 #include "../common/common_utils.h"
+#include "mathTools_utils.h"
 #include <cctype>
 #include <cmath>
 
@@ -37,7 +38,7 @@ json executeCalculate(const json& args) {
 
     // 输入验证：检查表达式长度是否合理
     std::string error_message;
-    if (!BuiltinTools::Utils::validateStringLength(expression, 1000, "Expression", error_message)) {
+    if (!Utils::validateStringLength(expression, 1000, "Expression", error_message)) {
         LOG_ERR("calculate: Expression too long: %zu characters", expression.length());
         return BuiltinTools::Utils::createErrorResponse(error_message);
     }
