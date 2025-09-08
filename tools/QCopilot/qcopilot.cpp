@@ -896,7 +896,25 @@ public:
         if (QCopilotConfig.n_gpu_layers >= 0) {
             cmd += " -ngl " + std::to_string(QCopilotConfig.n_gpu_layers);
         }
-        cmd += " --chat-template-kwargs '{\"reasoning_effort\":\"high\"}'";
+        // 针对不同平台，构造 chat-template-kwargs 字符串
+#ifdef _WIN32
+        /*
+        1、效果：程序接收到的将是 {"reasoning_effort":"high"}
+        2、Windows 规则：参数外层用 "..." ，内部 JSON 里的 " 必须写成 ""
+        */
+        std::string chat_kwargs =
+            "\"{"
+            "\"\"reasoning_effort\"\""
+            ":"
+            "\"\"high\"\""
+            "}\"";
+#else
+        // POSIX 规则：常见方式是外层 "..." ，内部 \" 转义
+        std::string chat_kwargs = "{\"reasoning_effort\":\"high\"}";
+#endif
+
+        cmd += " --chat-template-kwargs " + chat_kwargs;
+
 
 
         LOG_INF("正在启动 base-server......");
