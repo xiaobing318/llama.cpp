@@ -7,6 +7,7 @@
 namespace BuiltinTools {
 namespace SystemTools {
 
+// 获取 path_stat 工具的定义
 ToolDefinition getPathStatDefinition() {
     return {
         "path_stat",
@@ -29,7 +30,9 @@ ToolDefinition getPathStatDefinition() {
     };
 }
 
+// 执行 path_stat 工具
 json executePathStat(const json& args) {
+    // 提取参数，设置默认值
     std::string path = args.value("path", "");
     bool detailed = args.value("detailed", false);
     bool text_analysis = args.value("text_analysis", false);
@@ -49,27 +52,23 @@ json executePathStat(const json& args) {
             LOG_ERR("path_stat: Path not found: %s", path.c_str());
             return BuiltinTools::Utils::createErrorResponse("Path not found: " + path);
         }
-
+        // 构建结果JSON
         json result = BuiltinTools::Utils::createSuccessResponse();
         result["path"] = path;
         result["exists"] = true;
         result["absolute_path"] = std::filesystem::absolute(fs_path).string();
         result["filename"] = fs_path.filename().string();
-
         // 文件类型识别
         if (std::filesystem::is_regular_file(fs_path)) {
             result["type"] = "file";
-
             // 文件大小信息
             auto file_size = std::filesystem::file_size(fs_path);
             result["size"] = file_size;
             result["human_size"] = Utils::formatFileSize(file_size);
-
             // 文件扩展名
             if (fs_path.has_extension()) {
                 result["extension"] = fs_path.extension().string();
             }
-
             // UTF-8文本文件分析
             if (text_analysis) {
                 std::string content;
@@ -85,13 +84,14 @@ json executePathStat(const json& args) {
                     } else {
                         line_count = 0; // 空文件
                     }
-
+                    // 返回文本统计信息
                     result["text_stats"] = {
                         {"line_count", line_count},
                         {"character_count", content.size()},
                         {"is_text_readable", true}
                     };
                 } else {
+                    // 读取失败，可能是二进制文件或编码问题
                     LOG_WRN("path_stat: Cannot read file as text: %s", path.c_str());
                     result["text_stats"] = {
                         {"is_text_readable", false},
