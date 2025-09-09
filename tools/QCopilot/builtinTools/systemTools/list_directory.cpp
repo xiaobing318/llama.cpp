@@ -18,6 +18,7 @@
 namespace BuiltinTools {
 namespace SystemTools {
 
+// 获取 list_directory 工具的定义
 ToolDefinition getListDirectoryDefinition() {
     // 单行 description，避免多行 JSON 文本问题
     return {
@@ -43,12 +44,13 @@ ToolDefinition getListDirectoryDefinition() {
     };
 }
 
-// 平台无关/有关的小工具函数
+// 内部辅助函数：判断是否为以点开头的隐藏文件名
 static inline bool isDotHiddenName(const std::filesystem::path& p) {
     auto name = p.filename().string();
     return !name.empty() && name[0] == '.';
 }
 
+// Windows 平台下的隐藏文件判断
 #if defined(_WIN32)
 static bool isHiddenWin(const std::filesystem::path& p) {
     // 使用宽字符以兼容非 ASCII 路径
@@ -60,6 +62,7 @@ static bool isHiddenWin(const std::filesystem::path& p) {
 }
 #endif
 
+// 跨平台隐藏文件判断
 static bool isHiddenCrossPlatform(const std::filesystem::path& p) {
 #if defined(_WIN32)
     // Windows：使用文件属性；另外也兼容以 “.” 开头的约定
@@ -70,7 +73,7 @@ static bool isHiddenCrossPlatform(const std::filesystem::path& p) {
 #endif
 }
 
-// 安全获取文件大小（失败返回 false）
+// 内部辅助函数：尝试获取文件大小
 static bool tryGetFileSize(const std::filesystem::path& p, uint64_t& out_size) {
     std::error_code ec;
     auto sz = std::filesystem::file_size(p, ec);
@@ -79,10 +82,10 @@ static bool tryGetFileSize(const std::filesystem::path& p, uint64_t& out_size) {
     return true;
 }
 
-// 主执行逻辑
+// 执行 list_directory 工具
 json executeListDirectory(const json& args) {
 
-    // 解析参数
+    // 解析参数，设置默认参数
     const std::string path = args.value("path", ".");
     const bool recursive = args.value("recursive", false);
     const bool show_hidden = args.value("show_hidden", false);
