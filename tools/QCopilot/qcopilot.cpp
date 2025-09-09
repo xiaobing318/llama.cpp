@@ -910,7 +910,7 @@ public:
             "}\"";
 #else
         // POSIX 规则：常见方式是外层 "..." ，内部 \" 转义
-        std::string chat_kwargs = "{\"reasoning_effort\":\"high\"}";
+        std::string chat_kwargs = "'{\"reasoning_effort\":\"high\"}'";
 #endif
 
         cmd += " --chat-template-kwargs " + chat_kwargs;
