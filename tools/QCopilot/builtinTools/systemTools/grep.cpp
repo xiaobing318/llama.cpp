@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <system_error>
 
+// 根据不同的平台包含头文件
 #if defined(_WIN32)
   #ifndef NOMINMAX
   #define NOMINMAX
@@ -20,11 +21,13 @@ namespace SystemTools {
 
 namespace fs = std::filesystem;
 
-// ---- 隐藏项检测（与 glob 保持一致） ------------------------
+// 内部辅助函数
 static inline bool nameStartsWithDot(const fs::path& p) {
     auto s = p.filename().string();
     return !s.empty() && s[0] == '.';
 }
+
+// 内部辅助函数：跨平台隐藏项检测
 #if defined(_WIN32)
 static bool isHiddenWin(const fs::path& p) {
     std::wstring ws = p.wstring();
@@ -41,7 +44,7 @@ static bool isHiddenCrossPlatform(const fs::path& p) {
 #endif
 }
 
-// ---- 工具定义 ---------------------------------------------
+// 获取 grep 工具的定义
 ToolDefinition getGrepDefinition() {
     return {
         "grep",
@@ -71,8 +74,9 @@ ToolDefinition getGrepDefinition() {
     };
 }
 
-// ---- 执行逻辑 ---------------------------------------------
+// 执行 grep 工具
 json executeGrep(const json& args) {
+    // 解析参数，设置默认值
     const std::string target_path    = args.value("path", "");
     const std::string pat            = args.value("pattern", "");
     const bool use_regex             = args.value("use_regex", false);
@@ -97,7 +101,7 @@ json executeGrep(const json& args) {
         LOG_ERR("grep: Path not found: %s", target_path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Path not found: " + target_path);
     }
-
+    // 设置返回值的基础结构
     json result = BuiltinTools::Utils::createSuccessResponse();
     result["path"]            = target_path;
     result["pattern"]         = pat;
