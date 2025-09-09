@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <fstream>
 
 namespace BuiltinTools {
 namespace Utils {
@@ -106,11 +107,12 @@ std::string joinStrings(
 * 9、列出目录内容（不递归）
 * 10、在目录书中匹配文件/目录
 * 11、在文件中搜索
+* 12、检测文本是否疑似二进制文件
+* 13、以unicode友好方式打开指定文件，为了能够实现对中文路径的支持
 ***********************************************************/
 
 // 通用实用函数 1 ：检查文件是否存在
 bool fileExists(const std::string& path);
-
 // 通用实用函数 2 : 检查文件是否为常规可读文件
 bool is_regular_readable_file(
     const std::string& path,
@@ -148,7 +150,6 @@ bool appendFileContent(
 
 // 通用实用函数 9 ：列出目录内容（不递归）
 std::vector<std::string> listDirectory(const std::string& path);
-
 // 通用实用函数 10 ：在目录树中匹配文件/目录
 std::vector<std::filesystem::path> globFiles(
     const std::filesystem::path& base_dir,
@@ -162,7 +163,6 @@ std::vector<std::filesystem::path> globFiles(
     true
 #endif
 );
-
 // 通用实用函数 11 ：在文件中搜索
 std::vector<json> searchInFileRegex(
     const std::filesystem::path& filepath,
@@ -173,6 +173,15 @@ std::vector<json> searchInFileRegex(
     int& total_matches,
     int max_matches);
 
+// 通用实用函数 12 ：检测文本是否疑似二进制文件
+bool isLikelyBinary(
+    const std::filesystem::path& filepath,
+    std::size_t probe = 4096);
+
+// 通用实用函数 13 ：以unicode友好方式打开指定文件，为了能够实现对中文路径的支持
+std::ifstream open_ifstream_unicode(
+    const std::string& path,
+    std::ios::openmode mode);
 #pragma endregion
 
 } // namespace Utils

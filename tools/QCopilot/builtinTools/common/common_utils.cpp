@@ -144,24 +144,6 @@ static std::vector<std::string> splitPatternSegments(std::string pat) {
     if (!cur.empty()) segs.push_back(cur);
     return segs;
 }
-
-// 辅助：检测是否疑似二进制文件
-static bool isLikelyBinary(
-    const fs::path& filepath,
-    std::size_t probe = 4096) {
-    // 以二进制方式打开
-    std::ifstream ifs(filepath, std::ios::binary);
-    if (!ifs) return false; // 打不开就别当二进制处理
-    std::string buf;
-    buf.resize(probe);
-    ifs.read(&buf[0], static_cast<std::streamsize>(buf.size()));
-    std::streamsize n = ifs.gcount();
-    for (std::streamsize i = 0; i < n; ++i) {
-        unsigned char c = static_cast<unsigned char>(buf[static_cast<std::size_t>(i)]);
-        if (c == 0) return true; // NUL 字节高概率是二进制
-    }
-    return false;
-}
 #pragma endregion
 
 #pragma region "匹配模式相关实用函数"
@@ -433,9 +415,10 @@ std::string joinStrings(const std::vector<std::string>& strings, const std::stri
 * 7、以覆盖方式写入二进制文件
 * 8、以追加方式写入二进制文件
 * 9、列出目录内容（不递归）
-* 10、检测文件是否为二进制文件
-* 11、在目录书中匹配文件/目录
-* 12、在文件中搜索
+* 10、在目录书中匹配文件/目录
+* 11、在文件中搜索
+* 12、检查文件是否疑似二进制文件
+* 13、以unicode友好方式打开指定文件，为了能够实现对中文路径的支持
 ***********************************************************/
 bool fileExists(const std::string& path) {
     if (path.empty()) {
@@ -775,8 +758,7 @@ std::vector<fs::path> globFiles(
             for (const auto& root : frontier) {
                 if (!fs::exists(root) || !fs::is_directory(root)) continue;
                 expanded.push_back(root);
-                fs::directory_options opts = follow_symlinks ? fs::directory_options::follow_directory_symlink
-                                                             : fs::directory_options::none;
+                fs::directory_options opts = follow_symlinks ? fs::directory_options::follow_directory_symlink : fs::directory_options::none;
                 for (auto it = fs::recursive_directory_iterator(root, opts);
                      it != fs::recursive_directory_iterator(); ++it) {
                     if (it->is_directory()) expanded.push_back(it->path());
@@ -790,8 +772,7 @@ std::vector<fs::path> globFiles(
         std::vector<fs::path> next;
         for (const auto& dir : frontier) {
             if (!fs::exists(dir) || !fs::is_directory(dir)) continue;
-            fs::directory_options opts = follow_symlinks ? fs::directory_options::follow_directory_symlink
-                                                         : fs::directory_options::none;
+            fs::directory_options opts = follow_symlinks ? fs::directory_options::follow_directory_symlink : fs::directory_options::none;
             for (auto& de : fs::directory_iterator(dir, opts)) {
                 const std::string name = de.path().filename().string();
                 if (!globSegmentMatch(name, seg, case_sensitive)) continue;
@@ -818,9 +799,7 @@ std::vector<fs::path> globFiles(
     out.erase(std::unique(out.begin(), out.end()), out.end());
     return out;
 }
-
-
-// Grep：在文件中搜索
+// Grep：在文件中搜索匹配模式
 std::vector<json> searchInFileRegex(
     const fs::path& filepath,
     const std::string& pattern,
@@ -901,7 +880,30 @@ std::vector<json> searchInFileRegex(
 
     return matches;
 }
-
+// 检测文本是否疑似二进制文件
+bool isLikelyBinary(
+    const fs::path& filepath,
+    std::size_t probe) {
+    // 以二进制方式打开
+    std::ifstream ifs(filepath, std::ios::binary);
+    if (!ifs) return false; // 打不开就别当二进制处理
+    std::string buf;
+    buf.resize(probe);
+    ifs.read(&buf[0], static_cast<std::streamsize>(buf.size()));
+    std::streamsize n = ifs.gcount();
+    for (std::streamsize i = 0; i < n; ++i) {
+        unsigned char c = static_cast<unsigned char>(buf[static_cast<std::size_t>(i)]);
+        if (c == 0) return true; // NUL 字节高概率是二进制
+    }
+    return false;
+}
+// 以unicode友好方式打开指定文件，为了能够实现对中文路径的支持
+std::ifstream open_ifstream_unicode(
+    const std::string& path,
+    std::ios::openmode mode) {
+    // 使用 fs::path 保证在 Windows 上走 _wfopen 路径，支持中文/日文等非 ASCII 路径
+    return std::ifstream(fs::path(path), mode);
+}
 #pragma endregion
 
 } // namespace Utils

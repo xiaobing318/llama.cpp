@@ -21,7 +21,7 @@ ToolDefinition getPathStatDefinition() {
                     {"properties", {
                         {"path", {{"type", "string"}, {"description", "Target path for inspection (absolute or relative). Examples: './config.txt', '/var/log/app.log', 'C:/Documents/readme.md', '../src/main.cpp'. Supports cross-platform path formats. The tool validates path syntax and existence before analysis."}}},
                         {"detailed", {{"type", "boolean"}, {"description", "Analysis depth: false (basic inspection - path validation, type identification, size, modified time) or true (comprehensive analysis - includes permissions, directory statistics, and enhanced metadata). Default false for optimal performance. Detailed mode provides Unix-style permission strings and recursive directory analysis."}}},
-                        {"text_analysis", {{"type", "boolean"}, {"description", "Enable UTF-8 text file analysis including line counting and content statistics. Only applicable to regular files that can be read as text. Provides line count, character count for text files. Default false to avoid unnecessary file reading. Useful for code files, documentation, configuration files."}}}
+                        {"text_analysis", {{"type", "boolean"}, {"description", "Enable UTF-8 text file analysis including line counting and content statistics. Only applicable to regular files that can be read as text. Provides line count, character count for text files. Default true to for file reading. Useful for code files, documentation, configuration files."}}}
                     }},
                     {"required", {"path"}}
                 }}
@@ -35,7 +35,7 @@ json executePathStat(const json& args) {
     // 提取参数，设置默认值
     std::string path = args.value("path", "");
     bool detailed = args.value("detailed", false);
-    bool text_analysis = args.value("text_analysis", false);
+    bool text_analysis = args.value("text_analysis", true);
 
     // 参数验证
     std::string error_message;

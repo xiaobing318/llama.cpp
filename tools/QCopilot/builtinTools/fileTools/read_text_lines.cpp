@@ -12,6 +12,26 @@ namespace fs = std::filesystem;
 namespace BuiltinTools {
 namespace FileTools {
 
+// 如果存在 UTF-8 BOM ，则跳过对应的字节
+static void skip_utf8_bom(std::istream& is) {
+    // 仅在流处于 good 状态尝试
+    if (!is.good()) return;
+    unsigned char bom[3] = {0, 0, 0};
+    std::istream::pos_type pos0 = is.tellg();
+    if (!is.read(reinterpret_cast<char*>(bom), 3)) {
+        // 不足 3 字节，复位流并退出
+        is.clear();
+        is.seekg(pos0);
+        return;
+    }
+    const bool has_bom = (bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF);
+    if (!has_bom) {
+        // 无 BOM，回退
+        is.clear();
+        is.seekg(pos0);
+    }
+}
+
 // 获取 read_text_lines 工具的定义
 ToolDefinition getReadTextLinesDefinition() {
     return {
@@ -101,11 +121,15 @@ json executeReadTextLines(const json& args) {
     // 获取得到输入文件的总行数
     int64_t total_lines = 0;
     {
-        std::ifstream ifs(path, std::ios::binary);
+        // 以 Unicode 友好方式打开，并跳过 BOM
+        std::ifstream ifs = BuiltinTools::Utils::open_ifstream_unicode(path, std::ios::binary);
         if (!ifs) {
             LOG_ERR("read_text_lines: open for counting failed: %s", path.c_str());
             return BuiltinTools::Utils::createErrorResponse("Failed to open file");
         }
+        // 跳过 BOM
+        skip_utf8_bom(ifs);
+
         std::string tmp;
         while (std::getline(ifs, tmp)) {
             if (!tmp.empty() && tmp.back() == '\r') tmp.pop_back(); // 统一处理 CRLF
@@ -117,6 +141,24 @@ json executeReadTextLines(const json& args) {
         }
     }
 
+    // 如果是空文件不报错，直接返回空切片（content/lines 为空）
+    if (total_lines == 0) {
+        json out = BuiltinTools::Utils::createSuccessResponse();
+        out["tool"] = "read_text_lines";
+        out["path"] = path;
+        out["encoding"] = enforce_utf8 ? "utf-8" : "assumed-utf8";
+        out["enforce_utf8"] = enforce_utf8;
+        out["include_line_numbers"] = include_line_numbers;
+        out["total_lines"] = 0;
+        // 对于空文件，保持区间语义合理：end_line 规范为 0
+        out["range"] = { {"start_line", start_line}, {"end_line", 0} };
+        out["content"] = "";
+        if (include_line_numbers) {
+            out["lines"] = json::array();
+        }
+        return out;
+    }
+
     // 规范化并验证行号范围
     if (end_line <= 0){
         end_line = total_lines;
@@ -126,27 +168,25 @@ json executeReadTextLines(const json& args) {
         LOG_ERR("read_text_lines: invalid start_line=%lld", (long long)start_line);
         return BuiltinTools::Utils::createErrorResponse("start_line must be >= 1");
     }
-    if (total_lines > 0 && start_line > total_lines) {
-        LOG_ERR("read_text_lines: start_line(%lld) > total_lines(%lld)", (long long)start_line, (long long)total_lines);
-        return BuiltinTools::Utils::createErrorResponse("start_line exceeds total_lines=" + std::to_string(total_lines));
+    // 对 end_line 进行夹取，而不是报错
+    if (end_line > total_lines) {
+        end_line = total_lines;
     }
-    // 检查结束行号的合法性
-    if (total_lines > 0 && end_line > total_lines) {
-        LOG_ERR("read_text_lines: end_line(%lld) > total_lines(%lld)", (long long)end_line, (long long)total_lines);
-        return BuiltinTools::Utils::createErrorResponse("end_line exceeds total_lines=" + std::to_string(total_lines));
-    }
-    // 检查起始行号不大于结束行号
-    if (total_lines > 0 && start_line > end_line) {
+    // 检查起始行号不大于结束行号（当 total_lines>0 时有效）
+    if (start_line > end_line) {
         LOG_ERR("read_text_lines: start_line(%lld) > end_line(%lld)", (long long)start_line, (long long)end_line);
         return BuiltinTools::Utils::createErrorResponse("Invalid range: start_line > end_line");
     }
 
-    // 读取指定行号范围的数据，代码执行到这里说明参数合法
-    std::ifstream ifs(path, std::ios::binary);
+    // 读取指定行号范围的数据，代码执行到这里说明参数合法，以 Unicode 友好方式打开，并跳过 BOM
+    std::ifstream ifs = BuiltinTools::Utils::open_ifstream_unicode(path, std::ios::binary);
     if (!ifs) {
         LOG_ERR("read_text_lines: open for reading failed: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Failed to open file");
     }
+    // 跳过 BOM
+    skip_utf8_bom(ifs);
+
     // 预分配空间
     std::vector<std::pair<int64_t, std::string>> buf;
     buf.reserve((size_t) std::max<int64_t>(0, end_line - start_line + 1));
@@ -166,18 +206,25 @@ json executeReadTextLines(const json& args) {
         return BuiltinTools::Utils::createErrorResponse("I/O error during reading");
     }
 
-    // 针对返回片段验证其是否为正确的UTF-8字符集编码
-    if (enforce_utf8) {
-        std::string joined;
-        joined.reserve((size_t)std::min<uint64_t>((uint64_t)fsz, max_file_size_bytes));
+    // 对文件是否为二进制进行探测
+    {
+        std::string joined_for_probe;
+        joined_for_probe.reserve((size_t)std::min<uint64_t>((uint64_t)fsz, max_file_size_bytes));
         for (const auto& p : buf) {
-            joined.append(p.second);
-            joined.push_back('\n');
+            joined_for_probe.append(p.second);
+            joined_for_probe.push_back('\n');
         }
-        // 验证读取的内容是否为合法的 UTF-8 字符串
-        if (!BuiltinTools::Utils::isValidUtf8String(joined)) {
-            LOG_ERR("read_text_lines: selected segment is not valid UTF-8: %s", path.c_str());
-            return BuiltinTools::Utils::createErrorResponse("Selected text is not valid UTF-8");
+        if (BuiltinTools::Utils::isLikelyBinary(joined_for_probe)) {
+            LOG_ERR("read_text_lines: selected segment is likely binary: %s", path.c_str());
+            return BuiltinTools::Utils::createErrorResponse("Selected text appears to be binary");
+        }
+
+        // 针对返回片段验证其是否为正确的UTF-8字符集编码
+        if (enforce_utf8) {
+            if (!BuiltinTools::Utils::isValidUtf8String(joined_for_probe)) {
+                LOG_ERR("read_text_lines: selected segment is not valid UTF-8: %s", path.c_str());
+                return BuiltinTools::Utils::createErrorResponse("Selected text is not valid UTF-8");
+            }
         }
     }
 
@@ -185,7 +232,8 @@ json executeReadTextLines(const json& args) {
     json out = BuiltinTools::Utils::createSuccessResponse();
     out["tool"] = "read_text_lines";
     out["path"] = path;
-    out["encoding"] = "utf-8";
+    // encoding 字段在 enforce_utf8=false 时标记为 "assumed-utf8" ——
+    out["encoding"] = enforce_utf8 ? "utf-8" : "assumed-utf8";
     out["enforce_utf8"] = enforce_utf8;
     out["include_line_numbers"] = include_line_numbers;
     out["total_lines"] = total_lines;
