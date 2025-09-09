@@ -37,17 +37,17 @@ ToolDefinition getCalculateDefinition() {
                 {"name", "calculate"},
                 {"description",
                     R"(Basic mathematical expression evaluator for arithmetic, functions, and constants. Designed for quick scientific/engineering math, not a general-purpose data calculator. Supports:
-                    1) Operators: +, -, *, /, %, ^ (right-associative for exponent).
-                    2) Functions: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, sqrt, log (base-10), ln (natural), exp, abs, floor, ceil, round, pow(a,b).
-                    3) Constants: pi, e.
-                    4) Parentheses and scientific notation (e.g., 1.5e-3).
-                    Examples:
-                    - 'sin(pi/4)'
-                    - 'sqrt(pow(3,2)+pow(4,2))'
-                    - '2*pi*3.5'
-                    - 'log(100)/ln(10)'
-                    - '(1+0.05)^12'
-                    - 'abs(-5)+floor(3.7)'.)"},
+1) Operators: +, -, *, /, %, ^ (right-associative for exponent).
+2) Functions: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, sqrt, log (base-10), ln (natural), exp, abs, floor, ceil, round, pow(a,b).
+3) Constants: pi, e.
+4) Parentheses and scientific notation (e.g., 1.5e-3).
+Examples:
+- 'sin(pi/4)'
+- 'sqrt(pow(3,2)+pow(4,2))'
+- '2*pi*3.5'
+- 'log(100)/ln(10)'
+- '(1+0.05)^12'
+- 'abs(-5)+floor(3.7)'.)"},
                 {"parameters", {
                     {"type", "object"},
                     {"properties", {

@@ -14,7 +14,7 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
     definitions.push_back(MathTools::getCalculateDefinition());
 
     // 文件工具
-    definitions.push_back(FileTools::getReadTextFileDefinition());
+    definitions.push_back(FileTools::getReadTextLinesDefinition());
     definitions.push_back(FileTools::getWriteTextFileDefinition());
     definitions.push_back(FileTools::getValidateUtf8FileDefinition());
 
@@ -48,9 +48,9 @@ std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
                 return MathTools::executeCalculate(args);
             };
         }
-        else if (name == "read_text_file") {
+        else if (name == "read_text_lines") {
             functions[name] = [](const json& args) {
-                return FileTools::executeReadTextFile(args);
+                return FileTools::executeReadTextLines(args);
             };
         }
         else if (name == "write_text_file") {

@@ -10,7 +10,7 @@
 #include "builtinTools/common/tool_types.h"
 #include "builtinTools/timeTools/get_current_time.h"
 #include "builtinTools/mathTools/calculate.h"
-#include "builtinTools/fileTools/read_text_file.h"
+#include "builtinTools/fileTools/read_text_lines.h"
 #include "builtinTools/fileTools/write_text_file.h"
 #include "builtinTools/fileTools/validate_utf8_file.h"
 #include "builtinTools/systemTools/list_directory.h"

@@ -30,7 +30,7 @@ set(BUILTIN_TOOLS_SRCS
     builtinTools/mathTools/expression_parser.cpp
 
     # 文件工具
-    builtinTools/fileTools/read_text_file.cpp
+    builtinTools/fileTools/read_text_lines.cpp
     builtinTools/fileTools/write_text_file.cpp
     builtinTools/fileTools/validate_utf8_file.cpp
 
