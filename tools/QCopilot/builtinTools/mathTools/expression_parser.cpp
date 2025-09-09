@@ -2,249 +2,273 @@
 #include <cmath>
 #include <stdexcept>
 #include <cctype>
+#include <algorithm>
 
 namespace BuiltinTools {
 namespace MathTools {
 
-// 计算工具将会用到的常量
-const double ExpressionParser::PI = 3.14159265358979323846;
-const double ExpressionParser::E = 2.71828182845904523536;
+// 常量定义
+const double ExpressionParser::PI = 3.141592653589793238462643383279502884;
+const double ExpressionParser::E  = 2.718281828459045235360287471352662497;
 
+// 内部辅助函数： 判断字符是否为标识符起始字符或组成字符
+static inline bool isNameStart(char c) {
+    return std::isalpha(static_cast<unsigned char>(c)) || c == '_';
+}
+
+// 内部辅助函数： 判断字符是否为标识符组成字符
+static inline bool isNameChar(char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+}
+
+// 执行表达式计算的入口
 double ExpressionParser::evaluateExpression(const std::string& expr) {
-    if (expr.empty()) {
-        throw std::runtime_error("Empty expression");
-    }
-
+    if (expr.empty()) throw std::runtime_error("Empty expression");
     size_t pos = 0;
-    double result = parseExpression(expr, pos);
-
-    // 检查是否还有未处理的字符
+    double v = parseExpression(expr, pos);
     skipWhitespace(expr, pos);
-    if (pos < expr.length()) {
-        throw std::runtime_error("Unexpected characters at end of expression: " + expr.substr(pos));
+    if (pos != expr.size()) {
+        throw std::runtime_error("Unexpected characters at end: '" + expr.substr(pos) + "'");
     }
-
-    return result;
+    return v;
 }
 
+// 解析表达式的递归下降实现
 double ExpressionParser::parseExpression(const std::string& expr, size_t& pos) {
-    double result = parseTerm(expr, pos);
-
-    while (pos < expr.length()) {
+    double left = parseTerm(expr, pos);
+    while (true) {
         skipWhitespace(expr, pos);
-
-        if (pos < expr.length() && (expr[pos] == '+' || expr[pos] == '-')) {
-            char op = expr[pos];
-            pos++;
-            double right = parseTerm(expr, pos);
-
-            if (op == '+') {
-                result += right;
-            } else if (op == '-') {
-                result -= right;
-            }
-        } else {
-            break;
-        }
+        if (pos >= expr.size()) break;
+        char op = expr[pos];
+        if (op != '+' && op != '-') break;
+        ++pos;
+        double right = parseTerm(expr, pos);
+        left = (op == '+') ? (left + right) : (left - right);
     }
-
-    return result;
+    return left;
 }
 
+// 解析项
 double ExpressionParser::parseTerm(const std::string& expr, size_t& pos) {
-    double result = parseFactor(expr, pos);
-
-    while (pos < expr.length()) {
+    double left = parsePower(expr, pos);
+    while (true) {
         skipWhitespace(expr, pos);
-
-        if (pos < expr.length() && (expr[pos] == '*' || expr[pos] == '/' || expr[pos] == '%')) {
-            char op = expr[pos];
-            pos++;
-            double right = parseFactor(expr, pos);
-
-            if (op == '*') {
-                result *= right;
-            } else if (op == '/') {
-                if (right == 0) {
-                    throw std::runtime_error("Division by zero");
-                }
-                result /= right;
-            } else if (op == '%') {
-                if (right == 0) {
-                    throw std::runtime_error("Modulo by zero");
-                }
-                result = std::fmod(result, right);
-            }
-        } else {
-            break;
+        if (pos >= expr.size()) break;
+        char op = expr[pos];
+        if (op != '*' && op != '/' && op != '%') break;
+        ++pos;
+        double right = parsePower(expr, pos);
+        if (op == '*') {
+            left *= right;
+        } else if (op == '/') {
+            if (right == 0.0) throw std::runtime_error("Division by zero");
+            left /= right;
+        } else { // '%'
+            if (right == 0.0) throw std::runtime_error("Modulo by zero");
+            left = std::fmod(left, right);
         }
     }
-
-    return result;
+    return left;
 }
 
-double ExpressionParser::parseFactor(const std::string& expr, size_t& pos) {
+// 幂：右结合，例如 2^3^2 == 2^(3^2)
+double ExpressionParser::parsePower(const std::string& expr, size_t& pos) {
+    double base = parseUnary(expr, pos);
+    while (true) {
+        skipWhitespace(expr, pos);
+        if (pos >= expr.size() || expr[pos] != '^') break;
+        ++pos;
+        double exp = parseUnary(expr, pos);
+        base = std::pow(base, exp);
+    }
+    return base;
+}
+
+double ExpressionParser::parseUnary(const std::string& expr, size_t& pos) {
     skipWhitespace(expr, pos);
-
-    if (pos >= expr.length()) {
-        throw std::runtime_error("Unexpected end of expression");
+    if (pos < expr.size() && (expr[pos] == '+' || expr[pos] == '-')) {
+        char op = expr[pos++];
+        double v = parseUnary(expr, pos);
+        return (op == '-') ? -v : v;
     }
+    return parsePrimary(expr, pos);
+}
 
-    // 处理负号
-    if (expr[pos] == '-') {
-        pos++;
-        return -parseFactor(expr, pos);
-    }
+double ExpressionParser::parsePrimary(const std::string& expr, size_t& pos) {
+    skipWhitespace(expr, pos);
+    if (pos >= expr.size()) throw std::runtime_error("Unexpected end of expression");
 
-    // 处理正号
-    if (expr[pos] == '+') {
-        pos++;
-        return parseFactor(expr, pos);
-    }
-
-    // 处理括号
+    // 括号
     if (expr[pos] == '(') {
-        pos++; // 跳过 '('
-        double result = parseExpression(expr, pos);
-        if (pos >= expr.length() || expr[pos] != ')') {
-            throw std::runtime_error("Expected ')'");
-        }
-        pos++; // 跳过 ')'
-        return result;
+        ++pos;
+        double v = parseExpression(expr, pos);
+        expectChar(expr, pos, ')', "Expected ')'");
+        return v;
     }
 
-    // 解析数字或标识符
-    size_t start = pos;
+    // 数字
+    double num = 0.0;
+    size_t save = pos;
+    if (parseNumber(expr, pos, num)) {
+        return num;
+    }
+    pos = save;
 
-    // 检查是否是数学常量或函数
-    if (std::isalpha(expr[pos])) {
-        while (pos < expr.length() && std::isalnum(expr[pos])) {
-            pos++;
+    // 常量/函数
+    if (isNameStart(expr[pos])) {
+        std::string name = parseName(expr, pos);
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){ return std::tolower(c); });
+
+        if (lower == "pi") return PI;
+        if (lower == "e")  return E;
+
+        if (isFunction(lower)) {
+            return parseFunctionCall(lower, expr, pos);
         }
+        throw std::runtime_error("Unknown identifier: " + name);
+    }
 
-        std::string identifier = expr.substr(start, pos - start);
+    throw std::runtime_error(std::string("Unexpected character: '") + expr[pos] + "'");
+}
 
-        // 数学常量
-        if (identifier == "pi") return PI;
-        else if (identifier == "e") return E;
+bool ExpressionParser::parseNumber(const std::string& expr, size_t& pos, double& out) {
+    skipWhitespace(expr, pos);
+    size_t i = pos;
+    bool hasDigit = false;
 
-        // 数学函数
-        if (isFunction(identifier)) {
-            return parseFunction(identifier, expr, pos);
+    // integer part
+    while (i < expr.size() && std::isdigit(static_cast<unsigned char>(expr[i]))) {
+        hasDigit = true;
+        ++i;
+    }
+    // fractional part
+    if (i < expr.size() && expr[i] == '.') {
+        ++i;
+        while (i < expr.size() && std::isdigit(static_cast<unsigned char>(expr[i]))) {
+            hasDigit = true;
+            ++i;
+        }
+    }
+    if (!hasDigit) return false;
+
+    // exponent part
+    if (i < expr.size() && (expr[i] == 'e' || expr[i] == 'E')) {
+        size_t j = i + 1;
+        if (j < expr.size() && (expr[j] == '+' || expr[j] == '-')) ++j;
+        size_t jStart = j;
+        while (j < expr.size() && std::isdigit(static_cast<unsigned char>(expr[j]))) ++j;
+        if (j == jStart) {
+            // 'e' 后没有有效数字，不把它当指数，仍交给 stod 报错更合理
         } else {
-            throw std::runtime_error("Unknown identifier: " + identifier);
+            i = j;
         }
     }
 
-    // 解析数字（包括小数和科学计数法）
-    if (std::isdigit(expr[pos]) || expr[pos] == '.') {
-        while (pos < expr.length() &&
-               (std::isdigit(expr[pos]) || expr[pos] == '.' ||
-                expr[pos] == 'e' || expr[pos] == 'E' ||
-                expr[pos] == '+' || expr[pos] == '-')) {
-            pos++;
-        }
-
-        std::string numStr = expr.substr(start, pos - start);
-        try {
-            return std::stod(numStr);
-        } catch (const std::exception&) {
-            throw std::runtime_error("Invalid number format: " + numStr);
-        }
-    }
-
-    throw std::runtime_error("Unexpected character: " + std::string(1, expr[pos]));
-}
-
-double ExpressionParser::parseFunction(const std::string& funcName, const std::string& expr, size_t& pos) {
-    // 跳过函数名
-    pos += funcName.length();
-
-    // 期望左括号
-    if (pos >= expr.length() || expr[pos] != '(') {
-        throw std::runtime_error("Expected '(' after function name");
-    }
-    pos++; // 跳过 '('
-
-    // pow 函数需要两个参数
-    if (funcName == "pow") {
-        double arg1 = parseExpression(expr, pos);
-
-        // 期望逗号
-        if (pos >= expr.length() || expr[pos] != ',') {
-            throw std::runtime_error("Expected ',' in pow function");
-        }
-        pos++; // 跳过 ','
-
-        double arg2 = parseExpression(expr, pos);
-
-        // 期望右括号
-        if (pos >= expr.length() || expr[pos] != ')') {
-            throw std::runtime_error("Expected ')' after function arguments");
-        }
-        pos++; // 跳过 ')'
-
-        return std::pow(arg1, arg2);
-    } else {
-        // 单参数函数
-        double arg = parseExpression(expr, pos);
-
-        // 期望右括号
-        if (pos >= expr.length() || expr[pos] != ')') {
-            throw std::runtime_error("Expected ')' after function argument");
-        }
-        pos++; // 跳过 ')'
-
-        // 调用相应的数学函数
-        if (funcName == "sin") return std::sin(arg);
-        else if (funcName == "cos") return std::cos(arg);
-        else if (funcName == "tan") return std::tan(arg);
-        else if (funcName == "sqrt") {
-            if (arg < 0) throw std::runtime_error("sqrt of negative number");
-            return std::sqrt(arg);
-        }
-        else if (funcName == "log") {
-            if (arg <= 0) throw std::runtime_error("log of non-positive number");
-            return std::log10(arg);
-        }
-        else if (funcName == "ln") {
-            if (arg <= 0) throw std::runtime_error("ln of non-positive number");
-            return std::log(arg);
-        }
-        else if (funcName == "exp") return std::exp(arg);
-        else if (funcName == "abs") return std::abs(arg);
-        else if (funcName == "floor") return std::floor(arg);
-        else if (funcName == "ceil") return std::ceil(arg);
-        else if (funcName == "round") return std::round(arg);
-        else if (funcName == "asin") {
-            if (arg < -1 || arg > 1) throw std::runtime_error("asin argument out of range [-1,1]");
-            return std::asin(arg);
-        }
-        else if (funcName == "acos") {
-            if (arg < -1 || arg > 1) throw std::runtime_error("acos argument out of range [-1,1]");
-            return std::acos(arg);
-        }
-        else if (funcName == "atan") return std::atan(arg);
-        else if (funcName == "sinh") return std::sinh(arg);
-        else if (funcName == "cosh") return std::cosh(arg);
-        else if (funcName == "tanh") return std::tanh(arg);
-        else throw std::runtime_error("Unknown function: " + funcName);
+    try {
+        out = std::stod(expr.substr(pos, i - pos));
+        pos = i;
+        return true;
+    } catch (...) {
+        return false;
     }
 }
 
-void ExpressionParser::skipWhitespace(const std::string& expr, size_t& pos) {
-    while (pos < expr.length() && std::isspace(expr[pos])) {
-        pos++;
-    }
+// 解析标识符（常量名或函数名）
+std::string ExpressionParser::parseName(const std::string& expr, size_t& pos) {
+    size_t start = pos;
+    while (pos < expr.size() && isNameChar(expr[pos])) ++pos;
+    return expr.substr(start, pos - start);
 }
 
-bool ExpressionParser::isFunction(const std::string& name) {
-    static const std::set<std::string> functions = {
-        "sin", "cos", "tan", "sqrt", "log", "ln", "exp", "abs",
-        "floor", "ceil", "round", "pow", "asin", "acos", "atan",
-        "sinh", "cosh", "tanh"
+// 判断是否为已知函数
+bool ExpressionParser::isFunction(const std::string& lowerName) {
+    // 单参 + pow 双参
+    static const char* kFuncs[] = {
+        "sin","cos","tan","asin","acos","atan",
+        "sinh","cosh","tanh",
+        "sqrt","log","ln","exp","abs","floor","ceil","round",
+        "pow"
     };
-    return functions.find(name) != functions.end();
+    for (auto* f : kFuncs) {
+        if (lowerName == f) return true;
+    }
+    return false;
+}
+
+// 解析函数调用
+double ExpressionParser::parseFunctionCall(const std::string& lowerName, const std::string& expr, size_t& pos) {
+    // 注意：此时 pos 已经位于函数名后一个字符处，通常应当是 '('
+    skipWhitespace(expr, pos);
+    expectChar(expr, pos, '(', "Expected '(' after function name");
+
+    if (lowerName == "pow") {
+        double a = parseExpression(expr, pos);
+        skipWhitespace(expr, pos);
+        expectChar(expr, pos, ',', "Expected ',' in pow(a,b)");
+        double b = parseExpression(expr, pos);
+        skipWhitespace(expr, pos);
+        expectChar(expr, pos, ')', "Expected ')' after function arguments");
+        return std::pow(a, b);
+    }
+
+    // 单参函数
+    double v = parseExpression(expr, pos);
+    skipWhitespace(expr, pos);
+    expectChar(expr, pos, ')', "Expected ')' after function argument");
+
+    // 域检查与计算
+    if (lowerName == "sin")   return std::sin(v);
+    if (lowerName == "cos")   return std::cos(v);
+    if (lowerName == "tan")   return std::tan(v);
+
+    if (lowerName == "asin") {
+        if (v < -1.0 || v > 1.0) throw std::runtime_error("asin argument out of range [-1,1]");
+        return std::asin(v);
+    }
+    if (lowerName == "acos") {
+        if (v < -1.0 || v > 1.0) throw std::runtime_error("acos argument out of range [-1,1]");
+        return std::acos(v);
+    }
+    if (lowerName == "atan")  return std::atan(v);
+
+    if (lowerName == "sinh")  return std::sinh(v);
+    if (lowerName == "cosh")  return std::cosh(v);
+    if (lowerName == "tanh")  return std::tanh(v);
+
+    if (lowerName == "sqrt") {
+        if (v < 0.0) throw std::runtime_error("sqrt of negative number");
+        return std::sqrt(v);
+    }
+    if (lowerName == "log") {
+        if (v <= 0.0) throw std::runtime_error("log of non-positive number");
+        return std::log10(v);
+    }
+    if (lowerName == "ln") {
+        if (v <= 0.0) throw std::runtime_error("ln of non-positive number");
+        return std::log(v);
+    }
+    if (lowerName == "exp")   return std::exp(v);
+    if (lowerName == "abs")   return std::fabs(v);
+    if (lowerName == "floor") return std::floor(v);
+    if (lowerName == "ceil")  return std::ceil(v);
+    if (lowerName == "round") return std::round(v);
+
+    throw std::runtime_error("Unknown function: " + lowerName);
+}
+
+// 跳过空白字符
+void ExpressionParser::skipWhitespace(const std::string& expr, size_t& pos) {
+    while (pos < expr.size() && std::isspace(static_cast<unsigned char>(expr[pos]))) ++pos;
+}
+
+// 期望遇到特定字符，否则抛出异常
+void ExpressionParser::expectChar(const std::string& expr, size_t& pos, char ch, const char* err) {
+    skipWhitespace(expr, pos);
+    if (pos >= expr.size() || expr[pos] != ch) {
+        throw std::runtime_error(err);
+    }
+    ++pos;
 }
 
 } // namespace MathTools
