@@ -40,7 +40,10 @@ json executePathStat(const json& args) {
     std::string error_message;
     if (!BuiltinTools::Utils::validatePath(path, error_message)) {
         LOG_ERR("path_stat: Path validation failed for '%s': %s", path.c_str(), error_message.c_str());
-        return BuiltinTools::Utils::createErrorResponse(error_message);
+        json err = BuiltinTools::Utils::createErrorResponse(error_message);
+        err["path"] = path;
+        err["messages"] = json::array({"Path validation failed; please verify path syntax and traversal"});
+        return err;
     }
 
     try {
@@ -49,7 +52,10 @@ json executePathStat(const json& args) {
         // 检查路径是否存在
         if (!std::filesystem::exists(fs_path)) {
             LOG_ERR("path_stat: Path not found: %s", path.c_str());
-            return BuiltinTools::Utils::createErrorResponse("Path not found: " + path);
+            json err = BuiltinTools::Utils::createErrorResponse("Path not found: " + path);
+            err["path"] = path;
+            err["messages"] = json::array({"Path does not exist"});
+            return err;
         }
         // 构建结果JSON
         json result = BuiltinTools::Utils::createSuccessResponse();
@@ -57,6 +63,14 @@ json executePathStat(const json& args) {
         result["exists"] = true;
         result["absolute_path"] = BuiltinTools::Utils::pathToUtf8String(std::filesystem::absolute(fs_path));
         result["filename"] = BuiltinTools::Utils::pathToUtf8String(fs_path.filename());
+        // 汇总提示信息
+        json messages = json::array();
+        messages.push_back(detailed ? "Detailed mode enabled" : "Detailed mode disabled");
+        messages.push_back(text_analysis ? "Text analysis enabled" : "Text analysis disabled");
+        // 组合提示：详细模式关闭但启用了文本分析
+        if (!detailed && text_analysis) {
+            messages.push_back("Detailed mode is disabled; only basic metadata and text analysis for regular files will be returned (no directory statistics)");
+        }
         // 文件类型识别
         if (std::filesystem::is_regular_file(fs_path)) {
             result["type"] = "file";
@@ -89,6 +103,7 @@ json executePathStat(const json& args) {
                         {"character_count", content.size()},
                         {"is_text_readable", true}
                     };
+                    messages.push_back("Text analysis completed (readable text)");
                 } else {
                     // 读取失败，可能是二进制文件或编码问题
                     LOG_WRN("path_stat: Cannot read file as text: %s", path.c_str());
@@ -96,11 +111,16 @@ json executePathStat(const json& args) {
                         {"is_text_readable", false},
                         {"error", "Cannot read file as text (may be binary or encoding issue)"}
                     };
+                    messages.push_back("Text analysis skipped (not readable as UTF-8 text)");
                 }
             }
 
         } else if (std::filesystem::is_directory(fs_path)) {
             result["type"] = "directory";
+            messages.push_back("Path is a directory");
+            if (text_analysis) {
+                messages.push_back("Text analysis applies to regular files; ignored for directories");
+            }
 
             // 目录统计（详细模式）
             if (detailed) {
@@ -123,15 +143,18 @@ json executePathStat(const json& args) {
                         {"subdirectory_count", dir_count},
                         {"total_size", total_size}
                     };
+                    messages.push_back("Directory stats computed recursively (detailed mode)");
                 } catch (const std::exception& e) {
                     LOG_WRN("path_stat: Failed to analyze directory contents for '%s': %s", path.c_str(), e.what());
                     result["directory_stats"] = {
                         {"error", "Failed to analyze directory contents: " + std::string(e.what())}
                     };
+                    messages.push_back("Failed to enumerate directory for stats");
                 }
             }
         } else {
             result["type"] = "other";
+            messages.push_back("Path is neither regular file nor directory");
         }
 
         // 时间戳信息
@@ -174,14 +197,21 @@ json executePathStat(const json& args) {
             }
         }
 
+        if (!messages.empty()) result["messages"] = std::move(messages);
         return result;
 
     } catch (const std::filesystem::filesystem_error& e) {
         LOG_ERR("path_stat: Filesystem error for '%s': %s", path.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse("Filesystem error: " + std::string(e.what()));
+        json err = BuiltinTools::Utils::createErrorResponse("Filesystem error: " + std::string(e.what()));
+        err["path"] = path;
+        err["messages"] = json::array({"Filesystem exception during stat"});
+        return err;
     } catch (const std::exception& e) {
         LOG_ERR("path_stat: Failed to inspect path '%s': %s", path.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse("Failed to inspect path: " + std::string(e.what()));
+        json err = BuiltinTools::Utils::createErrorResponse("Failed to inspect path: " + std::string(e.what()));
+        err["path"] = path;
+        err["messages"] = json::array({"Unexpected exception during path inspection"});
+        return err;
     }
 }
 

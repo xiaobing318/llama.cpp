@@ -76,6 +76,9 @@ json executeWriteTextFile(const json& args) {
         result["bytes_written"] = content.size();
         result["mode"] = append ? "append" : "overwrite";
         result["file_existed"] = file_existed;
+        if (content.empty()) {
+            result["messages"] = json::array({"Empty content was written"});
+        }
 
         return result;
 

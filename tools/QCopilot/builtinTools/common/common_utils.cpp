@@ -1,4 +1,5 @@
 #include "common_utils.h"
+#include "common_utils_internal.h"
 #include <algorithm>
 #include <cctype>
 #include <iostream>
@@ -18,132 +19,7 @@ namespace BuiltinTools {
 namespace Utils {
 
 #pragma region "内部辅助函数"
-// 辅助：不安全的 tolower（假定输入是 char 范围内）
-static inline char to_lower_unsafe(char c) {
-    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-}
-
-// 辅助：统一大小写（若不区分大小写）
-static std::string normalize_case(
-    std::string s,
-    bool case_sensitive) {
-    if (!case_sensitive) {
-        std::transform(s.begin(), s.end(), s.begin(), to_lower_unsafe);
-    }
-    return s;
-}
-
-// 辅助：统一路径分隔符为 '/'（仅影响匹配逻辑，不改动实际路径）
-static std::string slashify(std::string s) {
-#ifdef _WIN32
-    std::replace(s.begin(), s.end(), '\\', '/');
-#endif
-    return s;
-}
-
-// 辅助：匹配字符类（方括号内），支持范围和否定
-static bool matchCharClass(
-    char c,
-    const std::string& cls,
-    bool case_sensitive){
-    // cls 不含方括号本体：已在解析阶段剔除了 [ 和 ]
-    if (!case_sensitive) c = to_lower_unsafe(c);
-    bool negate = false;
-    std::size_t i = 0;
-    if (i < cls.size() && cls[i] == '!') { negate = true; ++i; }
-
-    bool ok = false;
-    while (i < cls.size()) {
-        char first = cls[i++];
-        if (!case_sensitive) first = to_lower_unsafe(first);
-        // 范围或单字符
-        if (i + 1 < cls.size() && cls[i] == '-' ) {
-            // 范围 a-z，skip '-'
-            ++i;
-            char last = cls[i++];
-            if (!case_sensitive) last = to_lower_unsafe(last);
-            if (first <= c && c <= last) ok = true;
-        } else {
-            if (first == c) ok = true;
-        }
-    }
-    return negate ? !ok : ok;
-}
-
-// 辅助：// 辅助：通配符匹配核心：单段匹配（不含路径分隔符），支持 *, ?, [],\（不跨分隔符）
-static bool globSegmentMatch(
-    const std::string& text,
-    const std::string& pat,
-    bool case_sensitive) {
-    // 匹配单个路径段（不包含分隔符），支持 *, ?, []
-    // DP/回溯均可；这里用回溯实现，简洁直观。
-    const std::string t = case_sensitive ? text : normalize_case(text, false);
-    const std::string p = case_sensitive ? pat  : normalize_case(pat,  false);
-
-    std::size_t ti = 0, pi = 0;
-    std::size_t star_pi = std::string::npos, star_ti = 0;
-
-    while (ti < t.size()) {
-        if (pi < p.size()) {
-            if (p[pi] == '?') {
-                ++pi; ++ti; continue;
-            }
-            if (p[pi] == '\\') {
-                // 字面量转义
-                ++pi;
-                if (pi < p.size() && p[pi] == t[ti]) { ++pi; ++ti; continue; }
-            } else if (p[pi] == '[') {
-                // 字符类
-                std::size_t end = p.find(']', pi + 1);
-                if (end == std::string::npos) return false; // 不完整
-                std::string cls = p.substr(pi + 1, end - (pi + 1));
-                char tc = text[ti];
-                if (!case_sensitive) tc = to_lower_unsafe(tc);
-                if (!matchCharClass(tc, cls, case_sensitive)) {
-                    // 不匹配，若之前见过 '*'，尝试吞字符
-                    if (star_pi != std::string::npos) { ti = ++star_ti; pi = star_pi + 1; continue; }
-                    return false;
-                }
-                pi = end + 1; ++ti; continue;
-            } else if (p[pi] == '*') {
-                // 记录星号位置，先让它匹配空，必要时回溯多吞一点
-                star_pi = pi;
-                star_ti = ti;
-                ++pi;
-                continue;
-            } else if (p[pi] == t[ti]) {
-                ++pi; ++ti; continue;
-            }
-        }
-        // 不匹配时，如之前有 '*'，回溯：多吞一个字符
-        if (star_pi != std::string::npos) {
-            ti = ++star_ti;
-            pi = star_pi + 1;
-            continue;
-        }
-        return false;
-    }
-    // 吃掉末尾连续的 '*'
-    while (pi < p.size() && p[pi] == '*') ++pi;
-    return pi == p.size();
-}
-
-// 辅助：将 pattern 按 '/' 拆分成段
-static std::vector<std::string> splitPatternSegments(std::string pat) {
-    pat = slashify(std::move(pat));
-    std::vector<std::string> segs;
-    std::string cur;
-    for (char ch : pat) {
-        if (ch == '/') {
-            if (!cur.empty()) segs.push_back(cur);
-            cur.clear();
-        } else {
-            cur.push_back(ch);
-        }
-    }
-    if (!cur.empty()) segs.push_back(cur);
-    return segs;
-}
+// 已迁移到 common_utils_internal.{h,cpp}
 #pragma endregion
 
 #pragma region "匹配模式相关实用函数"
@@ -157,12 +33,12 @@ bool matchPattern(
     const std::string& pattern,
     bool case_sensitive) {
     // 这里匹配的是“单个段”，所以先把分隔符统一后，禁止跨分隔符。
-    std::string t = slashify(text);
+    std::string t = Internal::slashify(text);
     if (t.find('/') != std::string::npos) {
         // 若上层传的是“整条路径”，请先拆段后用；这里按典型 glob 约定：* 不跨分隔符。
         // 让调用方分段；或者在 globFiles 中处理。
     }
-    return globSegmentMatch(t, slashify(pattern), case_sensitive);
+    return Internal::globSegmentMatch(t, Internal::slashify(pattern), case_sensitive);
 }
 #pragma endregion
 
@@ -317,12 +193,6 @@ std::string formatTimeStamp(const std::chrono::system_clock::time_point& tp) {
 * 4、按定界符连接字符串
 ***********************************************************/
 
-// 辅助函数
-static inline void append_replacement_char(std::string& out) {
-    out.push_back(static_cast<char>(0xEF));
-    out.push_back(static_cast<char>(0xBF));
-    out.push_back(static_cast<char>(0xBD));
-}
 std::string sanitizeStringForJson(const std::string& input) {
     if (input.empty()) return input;
 
@@ -386,7 +256,7 @@ std::string sanitizeStringForJson(const std::string& input) {
         }
 
         // 不合法：写入替换符并前进一字节，避免卡死
-        Utils::append_replacement_char(out);
+        Internal::append_replacement_char(out);
         ++i;
     }
 
@@ -545,70 +415,7 @@ bool readFileContent(const std::string& path, std::string& content) {
     }
 }
 
-bool readTextFileWithRange(
-    const std::string& path,
-    int start_line,
-    int end_line,
-    std::string& content,
-    int& lines_read,
-    int& actual_end_line) {
-
-    content.clear();
-    lines_read = 0;
-    actual_end_line = 0;
-
-    if (path.empty()) return false;
-    if (start_line <= 0) start_line = 1; // 更健壮的入参防御
-
-    try {
-        std::ifstream file = open_ifstream_unicode(path, std::ios::binary);
-        if (!file.is_open()) return false;
-
-        // 读取前3字节以检测 UTF-8 BOM
-        unsigned char bom[3] = {0};
-        file.read(reinterpret_cast<char*>(bom), 3);
-        std::streamsize got = file.gcount();
-        if (!(got == 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF)) {
-            // 非UTF-8 BOM：回退
-            file.clear();
-            file.seekg(0, std::ios::beg);
-        }
-
-        std::string line;
-        std::vector<std::string> lines;
-        lines.reserve((end_line > 0) ? std::max(0, end_line - start_line + 1) : 256);
-
-        int current_line = 1;
-        while (std::getline(file, line)) {
-            // 如果是CRLF，getline去掉LF，但可能保留结尾的CR
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-
-            if (current_line >= start_line) {
-                if (end_line > 0 && current_line > end_line) break;
-                lines.emplace_back(std::move(line));
-            }
-            ++current_line;
-        }
-
-        // 用真实换行拼接
-        for (size_t i = 0; i < lines.size(); ++i) {
-            if (i) content.push_back('\n');
-            content += lines[i];
-        }
-
-        lines_read = static_cast<int>(lines.size());
-        actual_end_line = (lines_read > 0) ? (start_line + lines_read - 1) : (start_line - 1);
-
-        return true;
-
-    } catch (const std::exception& e) {
-        LOG_ERR("readTextFileWithRange: Failed to read text file '%s': %s", path.c_str(), e.what());
-        content.clear();
-        lines_read = 0;
-        actual_end_line = 0;
-        return false;
-    }
-}
+// (moved) readTextFileWithRange: now implemented in Utils::Internal
 
 bool isValidUtf8File(const std::string& path) {
     if (!fileExists(path)) {
@@ -624,7 +431,6 @@ bool isValidUtf8File(const std::string& path) {
 }
 
 // 辅助函数
-static inline bool is_cont(unsigned char x) { return (x & 0xC0) == 0x80; }
 bool isValidUtf8String(const std::string& s) {
     const unsigned char* p = reinterpret_cast<const unsigned char*>(s.data());
     size_t i = 0, n = s.size();
@@ -637,7 +443,7 @@ bool isValidUtf8String(const std::string& s) {
 
         // 2-byte: 110xxxxx 10xxxxxx, first byte C2..DF (C0/C1 禁止：避免 overlong)
         if (c >= 0xC2 && c <= 0xDF) {
-            if (i + 1 >= n || !is_cont(p[i+1])) return false;
+            if (i + 1 >= n || !Internal::is_cont(p[i+1])) return false;
             i += 2; continue;
         }
 
@@ -649,21 +455,21 @@ bool isValidUtf8String(const std::string& s) {
         if (c == 0xE0) {
             if (i + 2 >= n) return false;
             unsigned char b1 = p[i+1], b2 = p[i+2];
-            if (!(b1 >= 0xA0 && b1 <= 0xBF) || !is_cont(b2)) return false;
+            if (!(b1 >= 0xA0 && b1 <= 0xBF) || !Internal::is_cont(b2)) return false;
             i += 3; continue;
         }
         if (c >= 0xE1 && c <= 0xEC) {
-            if (i + 2 >= n || !is_cont(p[i+1]) || !is_cont(p[i+2])) return false;
+            if (i + 2 >= n || !Internal::is_cont(p[i+1]) || !Internal::is_cont(p[i+2])) return false;
             i += 3; continue;
         }
         if (c == 0xED) {
             if (i + 2 >= n) return false;
             unsigned char b1 = p[i+1], b2 = p[i+2];
-            if (!(b1 >= 0x80 && b1 <= 0x9F) || !is_cont(b2)) return false; // 禁止代理区
+            if (!(b1 >= 0x80 && b1 <= 0x9F) || !Internal::is_cont(b2)) return false; // 禁止代理区
             i += 3; continue;
         }
         if (c >= 0xEE && c <= 0xEF) {
-            if (i + 2 >= n || !is_cont(p[i+1]) || !is_cont(p[i+2])) return false;
+            if (i + 2 >= n || !Internal::is_cont(p[i+1]) || !Internal::is_cont(p[i+2])) return false;
             i += 3; continue;
         }
 
@@ -674,17 +480,17 @@ bool isValidUtf8String(const std::string& s) {
         if (c == 0xF0) {
             if (i + 3 >= n) return false;
             unsigned char b1 = p[i+1], b2 = p[i+2], b3 = p[i+3];
-            if (!(b1 >= 0x90 && b1 <= 0xBF) || !is_cont(b2) || !is_cont(b3)) return false;
+            if (!(b1 >= 0x90 && b1 <= 0xBF) || !Internal::is_cont(b2) || !Internal::is_cont(b3)) return false;
             i += 4; continue;
         }
         if (c >= 0xF1 && c <= 0xF3) {
-            if (i + 3 >= n || !is_cont(p[i+1]) || !is_cont(p[i+2]) || !is_cont(p[i+3])) return false;
+            if (i + 3 >= n || !Internal::is_cont(p[i+1]) || !Internal::is_cont(p[i+2]) || !Internal::is_cont(p[i+3])) return false;
             i += 4; continue;
         }
         if (c == 0xF4) {
             if (i + 3 >= n) return false;
             unsigned char b1 = p[i+1], b2 = p[i+2], b3 = p[i+3];
-            if (!(b1 >= 0x80 && b1 <= 0x8F) || !is_cont(b2) || !is_cont(b3)) return false;
+            if (!(b1 >= 0x80 && b1 <= 0x8F) || !Internal::is_cont(b2) || !Internal::is_cont(b3)) return false;
             i += 4; continue;
         }
 
@@ -775,7 +581,7 @@ std::vector<fs::path> globFiles(
     bool follow_symlinks,
     bool case_sensitive) {
     std::vector<fs::path> out;
-    std::vector<std::string> segs = splitPatternSegments(pattern);
+    std::vector<std::string> segs = Internal::splitPatternSegments(pattern);
 
     if (segs.empty()) return out;
 
@@ -812,7 +618,7 @@ std::vector<fs::path> globFiles(
             if (follow_symlinks) opts |= fs::directory_options::follow_directory_symlink;
             for (auto& de : fs::directory_iterator(dir, opts)) {
                 const std::string name = pathToUtf8String(de.path().filename());
-                if (!globSegmentMatch(name, seg, case_sensitive)) continue;
+                if (!Internal::globSegmentMatch(name, seg, case_sensitive)) continue;
 
                 if (last) {
                     // 最后一段：按需收集文件/目录
@@ -869,7 +675,7 @@ std::vector<json> searchInFileRegex(
             return matches;
         }
     } else if (!case_sensitive) {
-        needle = normalize_case(needle, false);
+        needle = Internal::normalize_case(needle, false);
     }
 
     std::string line;
@@ -891,7 +697,7 @@ std::vector<json> searchInFileRegex(
             if (case_sensitive) {
                 pos0 = line.find(needle);
             } else {
-                std::string lower_line = normalize_case(line, false);
+                std::string lower_line = Internal::normalize_case(line, false);
                 pos0 = lower_line.find(needle);
             }
             found = (pos0 != std::string::npos);

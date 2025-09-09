@@ -32,7 +32,10 @@ json executeValidateUtf8File(const json& args) {
     // 验证路径合法性
     if (!BuiltinTools::Utils::validatePath(path, error_message)) {
         LOG_ERR("validate_utf8_file: Path validation failed for '%s': %s", path.c_str(), error_message.c_str());
-        return BuiltinTools::Utils::createErrorResponse(error_message);
+        json err = BuiltinTools::Utils::createErrorResponse(error_message);
+        err["path"] = path;
+        err["messages"] = json::array({"Path validation failed; please check illegal traversal or length"});
+        return err;
     }
 
     try {
@@ -41,19 +44,28 @@ json executeValidateUtf8File(const json& args) {
         // 检查路径是否存在
         if (!std::filesystem::exists(fs_path)) {
             LOG_ERR("validate_utf8_file: File not found: %s", path.c_str());
-            return BuiltinTools::Utils::createErrorResponse("File not found: " + path);
+            json err = BuiltinTools::Utils::createErrorResponse("File not found: " + path);
+            err["path"] = path;
+            err["messages"] = json::array({"Path does not exist"});
+            return err;
         }
 
         // 检查是否是目录而不是文件
         if (std::filesystem::is_directory(fs_path)) {
             LOG_ERR("validate_utf8_file: Path is a directory, not a file: %s", path.c_str());
-            return BuiltinTools::Utils::createErrorResponse("Path is a directory, not a file: " + path);
+            json err = BuiltinTools::Utils::createErrorResponse("Path is a directory, not a file: " + path);
+            err["path"] = path;
+            err["messages"] = json::array({"Expected a regular file but got a directory"});
+            return err;
         }
 
         // 检查是否是常规文件
         if (!std::filesystem::is_regular_file(fs_path)) {
             LOG_ERR("validate_utf8_file: Path is not a regular file: %s", path.c_str());
-            return BuiltinTools::Utils::createErrorResponse("Path is not a regular file: " + path);
+            json err = BuiltinTools::Utils::createErrorResponse("Path is not a regular file: " + path);
+            err["path"] = path;
+            err["messages"] = json::array({"Only regular files are supported"});
+            return err;
         }
 
         // 获取文件大小
@@ -68,18 +80,30 @@ json executeValidateUtf8File(const json& args) {
         result["is_utf8"] = is_utf8;
         result["path"] = BuiltinTools::Utils::sanitizeStringForJson(path);
         result["file_size"] = static_cast<int64_t>(file_size);
+        if (!is_utf8) {
+            result["messages"] = json::array({"File content is not valid UTF-8"});
+        }
 
         return result;
 
     } catch (const std::filesystem::filesystem_error& e) {
         LOG_ERR("validate_utf8_file: Filesystem error for '%s': %s", path.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse("Filesystem error: " + std::string(e.what()));
+        json err = BuiltinTools::Utils::createErrorResponse("Filesystem error: " + std::string(e.what()));
+        err["path"] = path;
+        err["messages"] = json::array({"Filesystem exception occurred while reading file metadata"});
+        return err;
     } catch (const std::exception& e) {
         LOG_ERR("validate_utf8_file: Error checking UTF-8 encoding for '%s': %s", path.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse("Error checking UTF-8 encoding: " + std::string(e.what()));
+        json err = BuiltinTools::Utils::createErrorResponse("Error checking UTF-8 encoding: " + std::string(e.what()));
+        err["path"] = path;
+        err["messages"] = json::array({"Unexpected exception during UTF-8 validation"});
+        return err;
     } catch (...) {
         LOG_ERR("validate_utf8_file: Unknown error occurred while checking UTF-8 encoding for '%s'", path.c_str());
-        return BuiltinTools::Utils::createErrorResponse("Unknown error occurred while checking UTF-8 encoding");
+        json err = BuiltinTools::Utils::createErrorResponse("Unknown error occurred while checking UTF-8 encoding");
+        err["path"] = path;
+        err["messages"] = json::array({"Unknown error during UTF-8 validation"});
+        return err;
     }
 }
 

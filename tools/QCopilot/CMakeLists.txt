@@ -20,12 +20,13 @@ set(TARGET_SRCS
 set(BUILTIN_TOOLS_SRCS
     # 通用工具
     builtinTools/common/common_utils.cpp
+    builtinTools/common/common_utils_internal.cpp
 
     # 时间工具
     builtinTools/timeTools/get_current_time.cpp
 
     # 数学工具
-    builtinTools/mathTools/MathTools_utils.cpp
+    builtinTools/mathTools/mathTools_utils.cpp
     builtinTools/mathTools/calculate.cpp
     builtinTools/mathTools/expression_parser.cpp
 
@@ -139,3 +140,8 @@ endif()
 1、设置安装目录。
 ]]
 install(TARGETS ${TARGET} RUNTIME)
+
+# 内置工具单元测试（与 qcopilot 解耦）
+if (LLAMA_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()

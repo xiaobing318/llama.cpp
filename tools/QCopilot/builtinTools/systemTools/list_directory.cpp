@@ -178,6 +178,8 @@ json executeListDirectory(const json& args) {
 
                 process_entry(*it, BuiltinTools::Utils::utf8ToPath(path));
             }
+            // 提示递归行为
+            out_items.size(); // no-op keep
         } else {
             for (std::filesystem::directory_iterator it(BuiltinTools::Utils::utf8ToPath(path), opts), end; it != end; ++it) {
                 if (produced >= static_cast<size_t>(max_results)) { truncated = true; break; }
@@ -198,7 +200,17 @@ json executeListDirectory(const json& args) {
     result["max_results"] = max_results;
     result["files"] = std::move(out_items);
     result["count"] = result["files"].size();
-    if (truncated) result["truncated"] = true;
+    // 装配提示信息
+    json messages = json::array();
+    if (recursive) messages.push_back("Recursive mode enabled; scanned subdirectories");
+    else messages.push_back("Recursive mode disabled; returned top-level entries only");
+    if (!show_hidden) messages.push_back("Hidden items are filtered (dot entries on Unix; hidden/system on Windows)");
+    else messages.push_back("Hidden items are included");
+    if (truncated) {
+        result["truncated"] = true;
+        messages.push_back("Directory listing was truncated due to max_results cap");
+    }
+    if (!messages.empty()) result["messages"] = std::move(messages);
 
     return result;
 }

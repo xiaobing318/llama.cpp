@@ -1,0 +1,101 @@
+# QCopilot built-in tools tests across OS matrix
+# - Builds only the QCopilot tool target and its unit tests
+# - Runs split unit tests and emits JUnit XML reports
+# - Uses ccache on Linux/macOS for faster rebuilds
+
+name: qcopilot-tests
+
+on:
+  push:
+    paths:
+      - 'tools/QCopilot/**'
+      - 'vendor/nlohmann/**'
+      - '.github/workflows/qcopilot-tests.yml'
+      - 'CMakeLists.txt'
+      - 'tools/CMakeLists.txt'
+  pull_request:
+    paths:
+      - 'tools/QCopilot/**'
+      - 'vendor/nlohmann/**'
+      - '.github/workflows/qcopilot-tests.yml'
+      - 'CMakeLists.txt'
+      - 'tools/CMakeLists.txt'
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} - ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, macos-14]
+        build_type: [Debug, Release]
+        # NOTE: macOS 15.6 (Sequoia) runners may not be generally available yet.
+        # When available, switch to `macos-15` to align with the requested 15.6 target.
+
+    env:
+      BUILD_DIR: build-qcopilot
+      BUILD_TYPE: ${{ matrix.build_type }}
+      CTEST_PARALLEL_LEVEL: 2
+      # Enable ccache in CMake on non-Windows
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ccache (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-qcopilot-${{ matrix.build_type }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-qcopilot-${{ matrix.build_type }}-
+
+      - name: Install sccache (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          choco install sccache -y
+          echo "SCCACHE_DIR=${{ github.workspace }}\\.sccache" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Cache sccache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\.sccache
+          key: windows-sccache-${{ matrix.build_type }}-${{ github.sha }}
+          restore-keys: |
+            windows-sccache-${{ matrix.build_type }}-
+
+      - name: Configure (CMake)
+        shell: bash
+        run: |
+          cmake -S . -B "$BUILD_DIR" \
+            -DLLAMA_BUILD_TESTS=ON \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            $([[ "$RUNNER_OS" != "Windows" ]] && echo "-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache") \
+            $([[ "$RUNNER_OS" == "Windows" ]] && echo "-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache")
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" -j
+
+      - name: Run tests (JUnit)
+        shell: bash
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          mkdir -p test-results
+          # Produce JUnit XML; requires CMake/CTest >= 3.21 on the runner
+          ctest --output-on-failure -R test_ -C "$BUILD_TYPE" --output-junit test-results/qcopilot-tests-${BUILD_TYPE}.xml
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qcopilot-junit-${{ matrix.os }}-${{ matrix.build_type }}
+          path: ${{ env.BUILD_DIR }}/test-results/qcopilot-tests-${{ env.BUILD_TYPE }}.xml
+          if-no-files-found: warn

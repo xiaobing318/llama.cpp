@@ -604,3 +604,14 @@ $ echo "source ~/.llama-completion.bash" >> ~/.bashrc
 - [linenoise.cpp](./tools/run/linenoise.cpp/linenoise.cpp) - C++ library that provides readline-like line editing capabilities, used by `llama-run` - BSD 2-Clause License
 - [curl](https://curl.se/) - Client-side URL transfer library, used by various tools/examples - [CURL License](https://curl.se/docs/copyright.html)
 - [miniaudio.h](https://github.com/mackron/miniaudio) - Single-header audio format decoder, used by multimodal subsystem - Public domain
+## QCopilot Built-in Tools Tests
+
+This repository contains a QCopilot module under `tools/QCopilot` with a comprehensive unit test suite. A dedicated CI workflow runs these tests across multiple platforms and build types.
+
+Status badge (replace `OWNER/REPO` with this repository path if forking):
+
+![qcopilot-tests](https://github.com/OWNER/REPO/actions/workflows/qcopilot-tests.yml/badge.svg)
+
+For details on how tests are structured, how to run them locally, and how to export JUnit/XML reports, see:
+
+- `tools/QCopilot/tests/README.md`

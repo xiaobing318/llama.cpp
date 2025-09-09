@@ -69,23 +69,30 @@ json executeCalculate(const json& args) {
     std::string expression = args.value("expression", "");
     // 如果参数为空，则给出提示信息
     if (expression.empty()) {
-        // 向日志输出错误
         LOG_ERR("calculate: Empty expression provided");
-        // 返回错误响应
-        return BuiltinTools::Utils::createErrorResponse("Expression is required");
+        json err = BuiltinTools::Utils::createErrorResponse("Expression is required");
+        err["requested"] = { {"expression", expression} };
+        err["messages"] = json::array({"Missing 'expression' argument"});
+        return err;
     }
 
     // 长度校验（使用 MathTools 专属校验工具，避免与全局 Utils 冲突）
     std::string error_message;
     if (!BuiltinTools::MathTools::Utils::validateStringLength(expression, 1000, "Expression", error_message)) {
         LOG_ERR("calculate: Expression too long: %zu characters", expression.length());
-        return BuiltinTools::Utils::createErrorResponse(error_message);
+        json err = BuiltinTools::Utils::createErrorResponse(error_message);
+        err["requested"] = { {"expression", expression} };
+        err["messages"] = json::array({"Expression exceeds maximum length"});
+        return err;
     }
 
     // 基本字符白名单校验
     if (!hasOnlyAllowedChars(expression)) {
         LOG_ERR("calculate: Invalid character detected in expression: '%s'", expression.c_str());
-        return BuiltinTools::Utils::createErrorResponse("Expression contains invalid characters");
+        json err = BuiltinTools::Utils::createErrorResponse("Expression contains invalid characters");
+        err["requested"] = { {"expression", expression} };
+        err["messages"] = json::array({"Expression contains unsupported characters"});
+        return err;
     }
 
     try {
@@ -98,7 +105,10 @@ json executeCalculate(const json& args) {
         // 空表达式检查
         if (cleanExpr.empty()) {
             LOG_ERR("calculate: Expression contains only whitespace: '%s'", expression.c_str());
-            return BuiltinTools::Utils::createErrorResponse("Expression contains only whitespace");
+            json err = BuiltinTools::Utils::createErrorResponse("Expression contains only whitespace");
+            err["requested"] = { {"expression", expression} };
+            err["messages"] = json::array({"Expression becomes empty after trimming whitespace"});
+            return err;
         }
 
         // 括号匹配快速检查（提前给出更友好的报错）
@@ -110,14 +120,22 @@ json executeCalculate(const json& args) {
                 if (paren < 0) {
                     // 输出错误日志和返回错误响应
                     LOG_ERR("calculate: Mismatched parentheses (too many closing) in '%s'", expression.c_str());
-                    return BuiltinTools::Utils::createErrorResponse("Mismatched parentheses: too many closing parentheses");
+                    json err = BuiltinTools::Utils::createErrorResponse("Mismatched parentheses: too many closing parentheses");
+                    err["requested"] = { {"expression", expression} };
+                    err["cleaned_expression"] = cleanExpr;
+                    err["messages"] = json::array({"Unbalanced parentheses"});
+                    return err;
                 }
             }
         }
         // 最终检查
         if (paren != 0) {
             LOG_ERR("calculate: Mismatched parentheses (unclosed opening) in '%s'", expression.c_str());
-            return BuiltinTools::Utils::createErrorResponse("Mismatched parentheses: unclosed opening parentheses");
+            json err = BuiltinTools::Utils::createErrorResponse("Mismatched parentheses: unclosed opening parentheses");
+            err["requested"] = { {"expression", expression} };
+            err["cleaned_expression"] = cleanExpr;
+            err["messages"] = json::array({"Unbalanced parentheses"});
+            return err;
         }
         // 输出提示日志，用来提醒开发者清洗前的表达式和清洗后的表达式
         LOG_INF("[calculate]工具: 解析/执行表达式: '%s' (清洗后: '%s')", expression.c_str(), cleanExpr.c_str());
@@ -142,13 +160,22 @@ json executeCalculate(const json& args) {
 
     } catch (const std::runtime_error& e) {
         LOG_ERR("calculate: Mathematical evaluation error for '%s': %s", expression.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse(std::string("Mathematical evaluation error: ") + e.what());
+        json err = BuiltinTools::Utils::createErrorResponse(std::string("Mathematical evaluation error: ") + e.what());
+        err["requested"] = { {"expression", expression} };
+        err["messages"] = json::array({"Evaluation failed due to invalid domain or operation"});
+        return err;
     } catch (const std::exception& e) {
         LOG_ERR("calculate: Unexpected error for '%s': %s", expression.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse(std::string("Unexpected error: ") + e.what());
+        json err = BuiltinTools::Utils::createErrorResponse(std::string("Unexpected error: ") + e.what());
+        err["requested"] = { {"expression", expression} };
+        err["messages"] = json::array({"Unexpected exception during evaluation"});
+        return err;
     } catch (...) {
         LOG_ERR("calculate: Unknown error occurred during expression evaluation for '%s'", expression.c_str());
-        return BuiltinTools::Utils::createErrorResponse("Unknown error occurred during expression evaluation");
+        json err = BuiltinTools::Utils::createErrorResponse("Unknown error occurred during expression evaluation");
+        err["requested"] = { {"expression", expression} };
+        err["messages"] = json::array({"Unknown error during evaluation"});
+        return err;
     }
 }
 

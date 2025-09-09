@@ -117,7 +117,7 @@ std::string joinStrings(
 * 1、检查文件是否存在
 * 2、检查文件是否为常规可读文件
 * 3、读取整个文件内容到字符串
-* 4、按指定编码和行范围读取文本文件内容
+* 4、按指定编码和行范围读取文本文件内容（内部接口，见 common_utils_internal.h）
 * 5、检查文件是否为有效的UTF-8文本文件
 * 6、检查给定字符串是否为有效的UTF-8编码
 * 7、以覆盖方式写入二进制文件
@@ -140,15 +140,6 @@ bool is_regular_readable_file(
 bool readFileContent(
     const std::string& path,
     std::string& content);
-
-// 通用实用函数 4 ：按指定编码和行范围读取文本文件内容
-bool readTextFileWithRange(
-    const std::string& path,
-    int start_line,
-    int end_line,
-    std::string& content,
-    int& lines_read,
-    int& actual_end_line);
 
 // 通用实用函数 5 ：检查文件是否为有效的UTF-8文本文件
 bool isValidUtf8File(const std::string& path);
@@ -181,7 +172,11 @@ std::vector<std::filesystem::path> globFiles(
     true
 #endif
 );
-// 通用实用函数 11 ：在文件中搜索
+// 通用实用函数 11 ：在文件中搜索（行为契约）
+// - use_regex=true 时使用 ECMAScript 正则；false 时使用字面量查找
+// - case_sensitive=false 时对行做按字节小写化再匹配（与 grep 工具保持一致）
+// - line_numbers=true 时返回行号
+// - max_matches 为当前文件的软上限；调用者可在多文件循环中自行累计
 std::vector<json> searchInFileRegex(
     const std::filesystem::path& filepath,
     const std::string& pattern,

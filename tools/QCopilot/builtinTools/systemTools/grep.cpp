@@ -89,16 +89,26 @@ json executeGrep(const json& args) {
 
     // 参数校验
     if (pat.empty()) {
-        return BuiltinTools::Utils::createErrorResponse("pattern is required");
+        json err = BuiltinTools::Utils::createErrorResponse("pattern is required");
+        err["messages"] = json::array({"Missing 'pattern' argument"});
+        return err;
     }
     std::string error_message;
     if (!BuiltinTools::Utils::validatePath(target_path, error_message)) {
         LOG_ERR("grep: Path validation failed for '%s': %s", target_path.c_str(), error_message.c_str());
-        return BuiltinTools::Utils::createErrorResponse(error_message);
+        json err = BuiltinTools::Utils::createErrorResponse(error_message);
+        err["path"] = target_path;
+        err["pattern"] = pat;
+        err["messages"] = json::array({"Target path validation failed"});
+        return err;
     }
     if (!BuiltinTools::Utils::fileExists(target_path)) {
         LOG_ERR("grep: Path not found: %s", target_path.c_str());
-        return BuiltinTools::Utils::createErrorResponse("Path not found: " + target_path);
+        json err = BuiltinTools::Utils::createErrorResponse("Path not found: " + target_path);
+        err["path"] = target_path;
+        err["pattern"] = pat;
+        err["messages"] = json::array({"Target path does not exist"});
+        return err;
     }
     // 设置返回值的基础结构
     json result = BuiltinTools::Utils::createSuccessResponse();
@@ -172,17 +182,36 @@ json executeGrep(const json& args) {
                 }
             }
         } else {
-            return BuiltinTools::Utils::createErrorResponse("Unsupported path type for grep: " + target_path);
+            json err = BuiltinTools::Utils::createErrorResponse("Unsupported path type for grep: " + target_path);
+            err["path"] = target_path;
+            err["pattern"] = pat;
+            err["messages"] = json::array({"Only files or directories are supported"});
+            return err;
         }
     } catch (const std::exception& e) {
         LOG_ERR("grep: Failed on '%s': %s", target_path.c_str(), e.what());
-        return BuiltinTools::Utils::createErrorResponse("Failed to execute grep: " + std::string(e.what()));
+        json err = BuiltinTools::Utils::createErrorResponse("Failed to execute grep: " + std::string(e.what()));
+        err["path"] = target_path;
+        err["pattern"] = pat;
+        err["messages"] = json::array({"Unexpected exception during grep"});
+        return err;
     }
 
     result["results"]       = std::move(hits);
     result["matches_count"] = total_matches;
     result["files_scanned"] = files_scanned;
-    if (truncated) result["truncated"] = true;
+    // messages 汇总本次行为
+    json messages = json::array();
+    messages.push_back(recursive ? "Recursive mode enabled; scanned subdirectories" : "Recursive mode disabled; searched only the target path");
+    if (!show_hidden) messages.push_back("Hidden items are filtered (dot entries on Unix; hidden/system on Windows)");
+    else messages.push_back("Hidden items are included");
+    if (use_regex) messages.push_back("Regex matching enabled");
+    if (!case_sensitive) messages.push_back("Case-insensitive matching");
+    if (truncated) {
+        result["truncated"] = true;
+        messages.push_back("Search results were truncated due to max_matches cap");
+    }
+    if (!messages.empty()) result["messages"] = std::move(messages);
 
     return result;
 }

@@ -96,11 +96,13 @@ json executeGetCurrentTime(const json& args) {
     // 罗列支持的 format
     static const std::set<std::string> kFormats = {"ISO8601", "UNIX", "DEFAULT"};
     // 如果不支持，回退到 ISO8601
+    bool format_fallback = false;
     if (!kFormats.count(format)) {
         // 终端给出警告日志
         LOG_WRN("get_current_time: unsupported format='%s', fallback to 'ISO8601'", format_orig.c_str());
         // 回退到 ISO8601
         format = "ISO8601";
+        format_fallback = true;
     }
 
     // 2) 获取当前时间点
@@ -144,6 +146,9 @@ json executeGetCurrentTime(const json& args) {
     result["time"]     = ss.str();
     result["format"]   = (format == "UNIX" ? "unix" : (format == "ISO8601" ? "ISO8601" : "default"));
     result["timezone"] = timezone;
+    if (format_fallback) {
+        result["messages"] = json::array({"Unsupported format was requested; fell back to ISO8601"});
+    }
 
     return result;
 }

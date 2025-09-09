@@ -83,15 +83,27 @@ json executeGlob(const json& args) {
     // 参数验证
     if (!BuiltinTools::Utils::validatePath(base_dir, error_message)) {
         LOG_ERR("glob: Path validation failed for '%s': %s", base_dir.c_str(), error_message.c_str());
-        return BuiltinTools::Utils::createErrorResponse(error_message);
+        json err = BuiltinTools::Utils::createErrorResponse(error_message);
+        err["base_dir"] = base_dir;
+        err["pattern"] = pattern;
+        err["messages"] = json::array({"Base directory validation failed"});
+        return err;
     }
     if (!BuiltinTools::Utils::fileExists(base_dir)) {
         LOG_ERR("glob: Base directory not found: %s", base_dir.c_str());
-        return BuiltinTools::Utils::createErrorResponse("Base directory not found: " + base_dir);
+        json err = BuiltinTools::Utils::createErrorResponse("Base directory not found: " + base_dir);
+        err["base_dir"] = base_dir;
+        err["pattern"] = pattern;
+        err["messages"] = json::array({"Base directory does not exist"});
+        return err;
     }
     if (!fs::is_directory(BuiltinTools::Utils::utf8ToPath(base_dir))) {
         LOG_ERR("glob: Base path is not a directory: %s", base_dir.c_str());
-        return BuiltinTools::Utils::createErrorResponse("Base path is not a directory: " + base_dir);
+        json err = BuiltinTools::Utils::createErrorResponse("Base path is not a directory: " + base_dir);
+        err["base_dir"] = base_dir;
+        err["pattern"] = pattern;
+        err["messages"] = json::array({"Expected a directory"});
+        return err;
     }
     if (pattern.empty()) {
         return BuiltinTools::Utils::createErrorResponse("Pattern is required");
@@ -150,7 +162,18 @@ json executeGlob(const json& args) {
     result["max_results"]       = max_results;
     result["items"]             = std::move(items);
     result["count"]             = result["items"].size();
-    if (truncated) result["truncated"] = true;
+    // messages 说明本次行为
+    json messages = json::array();
+    messages.push_back(include_directories ? "Directories included in results" : "Only files are returned");
+    if (!show_hidden) messages.push_back("Hidden items are filtered (dot entries on Unix; hidden/system on Windows)");
+    else messages.push_back("Hidden items are included");
+    if (follow_symlinks) messages.push_back("Following directory symlinks during traversal");
+    if (!case_sensitive) messages.push_back("Case-insensitive matching");
+    if (truncated) {
+        result["truncated"] = true;
+        messages.push_back("Glob results were truncated due to max_results cap");
+    }
+    if (!messages.empty()) result["messages"] = std::move(messages);
     // 返回结果
     return result;
 }
