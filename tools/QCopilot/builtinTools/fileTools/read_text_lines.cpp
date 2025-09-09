@@ -12,7 +12,6 @@ namespace fs = std::filesystem;
 namespace BuiltinTools {
 namespace FileTools {
 
-
 // 获取 read_text_lines 工具的定义
 ToolDefinition getReadTextLinesDefinition() {
     return {
@@ -76,19 +75,18 @@ json executeReadTextLines(const json& args) {
     bool     enforce_utf8         = args.value("enforce_utf8", true);
     uint64_t max_file_size_bytes  = args.value("max_file_size_bytes", (uint64_t)(100ULL * 1024ULL * 1024ULL));
 
-    // 空路径校验
+    // 检查输入路径是否存在
     if (path.empty()) {
         LOG_ERR("read_text_lines: empty 'path'");
         return BuiltinTools::Utils::createErrorResponse("Path is empty");
     }
-
-    // 基础文件校验
+    // 检查输入文件是否存在且可读
     std::string path_err;
     if (!BuiltinTools::Utils::is_regular_readable_file(path, path_err)) {
         LOG_WRN("read_text_lines: invalid file: %s (%s)", path.c_str(), path_err.c_str());
         return BuiltinTools::Utils::createErrorResponse("Invalid file: " + path + " (" + path_err + ")");
     }
-
+    // 检查文件大小是否在允许范围内
     uintmax_t fsz = 0;
     try { fsz = fs::file_size(fs::path(path)); } catch (...) {}
     if (fsz > max_file_size_bytes) {
@@ -100,7 +98,7 @@ json executeReadTextLines(const json& args) {
         );
     }
 
-    // 第一遍：统计总行数
+    // 获取得到输入文件的总行数
     int64_t total_lines = 0;
     {
         std::ifstream ifs(path, std::ios::binary);
@@ -119,10 +117,11 @@ json executeReadTextLines(const json& args) {
         }
     }
 
-    // 规范化/校验范围
-    if (start_line <= 0) start_line = 1;
-    if (end_line <= 0)   end_line = total_lines;
-
+    // 规范化并验证行号范围
+    if (end_line <= 0){
+        end_line = total_lines;
+    }
+    // 检查起始行号的合法性
     if (start_line < 1) {
         LOG_ERR("read_text_lines: invalid start_line=%lld", (long long)start_line);
         return BuiltinTools::Utils::createErrorResponse("start_line must be >= 1");
@@ -131,25 +130,27 @@ json executeReadTextLines(const json& args) {
         LOG_ERR("read_text_lines: start_line(%lld) > total_lines(%lld)", (long long)start_line, (long long)total_lines);
         return BuiltinTools::Utils::createErrorResponse("start_line exceeds total_lines=" + std::to_string(total_lines));
     }
+    // 检查结束行号的合法性
     if (total_lines > 0 && end_line > total_lines) {
         LOG_ERR("read_text_lines: end_line(%lld) > total_lines(%lld)", (long long)end_line, (long long)total_lines);
         return BuiltinTools::Utils::createErrorResponse("end_line exceeds total_lines=" + std::to_string(total_lines));
     }
+    // 检查起始行号不大于结束行号
     if (total_lines > 0 && start_line > end_line) {
         LOG_ERR("read_text_lines: start_line(%lld) > end_line(%lld)", (long long)start_line, (long long)end_line);
         return BuiltinTools::Utils::createErrorResponse("Invalid range: start_line > end_line");
     }
 
-    // 第二遍：读取指定范围
+    // 读取指定行号范围的数据，代码执行到这里说明参数合法
     std::ifstream ifs(path, std::ios::binary);
     if (!ifs) {
         LOG_ERR("read_text_lines: open for reading failed: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Failed to open file");
     }
-
+    // 预分配空间
     std::vector<std::pair<int64_t, std::string>> buf;
     buf.reserve((size_t) std::max<int64_t>(0, end_line - start_line + 1));
-
+    // 逐行读取
     std::string line;
     int64_t current = 0;
     while (std::getline(ifs, line)) {
@@ -159,16 +160,21 @@ json executeReadTextLines(const json& args) {
         if (end_line > 0 && current > end_line) break;
         buf.emplace_back(current, line);
     }
+    // 读取过程中发生 I/O 错误
     if (ifs.bad()) {
         LOG_ERR("read_text_lines: I/O error during reading: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("I/O error during reading");
     }
 
-    // UTF-8 校验（针对返回片段）
+    // 针对返回片段验证其是否为正确的UTF-8字符集编码
     if (enforce_utf8) {
         std::string joined;
         joined.reserve((size_t)std::min<uint64_t>((uint64_t)fsz, max_file_size_bytes));
-        for (const auto& p : buf) { joined.append(p.second); joined.push_back('\n'); }
+        for (const auto& p : buf) {
+            joined.append(p.second);
+            joined.push_back('\n');
+        }
+        // 验证读取的内容是否为合法的 UTF-8 字符串
         if (!BuiltinTools::Utils::isValidUtf8String(joined)) {
             LOG_ERR("read_text_lines: selected segment is not valid UTF-8: %s", path.c_str());
             return BuiltinTools::Utils::createErrorResponse("Selected text is not valid UTF-8");
@@ -185,11 +191,15 @@ json executeReadTextLines(const json& args) {
     out["total_lines"] = total_lines;
     out["range"] = { {"start_line", start_line}, {"end_line", end_line} };
 
+    // 拼接 content 字段
     std::string content;
     content.reserve((size_t) std::min<uint64_t>((uint64_t)fsz, max_file_size_bytes));
-    for (const auto& p : buf) { content.append(p.second); content.push_back('\n'); }
+    for (const auto& p : buf) {
+        content.append(p.second);
+        content.push_back('\n');
+    }
     out["content"] = std::move(content);
-
+    // 根据需要拼接 lines 字段
     if (include_line_numbers) {
         json arr = json::array();
         for (const auto& p : buf) {
@@ -197,14 +207,6 @@ json executeReadTextLines(const json& args) {
         }
         out["lines"] = std::move(arr);
     }
-
-    LOG_INF("read_text_lines: ok path=%s total_lines=%lld range=[%lld,%lld] returned_lines=%zu",
-            path.c_str(),
-            (long long)total_lines,
-            (long long)start_line,
-            (long long)end_line,
-            (size_t)buf.size());
-
     return out;
 }
 
