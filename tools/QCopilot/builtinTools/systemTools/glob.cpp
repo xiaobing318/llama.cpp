@@ -6,7 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <system_error>
-
+// 根据平台包含隐藏文件检测所需头文件
 #if defined(_WIN32)
   #ifndef NOMINMAX
     #define NOMINMAX
@@ -19,11 +19,12 @@ namespace SystemTools {
 
 namespace fs = std::filesystem;
 
-// 隐藏项检测（跨平台）
+// 内部辅助函数
 static inline bool nameStartsWithDot(const fs::path& p) {
     auto s = p.filename().string();
     return !s.empty() && s[0] == '.';
 }
+// 内部辅助函数：跨平台隐藏项检测
 #if defined(_WIN32)
 static bool isHiddenWin(const fs::path& p) {
     std::wstring ws = p.wstring();
@@ -40,7 +41,7 @@ static bool isHiddenCrossPlatform(const fs::path& p) {
 #endif
 }
 
-// 工具定义
+// 获取 glob 工具的定义
 ToolDefinition getGlobDefinition() {
     return {
         "glob",
@@ -58,7 +59,7 @@ ToolDefinition getGlobDefinition() {
                         {"follow_symlinks",     {{"type","boolean"}, {"description","Follow directory symlinks during traversal. Default false."}, {"default", false}}},
                         {"case_sensitive",      {{"type","boolean"}, {"description","Case-sensitive matching for pattern segments. Default true."}, {"default", true}}},
                         {"show_hidden",         {{"type","boolean"}, {"description","Include hidden files/directories (Windows hidden/System and dot-prefixed). Default false."}, {"default", false}}},
-                        {"max_results",         {{"type","integer"}, {"description","Soft cap on number of returned items; set 'truncated=true' if reached. Default 50000."}, {"default", 50000}}}
+                        {"max_results",         {{"type","integer"}, {"description","Soft cap on number of returned items; set 'truncated=true' if reached. Default 50."}, {"default", 50}}}
                     }},
                     {"required", {"base_dir", "pattern"}}
                 }}
@@ -67,18 +68,20 @@ ToolDefinition getGlobDefinition() {
     };
 }
 
-// 主执行逻辑
+// 执行 glob 工具
 json executeGlob(const json& args) {
+    // 解析参数，设置默认值
     const std::string base_dir        = args.value("base_dir", ".");
     const std::string pattern         = args.value("pattern", "");
     const bool include_directories    = args.value("include_directories", false);
     const bool follow_symlinks        = args.value("follow_symlinks", false);
     const bool case_sensitive         = args.value("case_sensitive", true);
     const bool show_hidden            = args.value("show_hidden", false);
-    const int  max_results            = args.value("max_results", 50000);
+    const int  max_results            = args.value("max_results", 50);
 
-    // 基础参数校验
+    // 创建一个错误消息变量
     std::string error_message;
+    // 参数验证
     if (!BuiltinTools::Utils::validatePath(base_dir, error_message)) {
         LOG_ERR("glob: Path validation failed for '%s': %s", base_dir.c_str(), error_message.c_str());
         return BuiltinTools::Utils::createErrorResponse(error_message);
@@ -95,7 +98,7 @@ json executeGlob(const json& args) {
         return BuiltinTools::Utils::createErrorResponse("Pattern is required");
     }
 
-    // 利用 Utils::globFiles 做主匹配（不过滤隐藏与上限）
+    // 利用 Utils::globFiles 做主匹配，这一步不过滤隐藏与设置上限
     std::vector<fs::path> paths = BuiltinTools::Utils::globFiles(
         base_dir,
         pattern,
@@ -107,11 +110,13 @@ json executeGlob(const json& args) {
     // 过滤隐藏 & 封顶 & 构造结果
     std::vector<json> items;
     items.reserve(std::min<int>(static_cast<int>(paths.size()), std::max(0, max_results)));
-
+    // 是否截断
     bool truncated = false;
+    // 已经处理过的数量
     int produced = 0;
-
+    // 遍历所有匹配路径
     for (const auto& p : paths) {
+        // 如果不显示隐藏且是隐藏项则跳过
         if (!show_hidden && isHiddenCrossPlatform(p)) {
             continue;
         }
@@ -124,18 +129,18 @@ json executeGlob(const json& args) {
             else if (fs::is_regular_file(st)) tp = "file";
             else if (fs::is_symlink(st))   tp = "symlink";
         }
-
+        // 添加结果项
         items.push_back(json{
             {"name", p.filename().string()},
             {"path", p.string()},
             {"type", tp},
             {"is_hidden", isHiddenCrossPlatform(p)}
         });
-
+        // 增加计数，检查是否达到上限
         ++produced;
         if (produced >= max_results) { truncated = true; break; }
     }
-
+    // 构造返回值
     json result = BuiltinTools::Utils::createSuccessResponse();
     result["base_dir"]          = base_dir;
     result["pattern"]           = pattern;
@@ -147,7 +152,7 @@ json executeGlob(const json& args) {
     result["items"]             = std::move(items);
     result["count"]             = result["items"].size();
     if (truncated) result["truncated"] = true;
-
+    // 返回结果
     return result;
 }
 
