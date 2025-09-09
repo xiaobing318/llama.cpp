@@ -6,6 +6,7 @@
 #include <vector>
 #include <chrono>
 #include <fstream>
+#include <filesystem>
 
 namespace BuiltinTools {
 namespace Utils {
@@ -34,6 +35,19 @@ bool validatePath(
     std::string& error_message);
 #pragma endregion
 
+#pragma region "跨平台路径编解码"
+/***********************************************************
+* 1、将 UTF-8 字符串安全转换为 std::filesystem::path
+* 2、将 std::filesystem::path 安全转换为 UTF-8 字符串
+***********************************************************/
+
+// 通用实用函数 1 ：UTF-8 -> path（Windows 使用 u8path 以支持中文路径）
+std::filesystem::path utf8ToPath(const std::string& s);
+
+// 通用实用函数 2 ：path -> UTF-8（用于 JSON 输出，跨平台一致）
+std::string pathToUtf8String(const std::filesystem::path& p);
+#pragma endregion
+
 #pragma region "JSON相关实用函数"
 /***********************************************************
 * 1、构造错误响应JSON
@@ -59,6 +73,7 @@ std::string formatJson(const json& j);
 /***********************************************************
 * 1、返回本地时间戳字符串
 * 2、返回当前时间的毫秒级时间戳
+* 3、将 time_point 格式化成人类可读时间
 ***********************************************************/
 
 // 通用实用函数 1 ：返回本地时间戳字符串
@@ -66,6 +81,9 @@ std::string getCurrentTimestamp();
 
 // 通用实用函数 2 ：返回当前时间的毫秒级时间戳
 int64_t getCurrentTimeMs();
+
+// 通用实用函数 3 ：将 time_point 格式化为 "%Y-%m-%d %H:%M:%S"
+std::string formatTimeStamp(const std::chrono::system_clock::time_point& tp);
 #pragma endregion
 
 #pragma region "字符串操作相关实用函数"
@@ -178,10 +196,21 @@ bool isLikelyBinary(
     const std::filesystem::path& filepath,
     std::size_t probe = 4096);
 
+// 通用实用函数 12 扩展：检测字符串缓冲区是否疑似二进制（包含 NUL 字节）
+bool isLikelyBinaryString(const std::string& buffer);
+
 // 通用实用函数 13 ：以unicode友好方式打开指定文件，为了能够实现对中文路径的支持
 std::ifstream open_ifstream_unicode(
     const std::string& path,
     std::ios::openmode mode);
+#pragma endregion
+
+#pragma region "格式化辅助实用函数"
+/***********************************************************
+* 1、将字节大小格式化为人类可读字符串（B/KB/MB/GB/TB）
+***********************************************************/
+
+std::string formatFileSize(uintmax_t size_bytes);
 #pragma endregion
 
 } // namespace Utils

@@ -36,7 +36,7 @@ json executeValidateUtf8File(const json& args) {
     }
 
     try {
-        std::filesystem::path fs_path(path);
+        std::filesystem::path fs_path = BuiltinTools::Utils::utf8ToPath(path);
 
         // 检查路径是否存在
         if (!std::filesystem::exists(fs_path)) {

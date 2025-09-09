@@ -108,13 +108,10 @@ json executeReadTextLines(const json& args) {
     }
     // 检查文件大小是否在允许范围内
     uintmax_t fsz = 0;
-    try { fsz = fs::file_size(fs::path(path)); } catch (...) {}
+    try { fsz = fs::file_size(BuiltinTools::Utils::utf8ToPath(path)); } catch (...) {}
     if (fsz > max_file_size_bytes) {
-        LOG_WRN("read_text_lines: file too large: %s size=%ju limit=%ju",
-                path.c_str(), (uintmax_t)fsz, (uintmax_t)max_file_size_bytes);
-        return BuiltinTools::Utils::createErrorResponse(
-            "File too large: " + std::to_string((uintmax_t)fsz) +
-            " bytes (limit " + std::to_string((uintmax_t)max_file_size_bytes) + ")"
+        LOG_WRN("read_text_lines: file too large: %s size=%ju limit=%ju", path.c_str(), (uintmax_t)fsz, (uintmax_t)max_file_size_bytes);
+        return BuiltinTools::Utils::createErrorResponse( "File too large: " + std::to_string((uintmax_t)fsz) + " bytes (limit " + std::to_string((uintmax_t)max_file_size_bytes) + ")"
         );
     }
 
@@ -129,12 +126,16 @@ json executeReadTextLines(const json& args) {
         }
         // 跳过 BOM
         skip_utf8_bom(ifs);
-
+        // 逐行读取计数
         std::string tmp;
         while (std::getline(ifs, tmp)) {
-            if (!tmp.empty() && tmp.back() == '\r') tmp.pop_back(); // 统一处理 CRLF
+            // 统一处理 CRLF
+            if (!tmp.empty() && tmp.back() == '\r'){
+                tmp.pop_back();
+            }
             ++total_lines;
         }
+        // 如果读取过程中发生 I/O 错误，则输出错误
         if (ifs.bad()) {
             LOG_ERR("read_text_lines: I/O error during line counting: %s", path.c_str());
             return BuiltinTools::Utils::createErrorResponse("I/O error during line counting");
@@ -214,7 +215,7 @@ json executeReadTextLines(const json& args) {
             joined_for_probe.append(p.second);
             joined_for_probe.push_back('\n');
         }
-        if (BuiltinTools::Utils::isLikelyBinary(joined_for_probe)) {
+        if (BuiltinTools::Utils::isLikelyBinaryString(joined_for_probe)) {
             LOG_ERR("read_text_lines: selected segment is likely binary: %s", path.c_str());
             return BuiltinTools::Utils::createErrorResponse("Selected text appears to be binary");
         }

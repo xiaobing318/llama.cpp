@@ -1,5 +1,4 @@
 #include "grep.h"
-#include "systemTools_utils.h"
 #include "../common/common_utils.h"
 
 #include <filesystem>
@@ -23,7 +22,7 @@ namespace fs = std::filesystem;
 
 // 内部辅助函数
 static inline bool nameStartsWithDot(const fs::path& p) {
-    auto s = p.filename().string();
+    auto s = BuiltinTools::Utils::pathToUtf8String(p.filename());
     return !s.empty() && s[0] == '.';
 }
 
@@ -119,7 +118,7 @@ json executeGrep(const json& args) {
     bool truncated     = false;
 
     try {
-        fs::path p(target_path);
+        fs::path p = BuiltinTools::Utils::utf8ToPath(target_path);
         std::error_code ec;
 
         if (fs::is_regular_file(p, ec)) {

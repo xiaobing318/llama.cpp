@@ -183,7 +183,7 @@ bool validatePath(const std::string& path, std::string& error_message) {
         return false;
     }
     try {
-        std::filesystem::path p(path);
+        std::filesystem::path p = fs::u8path(path);
         // 仅做“语义穿越”检查：规范化后若仍含有“..”组件，判为不安全
         auto norm = p.lexically_normal();
         for (const auto& part : norm) {
@@ -200,6 +200,26 @@ bool validatePath(const std::string& path, std::string& error_message) {
         return false;
     }
     return true;
+}
+#pragma endregion
+
+#pragma region "跨平台路径编解码"
+/***********************************************************
+* 1、将 UTF-8 字符串安全转换为 std::filesystem::path
+* 2、将 std::filesystem::path 安全转换为 UTF-8 字符串
+***********************************************************/
+
+std::filesystem::path utf8ToPath(const std::string& s) {
+    return fs::u8path(s);
+}
+
+std::string pathToUtf8String(const std::filesystem::path& p) {
+#if defined(__cpp_lib_char8_t)
+    auto u8 = p.u8string();
+    return std::string(u8.begin(), u8.end());
+#else
+    return p.u8string();
+#endif
 }
 #pragma endregion
 
@@ -249,6 +269,7 @@ std::string formatJson(const json& j) {
 /***********************************************************
 * 1、返回本地时间戳字符串
 * 2、返回当前时间的毫秒级时间戳
+* 3、将 time_point 格式化成人类可读时间
 ***********************************************************/
 
 std::string getCurrentTimestamp() {
@@ -272,6 +293,19 @@ int64_t getCurrentTimeMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()
     ).count();
+}
+
+std::string formatTimeStamp(const std::chrono::system_clock::time_point& tp) {
+    auto tt = std::chrono::system_clock::to_time_t(tp);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    std::stringstream ss;
+    ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return ss.str();
 }
 #pragma endregion
 
@@ -426,7 +460,7 @@ bool fileExists(const std::string& path) {
     }
 
     try {
-        return std::filesystem::exists(path);
+        return std::filesystem::exists(fs::u8path(path));
     } catch (const std::filesystem::filesystem_error& e) {
         LOG_WRN("fileExists: Filesystem error checking path '%s': %s", path.c_str(), e.what());
         return false;
@@ -435,10 +469,10 @@ bool fileExists(const std::string& path) {
 
 bool is_regular_readable_file(const std::string& path, std::string& err) {
     try {
-        fs::path p(path);
+        fs::path p = fs::u8path(path);
         if (!fs::exists(p))                { err = "Path does not exist"; return false; }
         if (!fs::is_regular_file(p))       { err = "Path is not a regular file"; return false; }
-        std::ifstream ifs(path, std::ios::binary);
+        std::ifstream ifs(p, std::ios::binary);
         if (!ifs)                          { err = "Failed to open file for reading"; return false; }
         return true;
     } catch (const fs::filesystem_error& e) {
@@ -453,7 +487,7 @@ bool readFileContent(const std::string& path, std::string& content) {
     }
 
     try {
-        std::ifstream file(path, std::ios::binary);
+        std::ifstream file = open_ifstream_unicode(path, std::ios::binary);
         if (!file.is_open()) {
             return false;
         }
@@ -527,7 +561,7 @@ bool readTextFileWithRange(
     if (start_line <= 0) start_line = 1; // 更健壮的入参防御
 
     try {
-        std::ifstream file(path, std::ios::binary);
+        std::ifstream file = open_ifstream_unicode(path, std::ios::binary);
         if (!file.is_open()) return false;
 
         // 读取前3字节以检测 UTF-8 BOM
@@ -718,11 +752,12 @@ std::vector<std::string> listDirectory(const std::string& path) {
     std::vector<std::string> result;
     try {
         namespace fs = std::filesystem;
-        if (!fs::exists(path) || !fs::is_directory(path)) return result;
+        fs::path p = fs::u8path(path);
+        if (!fs::exists(p) || !fs::is_directory(p)) return result;
 
-        for (const auto& entry :
-             fs::directory_iterator(path, fs::directory_options::skip_permission_denied)) {
-            result.push_back(entry.path().filename().string());
+        auto opts = fs::directory_options::skip_permission_denied;
+        for (const auto& entry : fs::directory_iterator(p, opts)) {
+            result.push_back(pathToUtf8String(entry.path().filename()));
         }
         std::sort(result.begin(), result.end());
     } catch (const std::filesystem::filesystem_error& e) {
@@ -758,11 +793,12 @@ std::vector<fs::path> globFiles(
             for (const auto& root : frontier) {
                 if (!fs::exists(root) || !fs::is_directory(root)) continue;
                 expanded.push_back(root);
-                fs::directory_options opts = follow_symlinks ? fs::directory_options::follow_directory_symlink : fs::directory_options::none;
-                for (auto it = fs::recursive_directory_iterator(root, opts);
-                     it != fs::recursive_directory_iterator(); ++it) {
-                    if (it->is_directory()) expanded.push_back(it->path());
-                }
+            fs::directory_options opts = fs::directory_options::skip_permission_denied;
+            if (follow_symlinks) opts |= fs::directory_options::follow_directory_symlink;
+            for (auto it = fs::recursive_directory_iterator(root, opts);
+                 it != fs::recursive_directory_iterator(); ++it) {
+                if (it->is_directory()) expanded.push_back(it->path());
+            }
             }
             frontier.swap(expanded);
             continue;
@@ -772,9 +808,10 @@ std::vector<fs::path> globFiles(
         std::vector<fs::path> next;
         for (const auto& dir : frontier) {
             if (!fs::exists(dir) || !fs::is_directory(dir)) continue;
-            fs::directory_options opts = follow_symlinks ? fs::directory_options::follow_directory_symlink : fs::directory_options::none;
+            fs::directory_options opts = fs::directory_options::skip_permission_denied;
+            if (follow_symlinks) opts |= fs::directory_options::follow_directory_symlink;
             for (auto& de : fs::directory_iterator(dir, opts)) {
-                const std::string name = de.path().filename().string();
+                const std::string name = pathToUtf8String(de.path().filename());
                 if (!globSegmentMatch(name, seg, case_sensitive)) continue;
 
                 if (last) {
@@ -863,7 +900,7 @@ std::vector<json> searchInFileRegex(
 
         if (found) {
             json j = {
-                {"file", filepath.string()},
+                {"file", pathToUtf8String(filepath)},
                 {"line_content", line},
                 {"match_start", static_cast<int>(pos0)},
                 {"match_end", static_cast<int>(pos1)}
@@ -897,12 +934,34 @@ bool isLikelyBinary(
     }
     return false;
 }
+
+bool isLikelyBinaryString(const std::string& buffer) {
+    for (unsigned char c : buffer) {
+        if (c == 0) return true;
+    }
+    return false;
+}
 // 以unicode友好方式打开指定文件，为了能够实现对中文路径的支持
 std::ifstream open_ifstream_unicode(
     const std::string& path,
     std::ios::openmode mode) {
-    // 使用 fs::path 保证在 Windows 上走 _wfopen 路径，支持中文/日文等非 ASCII 路径
-    return std::ifstream(fs::path(path), mode);
+    // 使用 u8path 保证在 Windows 上走宽字符路径（支持中文等非 ASCII 路径）
+    return std::ifstream(fs::u8path(path), mode);
+}
+#pragma endregion
+
+#pragma region "格式化辅助实用函数"
+std::string formatFileSize(uintmax_t size_bytes) {
+    const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+    double size = static_cast<double>(size_bytes);
+    int unit = 0;
+    while (size >= 1024.0 && unit < 4) {
+        size /= 1024.0;
+        ++unit;
+    }
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(1) << size << ' ' << units[unit];
+    return ss.str();
 }
 #pragma endregion
 

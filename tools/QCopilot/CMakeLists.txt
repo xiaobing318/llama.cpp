@@ -35,7 +35,6 @@ set(BUILTIN_TOOLS_SRCS
     builtinTools/fileTools/validate_utf8_file.cpp
 
     # 系统工具
-    builtinTools/systemTools/systemTools_utils.cpp
     builtinTools/systemTools/list_directory.cpp
     builtinTools/systemTools/path_stat.cpp
     builtinTools/systemTools/glob.cpp

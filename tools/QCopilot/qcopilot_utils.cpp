@@ -50,8 +50,15 @@ std::string Logger::get_timestamp() {
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
 
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &time_t);
+#else
+    localtime_r(&time_t, &tm);
+#endif
+
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+    ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
     ss << '.' << std::setfill('0') << std::setw(3) << ms.count();
     return ss.str();
 }
@@ -146,7 +153,7 @@ bool file_exists(const std::string& path) {
     }
 
     try {
-        return fs::exists(path);
+        return fs::exists(fs::u8path(path));
     } catch (const fs::filesystem_error& e) {
         LOG_ERR("Filesystem error checking if file exists %s: %s", path.c_str(), e.what());
         return false;

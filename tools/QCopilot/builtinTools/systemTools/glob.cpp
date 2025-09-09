@@ -1,5 +1,4 @@
 #include "glob.h"
-#include "systemTools_utils.h"
 #include "../common/common_utils.h"
 
 #include <filesystem>
@@ -21,7 +20,7 @@ namespace fs = std::filesystem;
 
 // 内部辅助函数
 static inline bool nameStartsWithDot(const fs::path& p) {
-    auto s = p.filename().string();
+    auto s = BuiltinTools::Utils::pathToUtf8String(p.filename());
     return !s.empty() && s[0] == '.';
 }
 // 内部辅助函数：跨平台隐藏项检测
@@ -90,7 +89,7 @@ json executeGlob(const json& args) {
         LOG_ERR("glob: Base directory not found: %s", base_dir.c_str());
         return BuiltinTools::Utils::createErrorResponse("Base directory not found: " + base_dir);
     }
-    if (!fs::is_directory(base_dir)) {
+    if (!fs::is_directory(BuiltinTools::Utils::utf8ToPath(base_dir))) {
         LOG_ERR("glob: Base path is not a directory: %s", base_dir.c_str());
         return BuiltinTools::Utils::createErrorResponse("Base path is not a directory: " + base_dir);
     }
@@ -100,7 +99,7 @@ json executeGlob(const json& args) {
 
     // 利用 Utils::globFiles 做主匹配，这一步不过滤隐藏与设置上限
     std::vector<fs::path> paths = BuiltinTools::Utils::globFiles(
-        base_dir,
+        BuiltinTools::Utils::utf8ToPath(base_dir),
         pattern,
         /*include_directories=*/include_directories,
         /*follow_symlinks=*/follow_symlinks,
@@ -131,8 +130,8 @@ json executeGlob(const json& args) {
         }
         // 添加结果项
         items.push_back(json{
-            {"name", p.filename().string()},
-            {"path", p.string()},
+            {"name", BuiltinTools::Utils::pathToUtf8String(p.filename())},
+            {"path", BuiltinTools::Utils::pathToUtf8String(p)},
             {"type", tp},
             {"is_hidden", isHiddenCrossPlatform(p)}
         });

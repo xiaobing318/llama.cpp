@@ -1,5 +1,4 @@
 #include "path_stat.h"
-#include "systemTools_utils.h"
 #include "../common/common_utils.h"
 #include <filesystem>
 #include <algorithm>
@@ -39,13 +38,13 @@ json executePathStat(const json& args) {
 
     // 参数验证
     std::string error_message;
-    if (!Utils::validateSystemPath(path, error_message)) {
+    if (!BuiltinTools::Utils::validatePath(path, error_message)) {
         LOG_ERR("path_stat: Path validation failed for '%s': %s", path.c_str(), error_message.c_str());
         return BuiltinTools::Utils::createErrorResponse(error_message);
     }
 
     try {
-        std::filesystem::path fs_path(path);
+        std::filesystem::path fs_path = BuiltinTools::Utils::utf8ToPath(path);
 
         // 检查路径是否存在
         if (!std::filesystem::exists(fs_path)) {
@@ -56,18 +55,18 @@ json executePathStat(const json& args) {
         json result = BuiltinTools::Utils::createSuccessResponse();
         result["path"] = path;
         result["exists"] = true;
-        result["absolute_path"] = std::filesystem::absolute(fs_path).string();
-        result["filename"] = fs_path.filename().string();
+        result["absolute_path"] = BuiltinTools::Utils::pathToUtf8String(std::filesystem::absolute(fs_path));
+        result["filename"] = BuiltinTools::Utils::pathToUtf8String(fs_path.filename());
         // 文件类型识别
         if (std::filesystem::is_regular_file(fs_path)) {
             result["type"] = "file";
             // 文件大小信息
             auto file_size = std::filesystem::file_size(fs_path);
             result["size"] = file_size;
-            result["human_size"] = Utils::formatFileSize(file_size);
+            result["human_size"] = BuiltinTools::Utils::formatFileSize(file_size);
             // 文件扩展名
             if (fs_path.has_extension()) {
-                result["extension"] = fs_path.extension().string();
+                result["extension"] = BuiltinTools::Utils::pathToUtf8String(fs_path.extension());
             }
             // UTF-8文本文件分析
             if (text_analysis) {
@@ -144,7 +143,7 @@ json executePathStat(const json& args) {
             );
             auto time_t = std::chrono::system_clock::to_time_t(sctp);
 
-            result["last_modified"] = Utils::formatTimeStamp(sctp);
+            result["last_modified"] = BuiltinTools::Utils::formatTimeStamp(sctp);
             result["last_modified_timestamp"] = time_t;
         } catch (const std::exception& e) {
             LOG_WRN("path_stat: Failed to get modification time for '%s': %s", path.c_str(), e.what());

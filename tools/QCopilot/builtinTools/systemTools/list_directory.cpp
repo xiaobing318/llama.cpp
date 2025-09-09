@@ -1,5 +1,4 @@
 #include "list_directory.h"
-#include "systemTools_utils.h"
 #include "../common/common_utils.h"
 
 #include <filesystem>
@@ -46,7 +45,7 @@ ToolDefinition getListDirectoryDefinition() {
 
 // 内部辅助函数：判断是否为以点开头的隐藏文件名
 static inline bool isDotHiddenName(const std::filesystem::path& p) {
-    auto name = p.filename().string();
+    auto name = BuiltinTools::Utils::pathToUtf8String(p.filename());
     return !name.empty() && name[0] == '.';
 }
 
@@ -94,7 +93,7 @@ json executeListDirectory(const json& args) {
 
     // 基础校验
     std::string error_message;
-    if (!Utils::validateSystemPath(path, error_message)) {
+    if (!BuiltinTools::Utils::validatePath(path, error_message)) {
         LOG_ERR("list_directory: Path validation failed for '%s': %s", path.c_str(), error_message.c_str());
         return BuiltinTools::Utils::createErrorResponse(error_message);
     }
@@ -102,7 +101,7 @@ json executeListDirectory(const json& args) {
         LOG_ERR("list_directory: Directory not found: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Directory not found: " + path);
     }
-    if (!std::filesystem::is_directory(path)) {
+    if (!std::filesystem::is_directory(BuiltinTools::Utils::utf8ToPath(path))) {
         LOG_ERR("list_directory: Path is not a directory: %s", path.c_str());
         return BuiltinTools::Utils::createErrorResponse("Path is not a directory: " + path);
     }
@@ -140,8 +139,8 @@ json executeListDirectory(const json& args) {
         }
 
         json item = {
-            {"name", p.filename().string()},
-            {"path", p.string()},
+            {"name", BuiltinTools::Utils::pathToUtf8String(p.filename())},
+            {"path", BuiltinTools::Utils::pathToUtf8String(p)},
             {"type", is_dir ? "directory" : (is_file ? "file" : (is_sym ? "symlink" : "other"))},
             {"is_hidden", isHiddenCrossPlatform(p)}
         };
@@ -150,7 +149,7 @@ json executeListDirectory(const json& args) {
             uint64_t sz = 0;
             if (tryGetFileSize(p, sz)) {
                 item["size"] = sz;
-                item["human_size"] = Utils::formatFileSize(sz);
+                item["human_size"] = BuiltinTools::Utils::formatFileSize(sz);
             } else {
                 // 文件大小不可读时给个占位
                 item["size"] = 0;
@@ -165,7 +164,7 @@ json executeListDirectory(const json& args) {
     try {
         if (recursive) {
             // 递归枚举：对隐藏目录的“剪枝”也要生效
-            for (std::filesystem::recursive_directory_iterator it(path, opts), end; it != end; ++it) {
+            for (std::filesystem::recursive_directory_iterator it(BuiltinTools::Utils::utf8ToPath(path), opts), end; it != end; ++it) {
                 if (produced >= static_cast<size_t>(max_results)) { truncated = true; break; }
 
                 // 如果遇到隐藏目录且未开启 show_hidden，则跳过并阻止深入
@@ -177,12 +176,12 @@ json executeListDirectory(const json& args) {
                     }
                 }
 
-                process_entry(*it, path);
+                process_entry(*it, BuiltinTools::Utils::utf8ToPath(path));
             }
         } else {
-            for (std::filesystem::directory_iterator it(path, opts), end; it != end; ++it) {
+            for (std::filesystem::directory_iterator it(BuiltinTools::Utils::utf8ToPath(path), opts), end; it != end; ++it) {
                 if (produced >= static_cast<size_t>(max_results)) { truncated = true; break; }
-                process_entry(*it, path);
+                process_entry(*it, BuiltinTools::Utils::utf8ToPath(path));
             }
         }
     } catch (const std::exception& e) {
