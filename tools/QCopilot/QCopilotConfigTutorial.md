@@ -51,20 +51,84 @@ QCopilot 配置与工具定义完整指南（Linux/macOS/Windows）
 - timeout_ms（可选）：超时毫秒（整型或可解析成长整型的字符串）。默认 -1（不超时）。超时会终止子进程并在结果中标记 `timed_out: true`。
 
 3.2 function 对象（对 LLM 的函数说明）
-- name（必填）：工具名称（对 LLM 可见）。规则：以字母开头，仅含字母/数字/下划线；不可为空、不可包含空格或连字符。失败时注册被拒绝。
-- description（必填）：非空字符串，概述用途、适用场景与输入输出。
-- parameters（可选）：JSON Schema 的一个子集（类型需为 object）。用于在运行前校验 LLM/调用方提供的参数，防止无效调用。
-  - 固定结构：
-    - type: "object"（必填）
-    - properties: { <参数名>: { 子 schema } }（必填）
-    - required: ["必填参数名", ...]（可选）
-    - additionalProperties: 布尔（可选；false 表示严格拒绝未声明字段）
-  - 子 schema 支持的关键键：
-    - type: "string" | "number" | "integer" | "boolean" | "object" | "array" | "null"
-    - description: 字符串，参数说明
-    - enum: [允许值, ...]
-    - minLength/maxLength（字符串）、pattern（字符串正则）
-    - minimum/maximum、exclusiveMinimum/exclusiveMaximum（数值约束）
+- 校验规则清单（与 `validateToolDefinition` 完全一致）：
+  - name（必填）：存在、类型为字符串、非空；且名称格式必须合法：以英文字母开头，只能包含字母/数字/下划线。
+  - description（必填）：存在、类型为字符串、非空。
+  - parameters（可选）：若存在则必须是对象，且：
+    - 必含 `type` 且值为 `object`（字符串）。
+    - 必含 `properties` 且为对象。
+    - `required` 若存在，必须是字符串数组（每个元素为字符串）。
+    - `additionalProperties` 可选（布尔）。
+  - 其余键（如 `default`/`enum`/`minLength`/`pattern` 等）不由该函数强制校验，但会在运行时参数校验（`validate_arguments`）中生效。
+
+- 子 schema 常见键（供编写参考）：
+  - type: `string` | `number` | `integer` | `boolean` | `object` | `array` | `null`
+  - description: 参数说明字符串
+  - enum: 值集合
+  - 字符串约束：minLength / maxLength / pattern
+  - 数值约束：minimum / maximum / exclusiveMinimum / exclusiveMaximum
+
+3.2.1 真实示例：shapefile_converter（来自 macOS 配置）
+- 位置：tools/QCopilot/QCopilotConfig-macos.json:13
+- 片段（省略不相关字段）：
+```
+{
+  "type": "function",
+  "executable_generic": "shapefile_converter",
+  "executable_macos": "/usr/local/bin/shapefile_converter",
+  "function": {
+    "name": "shapefile_converter",
+    "description": "Convert ESRI Shapefile attribute text encoding ...",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input_path": { "type": "string", "minLength": 1 },
+        "s_flag": { "type": "string", "enum": ["-s"], "default": "-s" },
+        "source_encoding": { "type": "string", "minLength": 2, "maxLength": 40, "pattern": "^[A-Za-z0-9.-]+$" },
+        "t_flag": { "type": "string", "enum": ["-t"], "default": "-t" },
+        "target_encoding": { "type": "string", "minLength": 2, "maxLength": 40, "pattern": "^[A-Za-z0-9.-]+$" }
+      },
+      "required": ["input_path","s_flag","t_flag"],
+      "additionalProperties": false
+    }
+  },
+  "command_template": "shapefile_converter {s_flag} {source_encoding} {t_flag} {target_encoding} \"{input_path}\""
+}
+```
+- 对照校验要点：
+  - 顶层 `type=function` 满足要求；
+  - 可执行文件：提供了平台专属 `executable_macos` 与通用 `executable_generic`（满足“至少其一或 generic”）；
+  - function.name/description：均存在且非空；名称符合格式；
+  - parameters：存在，type=object；properties 为对象；required 为字符串数组；允许 additionalProperties=false；
+  - command_template：存在且为字符串。
+
+3.2.2 真实示例：ogr_convert_format_basic（来自 macOS 配置）
+- 位置：tools/QCopilot/QCopilotConfig-macos.json:131
+- 片段（省略不相关字段）：
+```
+{
+  "type": "function",
+  "executable_generic": "ogr2ogr",
+  "executable_macos": "/usr/bin/ogr2ogr",
+  "function": {
+    "name": "ogr_convert_format_basic",
+    "description": "Convert a vector dataset from one format to another ...",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input_file": { "type": "string", "minLength": 1 },
+        "output_file": { "type": "string", "minLength": 1 },
+        "output_format": { "type": "string", "enum": ["GPKG","ESRI Shapefile","GeoJSON", ...], "default": "GPKG" },
+        "overwrite_flag": { "type": "string", "enum": ["-overwrite"], "default": "-overwrite" }
+      },
+      "required": ["input_file","output_file","output_format","overwrite_flag"],
+      "additionalProperties": false
+    }
+  },
+  "command_template": "executableFilePath {overwrite_flag} -f \"{output_format}\" \"{output_file}\" \"{input_file}\""
+}
+```
+- 对照校验要点：同上，完全满足 `validateToolDefinition` 的各项检查。
 
 3.3 可执行文件解析与首参数替换规则
 - 平台解析：在执行前，执行器按当前平台优先选择 `executable_windows/linux/macos`，若缺省则回退 `executable_generic`。
