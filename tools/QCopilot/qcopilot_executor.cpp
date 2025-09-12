@@ -383,6 +383,12 @@ void ToolExecutor::registerBuiltinTools() {
     for (const auto& definition : definitions) {
         const std::string& name = definition.name;
         try {
+            // 先校验：仅校验共用的 function 子结构（Builtin 定义不要求可执行路径等外部字段）
+            std::string err;
+            if (!validate_tool_definition(definition.definition, ToolDefinitionKind::Builtin, err)) {
+                LOG_ERR("内置工具定义校验失败，已跳过注册: %s; 错误: %s", name.c_str(), err.c_str());
+                continue;
+            }
             std::lock_guard<std::mutex> lock(tools_mutex);
             // 注册工具定义
             tool_definitions[name] = definition.definition;
@@ -411,7 +417,7 @@ void ToolExecutor::registerBuiltinTools() {
 bool ToolExecutor::registerExternalTools(const json& tool_definition) {
     // 对外部工具的定义进行全面检查，确保其符合预期的 JSON schema
     std::string error_message;
-    if (!validateToolDefinition(tool_definition, error_message)) {
+    if (!validate_tool_definition(tool_definition, ToolDefinitionKind::External, error_message)) {
         LOG_ERR("外部工具定义验证失败: %s", error_message.c_str());
         return false;
     }
@@ -1243,180 +1249,4 @@ std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_te
 #endif
     }
     return out;
-}
-
-// 辅助函数：验证单个外部工具的定义是否符合预期的 JSON schema ，需要同 QCopilotConfigTutorial.md 中的描述保持一致
-bool ToolExecutor::validateToolDefinition(const json& tool_definition, std::string& error_message) const {
-    // 1. 检查单个外部工具定义的顶层结构
-    if (!tool_definition.is_object()) {
-        error_message = "工具定义必须是一个JSON对象";
-        return false;
-    }
-
-    // 2. 检查必需的'type'字段
-    if (!tool_definition.contains("type")) {
-        error_message = "工具定义缺失必需的'type'字段";
-        return false;
-    }
-
-    // 2.1 检查'type'字段是否为字符串且值为'function'
-    if (!tool_definition["type"].is_string() || tool_definition["type"].get<std::string>() != "function") {
-        error_message = "工具定义的'type'字段必须字符串类型且只能为'function'";
-        return false;
-    }
-
-    // 3. 检查必需的'function'字段
-    if (!tool_definition.contains("function")) {
-        error_message = "工具定义缺失必需的'function'字段";
-        return false;
-    }
-
-    /*获取'function'字段*/
-    const json& function = tool_definition["function"];
-
-    // 3.1 检查function是否为对象
-    if (!function.is_object()) {
-        error_message = "'function'字段必须是一个JSON对象";
-        return false;
-    }
-
-    /*检查function中的必需字段*/
-
-    // 4.1 检查'name'字段
-    if (!function.contains("name")) {
-        error_message = "function定义缺失必需的'name'字段";
-        return false;
-    }
-    // 4.1.1 检查'name'字段是否为字符串且非空
-    if (!function["name"].is_string() || function["name"].get<std::string>().empty()) {
-        error_message = "function的'name'字段必须是字符串且非空";
-        return false;
-    }
-    // 4.1.2 检查'name'字段格式是否有效
-    if (!validate_tool_name(function["name"].get<std::string>())) {
-        error_message = "工具名称格式无效: '" + function["name"].get<std::string>() + "' (必须以字母开头，只能包含字母、数字和下划线)";
-        return false;
-    }
-
-    // 4.2 检查'description'字段
-    if (!function.contains("description")) {
-        error_message = "function定义缺失必需的'description'字段";
-        return false;
-    }
-    // 4.2.1 检查'description'字段是否为字符串
-    if (!function["description"].is_string()) {
-        error_message = "function的'description'字段必须是字符串";
-        return false;
-    }
-    // 4.2.2 检查'description'字段是否非空
-    if (function["description"].get<std::string>().empty()) {
-        error_message = "function的'description'字段不能为空";
-        return false;
-    }
-
-    // 4.3 检查'parameters'字段
-    if (function.contains("parameters")) {
-        // 获取parameters字段
-        const json& parameters = function["parameters"];
-        // 检查parameters是否存在且是一个对象
-        if (!parameters.is_object()) {
-            error_message = "function的'parameters'字段必须是一个JSON对象";
-            return false;
-        }
-        // 检查parameters是否包含必需的'type'字段
-        if (!parameters.contains("type")) {
-            error_message = "function的'parameters'字段缺失必需的'type'字段";
-            return false;
-        }
-        // 检查'type'字段是否为字符串且值为'object'
-        if (!parameters["type"].is_string() || parameters["type"].get<std::string>() != "object") {
-            error_message = "parameters的'type'字段必须为'object'";
-            return false;
-        }
-        // 检查properties字段是否存在
-        if (!parameters.contains("properties"))
-        {
-            error_message = "'parameters'字段缺失必需的'properties'字段";
-            return false;
-        }
-        // 检查properties字段是否为一个对象
-        if (!parameters["properties"].is_object()) {
-            error_message = "parameters的'properties'字段必须是一个JSON对象";
-            return false;
-        }
-        // 'required'字段不是必须存在的，如果该字段存在则进行校验
-        if (parameters.contains("required")) {
-            // 检查'required'字段是否为数组
-            if (!parameters["required"].is_array()) {
-                error_message = "parameters的'required'字段必须是一个数组";
-                return false;
-            }
-            for (const auto& req : parameters["required"]) {
-                // 检查'required'数组中的每个元素是否为字符串
-                if (!req.is_string()) {
-                    error_message = "parameters的'required'数组中的元素必须是字符串";
-                    return false;
-                }
-            }
-        }
-    }
-
-    // 5. 检查可执行文件字段：仅支持平台专属或 executable_generic
-    bool has_any_exec = false;
-    if (tool_definition.contains("executable_generic")) {
-        // 检查'executable_generic'字段是否为字符串
-        if (!tool_definition["executable_generic"].is_string()) {
-            error_message = "'executable_generic'字段必须是字符串";
-            return false;
-        }
-        // 检查'executable_generic'字段是否非空
-        has_any_exec = has_any_exec || !tool_definition["executable_generic"].get<std::string>().empty();
-    }
-
-    if (tool_definition.contains("executable_windows")) {
-        // 检查'executable_windows'字段是否为字符串
-        if (!tool_definition["executable_windows"].is_string()) {
-            error_message = "'executable_windows'字段必须是字符串";
-            return false;
-        }
-        // 检查'executable_windows'字段是否非空
-        has_any_exec = has_any_exec || !tool_definition["executable_windows"].get<std::string>().empty();
-    }
-
-    if (tool_definition.contains("executable_linux")) {
-        // 检查'executable_linux'字段是否为字符串
-        if (!tool_definition["executable_linux"].is_string()) {
-            error_message = "'executable_linux'字段必须是字符串";
-            return false;
-        }
-        // 检查'executable_linux'字段是否非空
-        has_any_exec = has_any_exec || !tool_definition["executable_linux"].get<std::string>().empty();
-    }
-
-    if (tool_definition.contains("executable_macos")) {
-        // 检查'executable_macos'字段是否为字符串
-        if (!tool_definition["executable_macos"].is_string()) {
-            error_message = "'executable_macos'字段必须是字符串";
-            return false;
-        }
-        // 检查'executable_macos'字段是否非空
-        has_any_exec = has_any_exec || !tool_definition["executable_macos"].get<std::string>().empty();
-    }
-
-    // 如果没有任何可执行文件字段，报错
-    if (!has_any_exec) {
-        error_message = "缺少可执行文件路径: 至少提供 'executable_generic' 或某个平台专属字段";
-        return false;
-    }
-
-    // 6. 检查command_template字段
-    if (tool_definition.contains("command_template")) {
-        // 检查'command_template'字段是否为字符串
-        if (!tool_definition["command_template"].is_string()) {
-            error_message = "'command_template'字段必须是字符串";
-            return false;
-        }
-    }
-
-    return true;
 }

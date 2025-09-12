@@ -25,6 +25,7 @@
 
 namespace fs = std::filesystem;
 
+#pragma region "日志系统"
 /*
 Notes:
 1、如果配置中没有设置日志详细级别，这里默认将日志基准级别设置成 INFO 级别，日志可以通过配置文件实现调整。
@@ -130,7 +131,9 @@ void Logger::log(LogLevel level, const char* file, int line, const char* format,
     fprintf(output, "\n");
     fflush(output);
 }
+#pragma endregion
 
+#pragma region "通用初始化"
 void common_init() {
     // Set UTF-8 locale
     std::setlocale(LC_ALL, "");
@@ -146,7 +149,9 @@ void common_init() {
     // Log initialization
     LOG_INF("QCopilot utilities initialized");
 }
+#pragma endregion
 
+#pragma region "文件通用工具"
 bool file_exists(const std::string& path) {
     if (path.empty()) {
         return false;
@@ -159,7 +164,9 @@ bool file_exists(const std::string& path) {
         return false;
     }
 }
+#pragma endregion
 
+#pragma region "进程通用工具"
 std::pair<bool, std::string> execute_command(const std::string& command) {
     if (command.empty()) {
         LOG_ERR("Empty command provided to execute_command");
@@ -216,11 +223,10 @@ bool is_process_running(int pid) {
     return kill(pid, 0) == 0;
 #endif
 }
+#pragma endregion
 
-
-// JSON Schema validation helper functions
-
-// 基本类型验证
+#pragma region "工具定义 JSON 形状校验"
+// 内部辅助函数：基本类型验证
 static bool validate_type(const json& value, const std::string& expected_type) {
     if (expected_type == "string") {
         return value.is_string();
@@ -239,7 +245,7 @@ static bool validate_type(const json& value, const std::string& expected_type) {
     }
     return false;
 }
-// 枚举值验证
+// 内部辅助函数：枚举值验证
 static bool validate_enum(const json& value, const json& enum_values) {
     for (const auto& enum_val : enum_values) {
         if (value == enum_val) {
@@ -248,7 +254,7 @@ static bool validate_enum(const json& value, const json& enum_values) {
     }
     return false;
 }
-// 字符串约束检查
+// 内部辅助函数：字符串约束检查
 static bool validate_string_constraints(const json& value, const json& schema) {
     if (!value.is_string()) {
         return false;
@@ -291,7 +297,7 @@ static bool validate_string_constraints(const json& value, const json& schema) {
 
     return true;
 }
-// 数值约束检查
+// 内部辅助函数：数值约束检查
 static bool validate_number_constraints(const json& value, const json& schema) {
     if (!value.is_number()) {
         return false;
@@ -337,7 +343,7 @@ static bool validate_number_constraints(const json& value, const json& schema) {
 
     return true;
 }
-// 对象属性验证
+// 内部辅助函数：对象属性验证
 static bool validate_object_properties(const json& value, const json& schema) {
     if (!value.is_object()) {
         return false;
@@ -373,7 +379,7 @@ static bool validate_object_properties(const json& value, const json& schema) {
 
     return true;
 }
-// 必需属性检查
+// 内部辅助函数：必需属性检查
 static bool validate_required_properties(const json& value, const json& schema) {
     if (!value.is_object() || !schema.contains("required")) {
         return true;
@@ -390,7 +396,7 @@ static bool validate_required_properties(const json& value, const json& schema) 
 
     return true;
 }
-// 主验证逻辑
+// 内部辅助函数：主验证逻辑
 static bool validate_json_schema(const json& value, const json& schema) {
     // Check type
     if (schema.contains("type")) {
@@ -430,6 +436,18 @@ static bool validate_json_schema(const json& value, const json& schema) {
     }
 
     return true;
+}
+// 内部辅助函数：检查字符串是否是“可解析为整数”的形式
+static bool is_integer_like_string(const std::string& s) {
+    if (s.empty()) return false;
+    // 允许前导空白、可选的 +/-、数字、尾随空白
+    size_t i = 0, n = s.size();
+    while (i < n && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    if (i < n && (s[i] == '+' || s[i] == '-')) ++i;
+    size_t digits = 0;
+    while (i < n && std::isdigit(static_cast<unsigned char>(s[i]))) { ++i; ++digits; }
+    while (i < n && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    return digits > 0 && i == n;
 }
 
 // 工具名称验证
@@ -471,3 +489,186 @@ bool validate_arguments(const json& args, const json& schema) {
         return false;
     }
 }
+
+// 校验 function 子对象（供 Builtin/External 共用）
+bool validate_tool_function_block(const json& function, std::string& error_message) {
+    /*
+    校验 function 子对象（供 Builtin/External 共用）
+    要求：
+    - function 为对象
+    - function.name：非空字符串，命名合法（字母开头，仅字母/数字/下划线）
+    - function.description：非空字符串
+    - function.parameters（可选）：若存在则必须是 JSON Schema 子集，且 type=object、含 properties；若含 required 必须为字符串数组
+    失败时返回 false，并在 error_message 中给出可读性错误信息
+    */
+
+    // function 必须为对象
+    if (!function.is_object()) {
+        error_message = "'function'字段必须是一个JSON对象";
+        return false;
+    }
+
+    // name：存在、非空字符串、命名合法
+    if (!function.contains("name")) {
+        error_message = "function定义缺失必需的'name'字段";
+        return false;
+    }
+    if (!function["name"].is_string() || function["name"].get<std::string>().empty()) {
+        error_message = "function的'name'字段必须是字符串且非空";
+        return false;
+    }
+    if (!validate_tool_name(function["name"].get<std::string>())) {
+        error_message = "工具名称格式无效: '" + function["name"].get<std::string>() + "' (必须以字母开头，只能包含字母、数字和下划线)";
+        return false;
+    }
+
+    // description：存在、非空字符串
+    if (!function.contains("description")) {
+        error_message = "function定义缺失必需的'description'字段";
+        return false;
+    }
+    if (!function["description"].is_string()) {
+        error_message = "function的'description'字段必须是字符串";
+        return false;
+    }
+    if (function["description"].get<std::string>().empty()) {
+        error_message = "function的'description'字段不能为空";
+        return false;
+    }
+
+    // parameters（可选）：如存在则必须为 object schema，且 type=object、含 properties；required 为字符串数组
+    if (function.contains("parameters")) {
+        const json& parameters = function["parameters"];
+        if (!parameters.is_object()) {
+            error_message = "function的'parameters'字段必须是一个JSON对象";
+            return false;
+        }
+        if (!parameters.contains("type")) {
+            error_message = "function的'parameters'字段缺失必需的'type'字段";
+            return false;
+        }
+        if (!parameters["type"].is_string() || parameters["type"].get<std::string>() != "object") {
+            error_message = "parameters的'type'字段必须为'object'";
+            return false;
+        }
+        if (!parameters.contains("properties")) {
+            error_message = "'parameters'字段缺失必需的'properties'字段";
+            return false;
+        }
+        if (!parameters["properties"].is_object()) {
+            error_message = "parameters的'properties'字段必须是一个JSON对象";
+            return false;
+        }
+        if (parameters.contains("required")) {
+            if (!parameters["required"].is_array()) {
+                error_message = "parameters的'required'字段必须是一个数组";
+                return false;
+            }
+            for (const auto& req : parameters["required"]) {
+                if (!req.is_string()) {
+                    error_message = "parameters的'required'数组中的元素必须是字符串";
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+// 校验完整的工具定义 JSON
+bool validate_tool_definition(
+    const json& tool_definition,
+    ToolDefinitionKind kind,
+    std::string& error_message) {
+    /*
+    校验完整的工具定义 JSON：
+    - 顶层必须 type="function" 且包含 function 子对象（复用 validate_tool_function_block）
+    - Builtin：仅校验共用 function 结构；若出现外部字段将忽略（可在实现中记录 WARN）
+    - External：除共用部分外，还需至少提供一个可执行字段（executable_* 或 executable_generic）；
+      若提供 command_template 则必须为字符串；若提供 timeout_ms 则必须为整数或可解析为整数的字符串
+    失败时返回 false，并在 error_message 中给出可读性错误信息
+    */
+
+    // 顶层结构
+    if (!tool_definition.is_object()) {
+        error_message = "工具定义必须是一个JSON对象";
+        return false;
+    }
+
+    if (!tool_definition.contains("type")) {
+        error_message = "工具定义缺失必需的'type'字段";
+        return false;
+    }
+    if (!tool_definition["type"].is_string() || tool_definition["type"].get<std::string>() != "function") {
+        error_message = "工具定义的'type'字段必须字符串类型且只能为'function'";
+        return false;
+    }
+
+    if (!tool_definition.contains("function")) {
+        error_message = "工具定义缺失必需的'function'字段";
+        return false;
+    }
+    {
+        const json& function = tool_definition["function"];
+        if (!validate_tool_function_block(function, error_message)) {
+            return false;
+        }
+    }
+
+    // 外部工具特有字段校验
+    if (kind == ToolDefinitionKind::External) {
+        bool has_any_exec = false;
+        auto check_exec = [&](const char* key){
+            if (tool_definition.contains(key)) {
+                if (!tool_definition[key].is_string()) {
+                    error_message = std::string("'") + key + "'字段必须是字符串";
+                    return false;
+                }
+                const auto& v = tool_definition[key].get<std::string>();
+                if (!v.empty()) has_any_exec = true;
+            }
+            return true;
+        };
+
+        if (!check_exec("executable_generic")) return false;
+        if (!check_exec("executable_windows")) return false;
+        if (!check_exec("executable_linux")) return false;
+        if (!check_exec("executable_macos")) return false;
+
+        if (!has_any_exec) {
+            error_message = "缺少可执行文件路径: 至少提供 'executable_generic' 或某个平台专属字段";
+            return false;
+        }
+
+        if (tool_definition.contains("command_template") && !tool_definition["command_template"].is_string()) {
+            error_message = "'command_template'字段必须是字符串";
+            return false;
+        }
+
+        if (tool_definition.contains("timeout_ms")) {
+            const auto& tm = tool_definition["timeout_ms"];
+            bool ok = tm.is_number_integer() || (tm.is_string() && is_integer_like_string(tm.get<std::string>()));
+            if (!ok) {
+                error_message = "'timeout_ms'必须是整数或可解析的整数字符串";
+                return false;
+            }
+        }
+    } else {
+        // Builtin：若发现外部字段则给出一次性警告但不作为失败（保持宽松兼容）
+        auto warn_if_present = [&](const char* key){
+            if (tool_definition.contains(key)) {
+                LOG_WRN("Ignoring field '%s' in builtin tool definition", key);
+            }
+        };
+        warn_if_present("executable_generic");
+        warn_if_present("executable_windows");
+        warn_if_present("executable_linux");
+        warn_if_present("executable_macos");
+        warn_if_present("command_template");
+        warn_if_present("timeout_ms");
+    }
+
+    return true;
+}
+#pragma endregion
