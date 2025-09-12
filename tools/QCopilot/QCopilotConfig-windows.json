@@ -12,9 +12,11 @@
     "tools": [
         {
             "type": "function",
-            "executable": "shapefile_converter",
+            "executable_generic": "shapefile_converter",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/shapefile_converter.exe",
             "executable_linux": "/usr/local/bin/shapefile_converter",
+            "executable_macos": "/usr/local/bin/shapefile_converter",
+            "timeout_ms": 10000,
             "function": {
                 "name": "shapefile_converter",
                 "description": "Convert ESRI Shapefile attribute text encoding (e.g., GBK/GB2312) to UTF-8 (or another target encoding). Supports single-file conversion or batch/recursive directory processing, and automatically handles companion files (.shx, .dbf, .prj, etc.). WHEN TO USE: apply when Shapefile labels/attributes show garbled characters due to mismatched code pages; prefer this tool for bulk folder conversion.",
@@ -89,9 +91,11 @@
         },
         {
             "type": "function",
-            "executable": "ogrinfo",
+            "executable_generic": "ogrinfo",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogrinfo.exe",
             "executable_linux": "/usr/bin/ogrinfo",
+            "executable_macos": "/usr/bin/ogrinfo",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_info_basic",
                 "description": "Checks for vector data sources supported by OGR. Typically used to list layers or print summary information. This tool is useful for reprojecting a single shapefile or multiple shapefiles (organized as directories), converting data formats, and obtaining information such as the coordinate reference system, projected coordinate system, schema, feature count, and spatial extent. It is best suited for data validation, preprocessing, and pipeline inspection. Using summary mode (-so) can improve efficiency.",
@@ -125,9 +129,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_convert_format_basic",
                 "description": "Convert a vector dataset from one format to another without changing CRS/geometry. WHEN TO USE: simple format conversion (e.g., SHP ⇄ GPKG ⇄ GeoJSON).",
@@ -223,9 +229,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_write_shp_to_gpkg_layer",
                 "description": "Write a single Shapefile layer into a target GeoPackage layer. Supports safe update (-update), overwrite of the target layer only (-overwrite), or appending (-append). Optional geometry normalization (-nlt), SRS assignment (-a_srs), and common GPKG layer creation options (-lco).",
@@ -357,9 +365,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_reproject_shapefile",
                 "description": "Reproject a single ESRI Shapefile (.shp) to a target CRS (non-recursive). Encoding is preserved only if explicitly set via -oo/-lco; by default this tool passes UTF-8 to both sides to keep behavior consistent with your directory tool.",
@@ -460,9 +470,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_reproject_shapefile_dir",
                 "description": "Reproject all Shapefiles inside a directory (non-recursive). Treat the input directory as a Shapefile dataset (each .shp is a layer) and write to an output directory as Shapefiles. Encoding is preserved by default (no encoding options passed unless explicitly provided).",
@@ -561,9 +573,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_filter_by_attributes",
                 "description": "Filter features by attribute expression using -where and optionally choose a subset of fields with -select. WHEN TO USE: extract a subset by SQL-like predicate.",
@@ -631,9 +645,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_spatial_filter_bbox",
                 "description": "Select features that intersect a bounding box using -spat (no geometry clipping). WHEN TO USE: fast AOI filtering by rectangle.",
@@ -695,9 +711,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_clip_by_bbox",
                 "description": "Clip geometries to a bounding box using -clipsrc (output geometries are trimmed to the box). WHEN TO USE: produce geometry strictly within rectangular AOI.",
@@ -759,9 +777,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_append_to_gpkg",
                 "description": "Append features into an existing GeoPackage layer using -update -append. WHEN TO USE: incremental loads / merging data into an existing table.",
@@ -821,9 +841,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_drop_field_sqlite",
                 "description": "Drop one or more fields using SQL ALTER TABLE with SQLite dialect. WHEN TO USE: permanently remove columns from a layer during translation.",
@@ -890,9 +912,11 @@
         },
         {
             "type": "function",
-            "executable": "ogr2ogr",
+            "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
+            "executable_macos": "/usr/bin/ogr2ogr",
+            "timeout_ms": 10000,
             "function": {
                 "name": "ogr_explode_collections",
                 "description": "Convert geometry collections into individual simple features using -explodecollections. WHEN TO USE: normalize multi-part/collection geometries to single features.",
