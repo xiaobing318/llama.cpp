@@ -120,7 +120,7 @@ struct QCopilotConfig {
     int qcopilot_port = 8081;
     std::string base_server_host = "127.0.0.1";
     int base_server_port = 8080;
-    std::string base_server_path = "./llama-server";
+    std::string base_server_path = "./BaseServer";
     std::string model_path = "";
     int n_ctx = 2048;
     int n_gpu_layers = -1;
@@ -725,11 +725,11 @@ private:
     bool validateConfig() {
         // 验证端口范围
         if (QCopilotConfig.qcopilot_port < 1 || QCopilotConfig.qcopilot_port > 65535) {
-            LOG_ERR("QCopilot端口无效: %d，有效范围: 1-65535", QCopilotConfig.qcopilot_port);
+            LOG_ERR("QCopilot 端口无效: %d，有效范围: 1-65535", QCopilotConfig.qcopilot_port);
             return false;
         }
         if (QCopilotConfig.base_server_port < 1 || QCopilotConfig.base_server_port > 65535) {
-            LOG_ERR("base-server端口无效: %d，有效范围: 1-65535", QCopilotConfig.base_server_port);
+            LOG_ERR("BaseServer端口无效: %d，有效范围: 1-65535", QCopilotConfig.base_server_port);
             return false;
         }
 
@@ -848,32 +848,32 @@ public:
         // 每次检查间隔 1 秒，总共可以预留 300 秒（5 mins）的时间让 llama-server 进行启动。
         const int retry_interval_ms = 1000;
 
-        LOG_INF("正在等待 llama-server 启动...");
+        LOG_INF("正在等待 BaseServer 启动...");
 
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
             // 统一的进程状态检查
             if (!isLlamaServerRunning()) {
-                LOG_ERR("llama-server 进程异常退出");
+                LOG_ERR("BaseServer 进程异常退出");
                 return false;
             }
 
             // 尝试连接健康检查端点。
             auto res = llama_client->Get("/health");
             if (res && res->status == 200) {
-                LOG_INF("llama-server 启动成功！(等待次数 %d/%d 次/秒)", attempt, max_attempts);
+                LOG_INF("BaseServer 启动成功！(等待次数 %d/%d 次/秒)", attempt, max_attempts);
                 return true;
             }
 
             // 输出等待进度，每两次检查输出一次进度。
             if (attempt % 2 == 0) {
-                LOG_INF("等待 llama-server 启动中... (%d/%d)", attempt, max_attempts);
+                LOG_INF("等待 BaseServer 启动中... (%d/%d)", attempt, max_attempts);
             }
 
             // 等待后重试。
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_interval_ms));
         }
 
-        LOG_ERR("llama-server 启动超时！已尝试 %d 次，总计等待时间: %d 秒",
+        LOG_ERR("BaseServer 启动超时！已尝试 %d 次，总计等待时间: %d 秒",
                 max_attempts, max_attempts * retry_interval_ms / 1000);
         return false;
     }
@@ -881,7 +881,7 @@ public:
     bool startLlamaServer() {
         // 如果自动启动 llama-server 服务器选项被禁用，则假设 llama-server 已经在运行。
         if (!QCopilotConfig.auto_start_base_server) {
-            LOG_INF("auto_start_base_server 已禁用，这里假设 base_server 已在运行！");
+            LOG_INF("auto_start_base_server 已禁用，这里假设 BaseServer 已在运行！");
             return true;
         }
         // 拼接 llama-server 的命令行参数。
