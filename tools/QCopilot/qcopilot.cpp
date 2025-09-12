@@ -754,7 +754,7 @@ private:
         // 如果启用自动启动，验证相关路径
         if (QCopilotConfig.auto_start_base_server) {
             if (QCopilotConfig.base_server_path.empty()) {
-                LOG_ERR("base-server路径不能为空");
+                LOG_ERR("BaseServer路径不能为空");
                 return false;
             }
 
@@ -763,9 +763,9 @@ private:
                 return false;
             }
 
-            // 验证base-server路径是否存在
+            // 验证BaseServer路径是否存在
             if (!file_exists(QCopilotConfig.base_server_path)) {
-                LOG_ERR("base-server路径不存在: %s", QCopilotConfig.base_server_path.c_str());
+                LOG_ERR("BaseServer路径不存在: %s", QCopilotConfig.base_server_path.c_str());
                 return false;
             }
 
@@ -917,13 +917,13 @@ public:
 
 
 
-        LOG_INF("正在启动 base-server......");
+        LOG_INF("正在启动 BaseServer......");
         LOG_DBG("启动命令: %s", cmd.c_str());
 
 #ifdef _WIN32
         STARTUPINFOA si = {sizeof(si)};
         if (!CreateProcessA(NULL, const_cast<char*>(cmd.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &llama_process)) {
-            LOG_ERR("启动 base-server 失败");
+            LOG_ERR("启动 BaseServer 失败");
             return false;
         }
 #else
@@ -932,10 +932,10 @@ public:
             // Child process - use execl to replace process image
             execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
             // If execl returns, it failed
-            LOG_ERR("execl failed to start base-server: %s", strerror(errno));
+            LOG_ERR("execl failed to start BaseServer: %s", strerror(errno));
             exit(1);
         } else if (llama_pid < 0) {
-            LOG_ERR("fork 进程失败，即启动 base-server 失败: %s", strerror(errno));
+            LOG_ERR("fork 进程失败，即启动 BaseServer 失败: %s", strerror(errno));
             return false;
         }
 #endif
@@ -958,14 +958,14 @@ public:
             return;
         }
 
-        LOG_INF("正在停止 base-server...");
+        LOG_INF("正在停止 BaseServer...");
 
 #ifdef _WIN32
         if (llama_process.hProcess) {
             if (TerminateProcess(llama_process.hProcess, 0)) {
                 DWORD waitResult = WaitForSingleObject(llama_process.hProcess, 5000);
                 if (waitResult == WAIT_TIMEOUT) {
-                    LOG_WRN("base-server 进程在5秒内未响应，强制终止");
+                    LOG_WRN("BaseServer 进程在5秒内未响应，强制终止");
                 }
             }
             CloseHandle(llama_process.hProcess);
@@ -981,7 +981,7 @@ public:
                     wait_count++;
                 }
                 if (kill(llama_pid, 0) == 0) {
-                    LOG_WRN("base-server 进程在5秒内未响应，强制终止");
+                    LOG_WRN("BaseServer 进程在5秒内未响应，强制终止");
                     kill(llama_pid, SIGKILL);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
@@ -989,7 +989,7 @@ public:
             llama_pid = -1;
         }
 #endif
-        LOG_INF("base-server 已停止。");
+        LOG_INF("BaseServer 已停止。");
     }
 
     void setupRoutes() {
@@ -1064,7 +1064,7 @@ public:
                 res.set_content(llama_res->body, "application/json");
                 res.status = llama_res->status;
             } else {
-                json error_response = {{"status", "error"}, {"message", "base-server unavailable"}};
+                json error_response = {{"status", "error"}, {"message", "BaseServer unavailable"}};
                 res.set_content(error_response.dump(), "application/json");
                 res.status = 503;
             }
@@ -1124,7 +1124,7 @@ public:
                 normalize_messages_for_llama(one["messages"]);
                 auto llama_res = llama_client->Post("/v1/chat/completions", one.dump(), "application/json");
                 if (!llama_res || llama_res->status != 200) {
-                  json err = {{"error", {{"message", "Failed to connect to base-server"}}}};
+                  json err = {{"error", {{"message", "Failed to connect to BaseServer"}}}};
                   res.set_content(err.dump(), "application/json"); res.status = 503; return;
                 }
 
@@ -1412,9 +1412,9 @@ public:
 
         // 如果启动 llama-server 失败的话直接返回。
         if (!startLlamaServer()) {
-            LOG_ERR("无法启动 base-server，QCopilot 启动失败");
+            LOG_ERR("无法启动 BaseServer，QCopilot 启动失败");
             LOG_ERR("请检查：");
-            LOG_ERR("  1. base-server 路径是否正确: %s", QCopilotConfig.base_server_path.c_str());
+            LOG_ERR("  1. BaseServer 路径是否正确: %s", QCopilotConfig.base_server_path.c_str());
             LOG_ERR("  2. 模型文件路径是否正确: %s", QCopilotConfig.model_path.c_str());
             LOG_ERR("  3. 端口 %d 是否被占用", QCopilotConfig.base_server_port);
             LOG_ERR("  4. 系统资源是否充足（内存、GPU等）");
