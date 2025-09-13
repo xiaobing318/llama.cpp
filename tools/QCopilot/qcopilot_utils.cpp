@@ -590,27 +590,30 @@ bool validate_tool_definition(
     失败时返回 false，并在 error_message 中给出可读性错误信息
     */
 
-    // 顶层结构
+    // 1. 工具定义必须是一个对象
     if (!tool_definition.is_object()) {
         error_message = "工具定义必须是一个JSON对象";
         return false;
     }
-
+    // 2. 工具定义中必须包含 type 字段
     if (!tool_definition.contains("type")) {
         error_message = "工具定义缺失必需的'type'字段";
         return false;
     }
+    // 2.1 工具定义中的 type 字段必须是字符串类型并且 type 字段中的值必须是 function 字符串
     if (!tool_definition["type"].is_string() || tool_definition["type"].get<std::string>() != "function") {
         error_message = "工具定义的'type'字段必须字符串类型且只能为'function'";
         return false;
     }
-
+    // 3. 工具定义中必须包含 function 字段
     if (!tool_definition.contains("function")) {
         error_message = "工具定义缺失必需的'function'字段";
         return false;
     }
     {
+        // 获取工具定义中的 function 字段内容
         const json& function = tool_definition["function"];
+        // 验证 function 字段内容
         if (!validate_tool_function_block(function, error_message)) {
             return false;
         }
@@ -618,6 +621,7 @@ bool validate_tool_definition(
 
     // 外部工具特有字段校验
     if (kind == ToolDefinitionKind::External) {
+        //
         bool has_any_exec = false;
         auto check_exec = [&](const char* key){
             if (tool_definition.contains(key)) {
@@ -630,22 +634,22 @@ bool validate_tool_definition(
             }
             return true;
         };
-
+        // 验证是否存在指定字段并且指定字段的属性值是否为字符串
         if (!check_exec("executable_generic")) return false;
         if (!check_exec("executable_windows")) return false;
         if (!check_exec("executable_linux")) return false;
         if (!check_exec("executable_macos")) return false;
-
+        // 如果外部工具的定义中不存在可执行文件路径则报错
         if (!has_any_exec) {
             error_message = "缺少可执行文件路径: 至少提供 'executable_generic' 或某个平台专属字段";
             return false;
         }
-
+        // 如果外部工具定义中包含命令行模版但是命令行模版不是字符串则报错
         if (tool_definition.contains("command_template") && !tool_definition["command_template"].is_string()) {
             error_message = "'command_template'字段必须是字符串";
             return false;
         }
-
+        // 如果外部工具定义中包含超时时间，则提取其属性值
         if (tool_definition.contains("timeout_ms")) {
             const auto& tm = tool_definition["timeout_ms"];
             bool ok = tm.is_number_integer() || (tm.is_string() && is_integer_like_string(tm.get<std::string>()));

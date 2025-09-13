@@ -375,75 +375,80 @@ ToolExecutor::ToolExecutor() {
 
 // 注册内置工具
 void ToolExecutor::registerBuiltinTools() {
-    // 获取n内置工具定义和内置工具执行函数
+    // 获取内置工具定义和内置工具执行函数
     auto definitions = BuiltinTools::getBuiltinToolDefinitions();
     auto functions = BuiltinTools::getBuiltinToolFunctions();
 
     // 注册所有内置工具
     for (const auto& definition : definitions) {
-        const std::string& name = definition.name;
         try {
-            // 先校验：仅校验共用的 function 子结构（Builtin 定义不要求可执行路径等外部字段）
-            std::string err;
-            if (!validate_tool_definition(definition.definition, ToolDefinitionKind::Builtin, err)) {
-                LOG_ERR("内置工具定义校验失败，已跳过注册: %s; 错误: %s", name.c_str(), err.c_str());
+            // 对内部工具的定义进行全面检查，确保其符合预期的 JSON Schema
+            std::string error_message;
+            if (!validate_tool_definition(definition.definition, ToolDefinitionKind::Builtin, error_message)) {
+                LOG_ERR("内置工具定义校验失败，已跳过注册，错误: %s", error_message.c_str());
                 continue;
             }
-            std::lock_guard<std::mutex> lock(tools_mutex);
-            // 注册工具定义
-            tool_definitions[name] = definition.definition;
+            // 对内部工具的定义进行全面检查之后说明其符合预期的 JSON Schema，获取其名称
+            const std::string& name = definition.name;
 
-            // 注册工具执行函数
-            if (functions.find(name) != functions.end()) {
-                builtinTools[name] = functions[name];
+            // 需要在函数映射中存在并且非空
+            auto fit = functions.find(name);
+            if (fit == functions.end() || !fit->second) {
+                LOG_WRN("跳过注册内置工具 %s：未找到对应的执行函数", name.c_str());
+                continue;
             }
-        } catch (...) {
-            LOG_ERR("注册内置工具时发生异常: %s", name.c_str());
-            continue;
-        }
 
-        // 输出日志（尽量不抛异常）
-        try {
-            LOG_INF("成功注册内置工具: %s - %s",
-                name.c_str(),
-                tool_definitions[name]["function"]["description"].get<std::string>().c_str());
+            // 确保多线程注册安全
+            std::lock_guard<std::mutex> lock(tools_mutex);
+            // 先检查是否已经注册了同名的工具，如果已经存在，则直接返回不需要进行注册。
+            if (tool_functions.find(name) != tool_functions.end() || tool_definitions.find(name) != tool_definitions.end()){
+                LOG_ERR("内置工具注册失败：已存在名称为 %s 的工具（重复注册）", name.c_str());
+                continue;
+            }
+            // 注册内置工具的工具定义并标注来源
+            tool_definitions[name] = definition.definition;
+            tool_definitions[name]["_kind"] = "builtin";
+            // 注册内置工具的执行函数
+            tool_functions[name] = fit->second;
+            // 输出日志
+            LOG_INF("成功注册内置工具: %s - %s", name.c_str(), tool_definitions[name]["function"]["description"].get<std::string>().c_str());
+
         } catch (...) {
-            LOG_INF("成功注册内置工具: %s", name.c_str());
+            LOG_ERR("注册内置工具时发生异常");
+            continue;
         }
     }
 }
 
 // 注册外部工具
 bool ToolExecutor::registerExternalTools(const json& tool_definition) {
-    // 对外部工具的定义进行全面检查，确保其符合预期的 JSON schema
-    std::string error_message;
-    if (!validate_tool_definition(tool_definition, ToolDefinitionKind::External, error_message)) {
-        LOG_ERR("外部工具定义验证失败: %s", error_message.c_str());
-        return false;
-    }
-
-    // 获取工具名称（经过验证，我们知道这些字段是存在且有效的）
-    const json& function = tool_definition["function"];
-    std::string name = function["name"].get<std::string>();
-
-    // 检查是否已经注册了同名的工具，如果已经存在，则直接返回不需要进行注册。
-    {
-        std::lock_guard<std::mutex> lock(tools_mutex);
-        if (builtinTools.find(name) != builtinTools.end() || tool_definitions.find(name) != tool_definitions.end()){
-            LOG_ERR("工具注册失败：已存在名称为 %s 的工具（重复注册）", name.c_str());
+    try{
+        // 对外部工具的定义进行全面检查，确保其符合预期的 JSON Schema
+        std::string error_message;
+        if (!validate_tool_definition(tool_definition, ToolDefinitionKind::External, error_message)) {
+            LOG_ERR("外部工具定义校验失败，已跳过注册, 错误: %s", error_message.c_str());
             return false;
         }
-    }
-
-    // 经过上述检查后说明配置文件中的当前工具定义是有效的，将其保存到内存中的工具定义映射中。
-    {
+        // 对外部工具的定义进行全面检查之后说明其符合预期的 JSON Schema，获取其名称
+        const json& function = tool_definition["function"];
+        std::string name = function["name"].get<std::string>();
+        // 确保多线程注册安全
         std::lock_guard<std::mutex> lock(tools_mutex);
+        // 先检查是否已经注册了同名的工具，如果已经存在，则直接返回不需要进行注册。
+        if (tool_functions.find(name) != tool_functions.end() || tool_definitions.find(name) != tool_definitions.end()){
+            LOG_ERR("外部工具注册失败：已存在名称为 %s 的工具（重复注册）", name.c_str());
+            return false;
+        }
+        // 注册外部工具的工具定义并标注来源
         tool_definitions[name] = tool_definition;
+        tool_definitions[name]["_kind"] = "external";
+        // 输出日志
+        LOG_INF("成功注册外部工具: %s - %s", name.c_str(), function["description"].get<std::string>().c_str());
+        return true;
+    }catch (...) {
+            LOG_ERR("注册外部工具时发生异常");
+            return false;
     }
-    LOG_INF("成功注册外部工具: %s - %s",
-        name.c_str(),
-        function["description"].get<std::string>().c_str());
-    return true;
 }
 
 // 执行工具
@@ -504,8 +509,8 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
     bool has_builtin = false;
     {
         std::lock_guard<std::mutex> lock(tools_mutex);
-        auto it_local = builtinTools.find(name);
-        if (it_local != builtinTools.end()) {
+        auto it_local = tool_functions.find(name);
+        if (it_local != tool_functions.end()) {
             builtin_fn = it_local->second;
             has_builtin = true;
         }
@@ -531,6 +536,11 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
             };
             return out;
         };
+        // 健壮性保护：避免空的可调用体
+        if (!builtin_fn) {
+            LOG_ERR("内置工具未注册执行函数: %s", name.c_str());
+            return build_builtin_envelope(false, "Builtin tool function not registered");
+        }
         // 执行内置工具时捕获异常
         try {
             // 如果定义中包含参数 schema，则进行参数验证
@@ -682,7 +692,7 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
 // 检查工具是否存在
 bool ToolExecutor::hasTool(const std::string& name) const {
     std::lock_guard<std::mutex> lock(tools_mutex);
-    return builtinTools.find(name) != builtinTools.end() || tool_definitions.find(name) != tool_definitions.end();
+    return tool_functions.find(name) != tool_functions.end() || tool_definitions.find(name) != tool_definitions.end();
 }
 
 // 获取所有注册的工具定义
