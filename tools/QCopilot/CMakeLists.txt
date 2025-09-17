@@ -115,12 +115,38 @@ target_link_libraries(${TARGET} PRIVATE
 ]]
 target_compile_features(${TARGET} PRIVATE cxx_std_17)
 
+# 工具定义文档生成器
+set(QCOPILOT_DOCGEN_SRCS
+    generate_tool_docs.cpp
+    qcopilot_utils.cpp
+    qcopilot_executor.cpp
+    qcopilot_builtin_tools.cpp
+)
+list(APPEND QCOPILOT_DOCGEN_SRCS ${BUILTIN_TOOLS_SRCS})
+
+add_executable(qcopilot_tool_docs ${QCOPILOT_DOCGEN_SRCS})
+
+target_include_directories(qcopilot_tool_docs PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/builtinTools
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/vendor/nlohmann
+    ${CMAKE_SOURCE_DIR}/vendor/cpp-httplib
+)
+
+target_link_libraries(qcopilot_tool_docs PRIVATE
+    ${CMAKE_THREAD_LIBS_INIT}
+)
+
+target_compile_features(qcopilot_tool_docs PRIVATE cxx_std_17)
+
 #[[
 1、针对特定平台的设置，即不同的平台有着不同的设置。
 2、在windows平台上，需要链接 ws2_32 和 iphlpapi 库，这些库提供了网络编程和 IP 地址解析的功能。
 ]]
 if (WIN32)
     target_link_libraries(${TARGET} PRIVATE ws2_32 iphlpapi)
+    target_link_libraries(qcopilot_tool_docs PRIVATE ws2_32 iphlpapi)
     if (BUILD_SHARED_LIBS)
         set_target_properties(${TARGET} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()

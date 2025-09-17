@@ -316,7 +316,11 @@ public:
     }
 };
 
-static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls, json& messages) {
+static json executeToolCalls(
+    ToolExecutor* tool_executor,
+    const json& tool_calls,
+    json& messages,
+    std::vector<json>* execution_summaries = nullptr) {
     if (!tool_executor) {
         LOG_ERR("ToolExecutor为空，无法执行工具调用");
         return messages;
@@ -364,10 +368,29 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         //  创建两个临时变量用来保存工具调用处理结果。
         json result;
         std::string result_content;
+        bool success = true;
+        std::string error_detail;
         try {
             //  使用特定参数调用指定工具。
             result = tool_executor->execute(tool_name, arguments);
-            LOG_INF("名为[%s]工具执行成功！", tool_name.c_str());
+            if (result.contains("success") && result["success"].is_boolean()) {
+                success = result["success"].get<bool>();
+            }
+            if (!success) {
+                if (result.contains("error")) {
+                    if (result["error"].is_string()) {
+                        error_detail = result["error"].get<std::string>();
+                    } else {
+                        error_detail = result["error"].dump();
+                    }
+                }
+                if (error_detail.empty()) {
+                    error_detail = "unknown error";
+                }
+                LOG_ERR("名为[%s]工具执行失败。错误信息: %s", tool_name.c_str(), error_detail.c_str());
+            } else {
+                LOG_INF("名为[%s]工具执行成功！", tool_name.c_str());
+            }
             //  将工具执行的 JSON 结果序列化为字符串。
             result_content = result.dump();
         } catch (const std::exception& e) {
@@ -377,6 +400,8 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
                 {"details", e.what()}
             };
             result_content = result.dump();
+            success = false;
+            error_detail = e.what();
         }
         //  判断序列话的工具执行结果是否为空。
         if (result_content.empty()) {
@@ -400,6 +425,20 @@ static json executeToolCalls(ToolExecutor* tool_executor, const json& tool_calls
         };
         //  将工具执行结果保存到消息中用来再次给到推理引擎。
         messages.push_back(tool_message);
+
+        if (execution_summaries) {
+            json summary = {
+                {"tool_name", tool_name},
+                {"tool_call_id", tool_id},
+                {"success", success},
+                {"result", result},
+                {"result_string", result_content}
+            };
+            if (!error_detail.empty()) {
+                summary["error_message"] = error_detail;
+            }
+            execution_summaries->push_back(std::move(summary));
+        }
     }
 
     return messages;
@@ -1284,16 +1323,23 @@ public:
                                 bridge->push(std::string("data: ") + tool_executing_msg.dump() + "\n\n");
 
                                 // 执行工具
+                                std::vector<json> execution_summaries;
                                 size_t before = msgs.size();
-                                executeToolCalls(tool_executor.get(), assist_msg["tool_calls"], msgs);
+                                executeToolCalls(tool_executor.get(), assist_msg["tool_calls"], msgs, &execution_summaries);
                                 size_t added = msgs.size() - before;
 
-                                // 发送工具执行结果的提示
-                                for (size_t i = msgs.size() - added; i < msgs.size(); ++i) {
-                                    if (!msgs[i].contains("role") || msgs[i]["role"] != "tool") continue;
-                                    std::string tool_name = msgs[i].value("name", "unknown");
+                                if (execution_summaries.size() != added) {
+                                    LOG_WRN("工具执行摘要数量(%zu)与新增消息数量(%zu)不一致", execution_summaries.size(), added);
+                                }
 
-                                    // 发送工具执行完成的消息
+                                // 发送工具执行结果的提示
+                                for (const auto& summary : execution_summaries) {
+                                    const std::string tool_name = summary.value("tool_name", std::string("unknown"));
+                                    const bool success = summary.value("success", true);
+                                    const std::string status_line = success
+                                        ? std::string(" QCopilot 调用工具 [") + tool_name + "] 执行操作完成。\n"
+                                        : std::string(" QCopilot 调用工具 [") + tool_name + "] 执行失败。\n";
+
                                     json tool_result_msg = {
                                         {"id", stream_id},
                                         {"object", "chat.completion.chunk"},
@@ -1301,36 +1347,46 @@ public:
                                         {"choices", json::array({
                                             json{
                                                 {"index", 0},
-                                                {"delta", json{ { "content", " QCopilot 调用工具 [" + tool_name + "] 执行操作完成。\n" }
-                                                }},
+                                                {"delta", json{{"content", status_line}}},
                                                 {"finish_reason", nullptr}
                                             }
                                         })}
                                     };
                                     bridge->push(std::string("data: ") + tool_result_msg.dump() + "\n\n");
 
-                                    // 发送工具处理结果的预览（150字符以内）
-                                    std::string tool_content = msgs[i].value("content", "");
-                                    std::string preview = tool_content.length() > 150 ?
-                                        tool_content.substr(0, 147) + "..." : tool_content;
+                                    const std::string result_payload = summary.value("result_string", std::string(""));
+                                    std::string detail = summary.value("error_message", std::string(""));
+                                    if (detail.empty()) {
+                                        detail = result_payload;
+                                    }
+                                    if (detail.size() > 200) {
+                                        detail = detail.substr(0, 197) + "...";
+                                    }
 
-                                    json tool_preview_msg = {
-                                        {"id", stream_id},
-                                        {"object", "chat.completion.chunk"},
-                                        {"model", model_name},
-                                        {"choices", json::array({
-                                            json{
-                                                {"index", 0},
-                                                {"delta", json{
-                                                    {"content", " QCopilot 调用工具 [" + tool_name + "] 执行结果预览：" + preview + "\n"}
-                                                }},
-                                                {"finish_reason", nullptr}
-                                            }
-                                        })}
-                                    };
-                                    bridge->push(std::string("data: ") + tool_preview_msg.dump() + "\n\n");
+                                    if (!detail.empty()) {
+                                        std::string preview_prefix = success
+                                            ? " QCopilot 调用工具 [" + tool_name + "] 执行结果预览："
+                                            : " QCopilot 调用工具 [" + tool_name + "] 失败详情：";
+                                        json tool_preview_msg = {
+                                            {"id", stream_id},
+                                            {"object", "chat.completion.chunk"},
+                                            {"model", model_name},
+                                            {"choices", json::array({
+                                                json{
+                                                    {"index", 0},
+                                                    {"delta", json{{"content", preview_prefix + detail + "\n"}}},
+                                                    {"finish_reason", nullptr}
+                                                }
+                                            })}
+                                        };
+                                        bridge->push(std::string("data: ") + tool_preview_msg.dump() + "\n\n");
+                                    }
 
-                                    LOG_INF("工具 %s 执行完成", tool_name.c_str());
+                                    if (success) {
+                                        LOG_INF("工具 %s 执行完成", tool_name.c_str());
+                                    } else {
+                                        LOG_ERR("工具 %s 执行失败", tool_name.c_str());
+                                    }
                                 }
 
                                 continue;

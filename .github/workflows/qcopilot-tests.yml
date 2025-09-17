@@ -53,37 +53,47 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-qcopilot-${{ matrix.build_type }}-
 
-      - name: Install sccache (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          choco install sccache -y
-          echo "SCCACHE_DIR=${{ github.workspace }}\\.sccache" | Out-File -FilePath $env:GITHUB_ENV -Append
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev
 
-      - name: Cache sccache (Windows)
+      - name: Setup libcurl (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}\.sccache
-          key: windows-sccache-${{ matrix.build_type }}-${{ github.sha }}
-          restore-keys: |
-            windows-sccache-${{ matrix.build_type }}-
+        id: windows_curl
+        uses: ./.github/actions/windows-setup-curl
 
       - name: Configure (CMake)
         shell: bash
+        env:
+          CURL_PATH: ${{ steps.windows_curl.outputs.curl_path }}
         run: |
           cmake -S . -B "$BUILD_DIR" \
+            -DLLAMA_BUILD_TOOLS=ON \
             -DLLAMA_BUILD_TESTS=ON \
             -DLLAMA_BUILD_SERVER=ON \
-            -DLLAMA_CURL=OFF\
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             $([[ "$RUNNER_OS" != "Windows" ]] && echo "-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache") \
-            $([[ "$RUNNER_OS" == "Windows" ]] && echo "-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache")
+            $([[ "$RUNNER_OS" == "Windows" ]] && echo "-DCURL_LIBRARY=$CURL_PATH/lib/libcurl.dll.a -DCURL_INCLUDE_DIR=$CURL_PATH/include")
 
       - name: Build
         shell: bash
         run: |
           cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" -j
+
+      - name: Copy libcurl DLL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          BUILD_DIR: ${{ env.BUILD_DIR }}
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}
+          CURL_PATH: ${{ steps.windows_curl.outputs.curl_path }}
+        run: |
+          $dest = Join-Path $env:BUILD_DIR "bin"
+          $dest = Join-Path $dest $env:BUILD_TYPE
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Copy-Item "$env:CURL_PATH\bin\libcurl-x64.dll" $dest -Force
 
       - name: Run tests (JUnit)
         shell: bash
