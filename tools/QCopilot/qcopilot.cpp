@@ -60,9 +60,10 @@ static std::string make_stream_id() {
 }
 
 // 统一构造 OpenAI 形状的 streaming chunk（chat.completion.chunk）
-static std::string build_delta_chunk(const std::string &stream_id,
-                                     const std::string &model_name,
-                                     const nlohmann::ordered_json &delta) {
+static std::string build_delta_chunk(
+    const std::string &stream_id,
+    const std::string &model_name,
+    const nlohmann::ordered_json &delta) {
     nlohmann::ordered_json chunk = {
         {"id",      stream_id},
         {"object",  "chat.completion.chunk"},

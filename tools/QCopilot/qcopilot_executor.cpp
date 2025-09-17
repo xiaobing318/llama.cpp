@@ -714,6 +714,7 @@ json ToolExecutor::executeExternalTool(
     long long timeout_ms) const {
     // 使用跨平台的方式执行外部工具，并捕获其输出
     try {
+        // 开始记录起始时间
         auto t_start = std::chrono::steady_clock::now();
         // 使用命令模板构建 argv 列表
         std::vector<std::string> argv = build_argv_from_template(command_template, arguments, executable);
