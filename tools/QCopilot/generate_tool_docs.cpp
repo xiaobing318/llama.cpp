@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    json all_tools = executor.getTools();
+    json all_tools = executor.getAllToolsDefinitions();
     std::vector<json> builtin_tools;
     std::vector<json> external_tools;
     builtin_tools.reserve(all_tools.size());

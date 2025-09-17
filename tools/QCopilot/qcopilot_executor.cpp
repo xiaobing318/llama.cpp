@@ -11,6 +11,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <optional>
 
 // 4. 平台特定头文件
 #ifdef _WIN32
@@ -84,6 +85,47 @@ struct Token {
     std::string text;
     bool quoted = false; // whether the token in template was quoted
 };
+
+// 构建统一的工具执行结果结构
+static json make_uniform_result(bool success,
+                                int exit_code,
+                                const std::string &stdout_text,
+                                const std::string &stderr_text,
+                                const std::string &command_line,
+                                const json &argv,
+                                const std::string &executable,
+                                int64_t duration_ms,
+                                bool timed_out,
+                                const std::string &llm_message,
+                                std::optional<long long> timeout_ms = std::nullopt,
+                                const std::string &error_message = std::string()) {
+    json out = {
+        {"success", success},
+        {"exit_code", exit_code},
+        {"stdout", stdout_text},
+        {"stderr", stderr_text},
+        {"command_line", command_line},
+        {"argv", argv},
+        {"executable", executable},
+        {"duration_ms", duration_ms},
+        {"timed_out", timed_out},
+        {"llm_message", llm_message}
+    };
+
+    if (timeout_ms.has_value()) {
+        out["timeout_ms"] = timeout_ms.value();
+    }
+
+    std::string error = error_message;
+    if (!success && error.empty()) {
+        error = !stderr_text.empty() ? stderr_text : llm_message;
+    }
+    if (!error.empty()) {
+        out["error"] = error;
+    }
+
+    return out;
+}
 
 // Split command template into tokens respecting quotes (' and ") and backslash escapes inside quotes
 static std::vector<Token> split_template_tokens(const std::string& s) {
@@ -521,23 +563,24 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
         auto t_start = std::chrono::steady_clock::now();
         // 执行内置工具并构建统一的输出格式，也就是说内置工具的输出格式保持一致
         auto build_builtin_envelope = [&](bool success, const std::string &error_msg) {
-            // 计算调用内置工具执行实现
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-            // 构建 JSON 输出结构
-            json out = {
-                {"success", success},
-                {"exit_code", success ? 0 : 1},
-                {"stdout", ""},
-                {"stderr", success ? std::string("") : error_msg},
-                {"command_line", std::string("builtin:") + name},
-                {"argv", json::array()},
-                {"executable", std::string("builtin:") + name},
-                {"duration_ms", dur_ms},
-                {"timed_out", false},
-                {"llm_message", success ? std::string("Builtin tool executed successfully.") : (error_msg.empty() ? std::string("Builtin tool failed.") : error_msg)}
-            };
-            // 返回构建好的 JSON 输出结构
-            return out;
+            const std::string command = std::string("builtin:") + name;
+            const std::string llm = success
+                                        ? std::string("Builtin tool executed successfully.")
+                                        : (error_msg.empty() ? std::string("Builtin tool failed.") : error_msg);
+            const std::string stderr_text = success ? std::string("") : error_msg;
+            return make_uniform_result(success,
+                                       success ? 0 : 1,
+                                       std::string(),
+                                       stderr_text,
+                                       command,
+                                       json::array(),
+                                       command,
+                                       dur_ms,
+                                       false,
+                                       llm,
+                                       std::nullopt,
+                                       error_msg);
         };
         // 健壮性保护：避免空的可调用体，即如果被调用的内置函数没有具体的实现函数，则输出提示信息
         if (!builtin_fn) {
@@ -601,6 +644,15 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
             if (!res.contains("llm_message")){
                 res["llm_message"] = success ? "Builtin tool executed successfully." : (res.contains("error") && res["error"].is_string() ? res["error"].get<std::string>() : "Builtin tool failed.");
             }
+            if (!success && !res.contains("error")) {
+                if (res.contains("stderr") && res["stderr"].is_string() && !res["stderr"].get<std::string>().empty()) {
+                    res["error"] = res["stderr"].get<std::string>();
+                } else if (res.contains("llm_message") && res["llm_message"].is_string()) {
+                    res["error"] = res["llm_message"].get<std::string>();
+                } else {
+                    res["error"] = "Builtin tool failed.";
+                }
+            }
             return res;
 
         } catch (const std::exception& e) {
@@ -639,17 +691,21 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
                     if (!validate_arguments(arguments, definition["function"]["parameters"])) {
                         LOG_ERR("Invalid tool arguments (schema mismatch) for tool %s", name.c_str());
                         auto dur_ms = (int64_t)0;
-                        json out = {{"success", false}, {"error", "Invalid tool arguments (schema mismatch)"}};
-                        out["llm_message"] = out["error"];
-                        out["exit_code"] = 1;
-                        out["stdout"] = "";
-                        out["stderr"] = out["error"];
-                        out["command_line"] = std::string("tool:") + name;
-                        out["argv"] = json::array();
-                        out["executable"] = std::string("tool:") + name;
-                        out["duration_ms"] = dur_ms;
-                        out["timed_out"] = false;
-                        return out;
+                        std::optional<long long> timeout_opt;
+                        if (timeout_ms >= 0) timeout_opt = timeout_ms;
+                        const std::string command_desc = std::string("tool:") + name;
+                        return make_uniform_result(false,
+                                                   1,
+                                                   std::string(),
+                                                   std::string("Invalid tool arguments (schema mismatch)"),
+                                                   command_desc,
+                                                   json::array(),
+                                                   command_desc,
+                                                   dur_ms,
+                                                   false,
+                                                   std::string("Invalid tool arguments (schema mismatch)"),
+                                                   timeout_opt,
+                                                   std::string("Invalid tool arguments (schema mismatch)"));
                     }
                 }
 
@@ -669,7 +725,21 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
             } catch (const std::exception& e) {
                 // 捕获异常并返回失败结果
                 LOG_ERR("External tool execution failed: %s", e.what());
-                return json{{"success", false}, {"error", e.what()}};
+                std::optional<long long> timeout_opt;
+                if (timeout_ms >= 0) timeout_opt = timeout_ms;
+                const std::string command_desc = std::string("tool:") + name;
+                return make_uniform_result(false,
+                                           1,
+                                           std::string(),
+                                           std::string(e.what()),
+                                           command_desc,
+                                           json::array(),
+                                           command_desc,
+                                           0,
+                                           false,
+                                           std::string(e.what()),
+                                           timeout_opt,
+                                           std::string(e.what()));
             }
         }
     }
@@ -758,8 +828,21 @@ json ToolExecutor::executeExternalTool(
             // 如果文件不存在或不可访问则返回错误
             if (attrs == INVALID_FILE_ATTRIBUTES) {
                 auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-                json err = {{"success", false}, {"error", std::string("Executable not found: ") + exe_path}, {"llm_message", std::string("Executable not found: ") + exe_path}, {"command_line", log_cmd}, {"argv", argv}, {"executable", exe_path}, {"duration_ms", dur_ms}};
-                if (timeout_ms >= 0) err["timeout_ms"] = timeout_ms;
+                std::optional<long long> timeout_opt;
+                if (timeout_ms >= 0) timeout_opt = timeout_ms;
+                auto message = std::string("Executable not found: ") + exe_path;
+                json err = make_uniform_result(false,
+                                               127,
+                                               std::string(),
+                                               message,
+                                               log_cmd,
+                                               json(argv),
+                                               exe_path,
+                                               dur_ms,
+                                               false,
+                                               message,
+                                               timeout_opt,
+                                               message);
                 LOG_ERR("Executable not found: %s (cmd=%s)", exe_path.c_str(), log_cmd.c_str());
                 return err;
             }
@@ -769,8 +852,21 @@ json ToolExecutor::executeExternalTool(
         if (has_path_separator(exe_path)) {
             if (access(exe_path.c_str(), X_OK) != 0) {
                 auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-                json err = {{"success", false}, {"error", std::string("Executable not found or not executable: ") + exe_path}, {"llm_message", std::string("Executable not found or not executable: ") + exe_path}, {"command_line", log_cmd}, {"argv", argv}, {"executable", exe_path}, {"duration_ms", dur_ms}};
-                if (timeout_ms >= 0) err["timeout_ms"] = timeout_ms;
+                std::optional<long long> timeout_opt;
+                if (timeout_ms >= 0) timeout_opt = timeout_ms;
+                auto message = std::string("Executable not found or not executable: ") + exe_path;
+                json err = make_uniform_result(false,
+                                               127,
+                                               std::string(),
+                                               message,
+                                               log_cmd,
+                                               json(argv),
+                                               exe_path,
+                                               dur_ms,
+                                               false,
+                                               message,
+                                               timeout_opt,
+                                               message);
                 LOG_ERR("Executable not found or not executable: %s (cmd=%s)", exe_path.c_str(), log_cmd.c_str());
                 return err;
             }
@@ -800,8 +896,20 @@ json ToolExecutor::executeExternalTool(
             !CreatePipe(&hChildStd_IN_Rd, &hChildStd_IN_Wr, &saAttr, 0) ||
             !SetHandleInformation(hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0)) {
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-            json err = {{"success", false}, {"error", "Failed to create pipes"}, {"llm_message", "Failed to create pipes"}, {"command_line", log_cmd}, {"argv", argv}, {"executable", exe_path}, {"duration_ms", dur_ms}};
-            if (timeout_ms >= 0) err["timeout_ms"] = timeout_ms;
+            std::optional<long long> timeout_opt;
+            if (timeout_ms >= 0) timeout_opt = timeout_ms;
+            json err = make_uniform_result(false,
+                                           1,
+                                           std::string(),
+                                           std::string("Failed to create pipes"),
+                                           log_cmd,
+                                           json(argv),
+                                           exe_path,
+                                           dur_ms,
+                                           false,
+                                           std::string("Failed to create pipes"),
+                                           timeout_opt,
+                                           std::string("Failed to create pipes"));
             LOG_ERR("Failed to create pipes (cmd=%s)", log_cmd.c_str());
             return err;
         }
@@ -835,8 +943,21 @@ json ToolExecutor::executeExternalTool(
             CloseHandle(hChildStd_IN_Rd);
             CloseHandle(hChildStd_IN_Wr);
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-            json j = {{"success", false}, {"error", std::string("Failed to create process: error ") + std::to_string(err)}, {"llm_message", std::string("Failed to create process: error ") + std::to_string(err)}, {"command_line", log_cmd}, {"argv", argv}, {"executable", exe_path}, {"duration_ms", dur_ms}};
-            if (timeout_ms >= 0) j["timeout_ms"] = timeout_ms;
+            std::optional<long long> timeout_opt;
+            if (timeout_ms >= 0) timeout_opt = timeout_ms;
+            auto message = std::string("Failed to create process: error ") + std::to_string(err);
+            json j = make_uniform_result(false,
+                                         1,
+                                         std::string(),
+                                         message,
+                                         log_cmd,
+                                         json(argv),
+                                         exe_path,
+                                         dur_ms,
+                                         false,
+                                         message,
+                                         timeout_opt,
+                                         message);
             LOG_ERR("Failed to create process (err=%lu) cmd=%s", err, log_cmd.c_str());
             return j;
         }
@@ -973,7 +1094,7 @@ json ToolExecutor::executeExternalTool(
             {"duration_ms", dur_ms}
         };
         if (timeout_ms >= 0) base["timeout_ms"] = timeout_ms;
-        if (timed_out) base["timed_out"] = true;
+        base["timed_out"] = timed_out;
         if (exitCode != 0) {
             base["success"] = false;
             base["error"] = timed_out ? std::string("Timed out") : std::string("External tool exited with code ") + std::to_string(exitCode);
@@ -1010,8 +1131,20 @@ json ToolExecutor::executeExternalTool(
         int stderr_pipe[2];
         if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-            json err = {{"success", false}, {"error", "Failed to create pipes"}, {"llm_message", "Failed to create pipes"}, {"command_line", log_cmd}, {"argv", argv}, {"executable", exe_path}, {"duration_ms", dur_ms}};
-            if (timeout_ms >= 0) err["timeout_ms"] = timeout_ms;
+            std::optional<long long> timeout_opt;
+            if (timeout_ms >= 0) timeout_opt = timeout_ms;
+            json err = make_uniform_result(false,
+                                           1,
+                                           std::string(),
+                                           std::string("Failed to create pipes"),
+                                           log_cmd,
+                                           json(argv),
+                                           exe_path,
+                                           dur_ms,
+                                           false,
+                                           std::string("Failed to create pipes"),
+                                           timeout_opt,
+                                           std::string("Failed to create pipes"));
             LOG_ERR("Failed to create pipes (cmd=%s)", log_cmd.c_str());
             return err;
         }
@@ -1022,8 +1155,20 @@ json ToolExecutor::executeExternalTool(
             close(stdout_pipe[0]); close(stdout_pipe[1]);
             close(stderr_pipe[0]); close(stderr_pipe[1]);
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
-            json err = {{"success", false}, {"error", "Failed to fork process"}, {"llm_message", "Failed to fork process"}, {"command_line", log_cmd}, {"argv", argv}, {"executable", exe_path}, {"duration_ms", dur_ms}};
-            if (timeout_ms >= 0) err["timeout_ms"] = timeout_ms;
+            std::optional<long long> timeout_opt;
+            if (timeout_ms >= 0) timeout_opt = timeout_ms;
+            json err = make_uniform_result(false,
+                                           1,
+                                           std::string(),
+                                           std::string("Failed to fork process"),
+                                           log_cmd,
+                                           json(argv),
+                                           exe_path,
+                                           dur_ms,
+                                           false,
+                                           std::string("Failed to fork process"),
+                                           timeout_opt,
+                                           std::string("Failed to fork process"));
             LOG_ERR("Failed to fork process (cmd=%s)", log_cmd.c_str());
             return err;
         }
@@ -1190,7 +1335,21 @@ json ToolExecutor::executeExternalTool(
 
     } catch (const std::exception& e) {
         LOG_ERR("External tool execution error: %s", e.what());
-        return json{{"success", false}, {"error", e.what()}};
+        std::optional<long long> timeout_opt;
+        if (timeout_ms >= 0) timeout_opt = timeout_ms;
+        auto message = std::string(e.what());
+        return make_uniform_result(false,
+                                   1,
+                                   std::string(),
+                                   message,
+                                   executable,
+                                   json::array(),
+                                   executable,
+                                   0,
+                                   false,
+                                   message,
+                                   timeout_opt,
+                                   message);
     }
 }
 
