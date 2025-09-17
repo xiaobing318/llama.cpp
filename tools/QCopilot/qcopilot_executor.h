@@ -29,11 +29,11 @@ public:
     // 检查给定名称的工具是否存在
     bool hasTool(const std::string & name) const;
 
-    // 获取得到所有已注册的工具
-    json getTools() const;
+    // 获取得到所有已注册工具的工具调用定义
+    json getAllToolsDefinitions() const;
 
 private:
-    // 工具的名称和实现的映射（内置工具 + 外部工具）
+    // 工具的名称和实现的映射（内置工具 + 外部工具不被包含在这里，只是被调用）
     std::unordered_map<std::string, ToolFunction> tool_functions;
 
     // 工具的名称和定义的映射（内置工具 + 外部工具）

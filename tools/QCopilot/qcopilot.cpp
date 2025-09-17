@@ -1112,7 +1112,9 @@ public:
 
         // List available tools endpoint
         server->Get("/tools", [this](const httplib::Request&, httplib::Response& res) {
-            json response = {{"tools", tool_executor->getTools()}};
+            json response = {
+                { "tools", tool_executor->getAllToolsDefinitions() }
+            };
             res.set_content(response.dump(), "application/json");
         });
 
@@ -1148,7 +1150,7 @@ public:
             字段中；如果该 endpoint 发送请求的请求体中存在 tools 字段，则将会使用配置工具将该 tools 字段内容覆盖掉。
             4、TODO：后续会对该部分进行逻辑优化。
             */
-            json all_tools = tool_executor->getTools();
+            json all_tools   = tool_executor->getAllToolsDefinitions();
             request["tools"] = all_tools;
 
             // HTTP客户端超时已在启动时配置

@@ -502,7 +502,7 @@ namespace {
     }
 }
 
-// 执行工具（内置或外部）
+// 执行内置工具或者外部工具
 json ToolExecutor::execute(const std::string& name, const json& arguments) const {
     // 首先检查是否为内置工具
     ToolFunction builtin_fn;
@@ -517,11 +517,13 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
     }
     // 如果是内置工具，直接调用其函数
     if (has_builtin) {
-        // 执行内置工具并构建统一的输出格式
+        // 记录起始时间
         auto t_start = std::chrono::steady_clock::now();
-        // 构建统一的输出封装
+        // 执行内置工具并构建统一的输出格式，也就是说内置工具的输出格式保持一致
         auto build_builtin_envelope = [&](bool success, const std::string &error_msg) {
+            // 计算调用内置工具执行实现
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
+            // 构建 JSON 输出结构
             json out = {
                 {"success", success},
                 {"exit_code", success ? 0 : 1},
@@ -534,12 +536,13 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
                 {"timed_out", false},
                 {"llm_message", success ? std::string("Builtin tool executed successfully.") : (error_msg.empty() ? std::string("Builtin tool failed.") : error_msg)}
             };
+            // 返回构建好的 JSON 输出结构
             return out;
         };
-        // 健壮性保护：避免空的可调用体
+        // 健壮性保护：避免空的可调用体，即如果被调用的内置函数没有具体的实现函数，则输出提示信息
         if (!builtin_fn) {
-            LOG_ERR("内置工具未注册执行函数: %s", name.c_str());
-            return build_builtin_envelope(false, "Builtin tool function not registered");
+            LOG_ERR("内置工具 [%s] 未注册执行函数，即没有具体的实现函数。", name.c_str());
+            return build_builtin_envelope(false, "The implementation of the built-in tool is not registered, that is, there is only the definition of the tool call but no implementation of the tool");
         }
         // 执行内置工具时捕获异常
         try {
@@ -692,18 +695,22 @@ json ToolExecutor::execute(const std::string& name, const json& arguments) const
 // 检查工具是否存在
 bool ToolExecutor::hasTool(const std::string& name) const {
     std::lock_guard<std::mutex> lock(tools_mutex);
-    return tool_functions.find(name) != tool_functions.end() || tool_definitions.find(name) != tool_definitions.end();
+    // 因为在工具定义集合里面同时包含了内置工具和外部工具，因此只需要在工具定义集合里面查询即可
+    return tool_definitions.find(name) != tool_definitions.end();
 }
 
 // 获取所有注册的工具定义
-json ToolExecutor::getTools() const {
+json ToolExecutor::getAllToolsDefinitions() const {
+    // 创建一个空的 JSON 数组用来保存获取得到的工具调用定义
     json result = json::array();
+    // 使用线程锁来确保数据访问正确
     {
         std::lock_guard<std::mutex> lock(tools_mutex);
         for (const auto& kv : tool_definitions) {
             result.push_back(kv.second);
         }
     }
+    // 将获取到的工具调用定义返回
     return result;
 }
 
