@@ -1,0 +1,109 @@
+# QCopilot 跨平台工具测试工作流
+# 仅构建并验证 QCopilot 相关目标与单元测试
+# 生成 JUnit 报告便于在 CI 中汇总测试结果
+# 在 Linux/macOS 上使用 ccache 加速重复构建
+
+name: qcopilot-tests  # 工作流名称，便于在 GitHub Actions 列表中识别
+
+on:  # 触发条件，定义何时运行该工作流
+  push:  # 当推送符合路径过滤的提交时触发
+    paths:  # 限制需要关注的文件范围，减少无关触发
+      - 'tools/QCopilot/**'  # QCopilot 代码发生变化需要重新测试
+      - 'vendor/nlohmann/**'  # JSON 库更新可能影响工具行为
+      - '.github/workflows/qcopilot-tests.yml'  # 工作流自身调整需重新验证
+      - 'CMakeLists.txt'  # 顶层构建配置影响所有目标
+      - 'tools/CMakeLists.txt'  # tools 子目录的构建规则变更
+  pull_request:  # 针对 PR 事件同样执行检查
+    paths:  # 与 push 相同的路径过滤策略
+      - 'tools/QCopilot/**'  # PR 修改 QCopilot 代码时触发
+      - 'vendor/nlohmann/**'  # PR 更新 JSON 库时触发
+      - '.github/workflows/qcopilot-tests.yml'  # PR 修改工作流时触发
+      - 'CMakeLists.txt'  # PR 变更顶层 CMake 时触发
+      - 'tools/CMakeLists.txt'  # PR 修改 tools 构建脚本时触发
+
+jobs:  # 定义实际执行的任务集合
+  build-and-test:  # 单个作业，涵盖构建与测试
+    name: ${{ matrix.os }} - ${{ matrix.build_type }}  # 在日志中显示当前操作系统和构建类型
+    runs-on: ${{ matrix.os }}  # 依据矩阵选择运行环境
+    strategy:  # 配置矩阵和失败策略
+      fail-fast: false  # 任一矩阵分支失败时不中止其他分支，便于一次查清全部问题
+      matrix:  # 定义多维度参数组合
+        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, macos-14]  # 四个平台覆盖主要用户环境
+        build_type: [Debug, Release]  # 同时验证调试版与发布版编译
+        # 注意：macOS 15.6 (Sequoia) Runner 尚未全面可用，等待可用后可替换 macos-14
+
+    env:  # 为整个作业设置通用环境变量
+      BUILD_DIR: build-qcopilot  # 指定 CMake 构建输出目录，保持各矩阵分支一致
+      BUILD_TYPE: ${{ matrix.build_type }}  # 导出构建类型供脚本引用
+      CTEST_PARALLEL_LEVEL: 2  # 让 ctest 并行运行两个测试，提升速度同时避免资源压力
+      CCACHE_BASEDIR: ${{ github.workspace }}  # 配置 ccache 根目录，确保缓存命中
+      CCACHE_DIR: ${{ github.workspace }}/.ccache  # 指定缓存目录，便于复用与缓存动作配合
+
+    steps:  # 作业中的执行步骤
+      - name: Checkout  # 检出仓库代码
+        uses: actions/checkout@v4  # 使用官方 Action 获取指定提交
+
+      - name: Setup ccache (Linux/macOS)  # 在非 Windows 平台启用 ccache
+        if: runner.os != 'Windows'  # Windows 不支持该 Action，避免无效执行
+        uses: hendrikmuhs/ccache-action@v1.2  # 配置缓存工具并管理缓存上传/恢复
+        with:
+          key: ${{ runner.os }}-qcopilot-${{ matrix.build_type }}-${{ github.sha }}  # 缓存键包含平台、构建类型和提交 SHA，保证唯一性
+          restore-keys: |  # 允许使用前缀匹配恢复旧缓存，提高命中率
+            ${{ runner.os }}-qcopilot-${{ matrix.build_type }}-
+
+      - name: Install dependencies (Linux)  # 安装 Linux 平台所需依赖
+        if: runner.os == 'Linux'  # 仅在 Linux 环境执行
+        run: |  # 执行 Shell 脚本安装依赖
+          sudo apt-get update  # 更新软件包索引，确保获取最新包信息
+          sudo apt-get install -y build-essential libcurl4-openssl-dev  # 安装构建工具及 libcurl 开发包，满足编译和运行需求
+
+      - name: Setup libcurl (Windows)  # Windows 平台准备 libcurl
+        if: runner.os == 'Windows'  # 仅在 Windows 环境需要额外处理
+        id: windows_curl  # 保存步骤输出供后续引用
+        uses: ./.github/actions/windows-setup-curl  # 复用仓库内自定义 Action 下载并解压 libcurl
+
+      - name: Configure (CMake)  # 配置 CMake 构建系统
+        shell: bash  # 使用 Bash 运行脚本，确保 \\ 多行写法兼容
+        env:
+          CURL_PATH: ${{ steps.windows_curl.outputs.curl_path }}  # 将 Windows 步骤输出的 libcurl 路径传入脚本
+        run: |
+          cmake -S . -B "$BUILD_DIR" \  # 指定源码与构建目录，生成构建文件
+            -DLLAMA_BUILD_TOOLS=ON \  # 强制启用工具目标，确保 QCopilot 被编译
+            -DLLAMA_BUILD_TESTS=ON \  # 打开测试构建开关，生成内置单元测试
+            -DLLAMA_BUILD_SERVER=ON \  # 启用 server 目标以满足 QCopilot 对 server 代码的依赖
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \  # 设置构建类型，匹配矩阵参数
+            $([[ "$RUNNER_OS" != "Windows" ]] && echo "-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache") \  # 在非 Windows 平台启用 ccache，加速编译
+            $([[ "$RUNNER_OS" == "Windows" ]] && echo "-DCURL_LIBRARY=$CURL_PATH/lib/libcurl.dll.a -DCURL_INCLUDE_DIR=$CURL_PATH/include")  # 在 Windows 上显式提供 libcurl 库和头文件路径
+
+      - name: Build  # 编译目标代码
+        shell: bash  # 使用 Bash 执行构建指令
+        run: |
+          cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" -j  # 根据生成的构建文件编译，并开启多核加速
+
+      - name: Copy libcurl DLL (Windows)  # Windows 复制运行时依赖
+        if: runner.os == 'Windows'  # 仅在 Windows 需要手动部署动态库
+        shell: powershell  # 使用 PowerShell 便于处理路径
+        env:
+          BUILD_DIR: ${{ env.BUILD_DIR }}  # 复用构建目录环境变量
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}  # 复用构建类型
+          CURL_PATH: ${{ steps.windows_curl.outputs.curl_path }}  # 获取 libcurl 安装路径
+        run: |
+          $dest = Join-Path $env:BUILD_DIR "bin"  # 拼接可执行文件所在目录
+          $dest = Join-Path $dest $env:BUILD_TYPE  # 按构建类型定位具体子目录
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null  # 确保目标目录存在
+          Copy-Item "$env:CURL_PATH\bin\libcurl-x64.dll" $dest -Force  # 将 libcurl 动态库复制到可执行目录供测试运行时加载
+
+      - name: Run tests (JUnit)  # 执行单元测试并生成 JUnit 报告
+        shell: bash  # 使用 Bash 运行测试命令
+        working-directory: ${{ env.BUILD_DIR }}  # 在构建目录中执行，ctest 可找到生成的测试目标
+        run: |
+          mkdir -p test-results  # 创建存放测试报告的目录
+          ctest --output-on-failure -R test_ -C "$BUILD_TYPE" --output-junit test-results/qcopilot-tests-${BUILD_TYPE}.xml  # 运行匹配 test_ 前缀的测试，失败时输出日志，并生成 JUnit XML
+
+      - name: Upload JUnit report  # 将测试结果上传为构件，便于后续查看
+        if: always()  # 无论前面步骤成功与否都尝试上传，保留失败现场
+        uses: actions/upload-artifact@v4  # 使用官方 Action 上传文件
+        with:
+          name: qcopilot-junit-${{ matrix.os }}-${{ matrix.build_type }}  # 构件命名包含平台和构建类型，避免冲突
+          path: ${{ env.BUILD_DIR }}/test-results/qcopilot-tests-${{ env.BUILD_TYPE }}.xml  # 指定要上传的 JUnit 报告路径
+          if-no-files-found: warn  # 若报告缺失仅发出告警，方便排查
