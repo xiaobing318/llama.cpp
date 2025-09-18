@@ -87,18 +87,19 @@ struct Token {
 };
 
 // 构建统一的工具执行结果结构
-static json make_uniform_result(bool success,
-                                int exit_code,
-                                const std::string &stdout_text,
-                                const std::string &stderr_text,
-                                const std::string &command_line,
-                                const json &argv,
-                                const std::string &executable,
-                                int64_t duration_ms,
-                                bool timed_out,
-                                const std::string &llm_message,
-                                std::optional<long long> timeout_ms = std::nullopt,
-                                const std::string &error_message = std::string()) {
+static json make_uniform_result(
+    bool success,
+    int exit_code,
+    const std::string &stdout_text,
+    const std::string &stderr_text,
+    const std::string &command_line,
+    const json &argv,
+    const std::string &executable,
+    int64_t duration_ms,
+    bool timed_out,
+    const std::string &llm_message,
+    std::optional<long long> timeout_ms = std::nullopt,
+    const std::string &error_message = std::string()) {
     json out = {
         {"success", success},
         {"exit_code", exit_code},
@@ -405,6 +406,54 @@ static std::wstring build_windows_cmdline_w(const std::vector<std::string>& argv
 }
 #endif
 
+// 内部辅助函数：根据平台解析可执行文件路径
+static std::string resolve_executable_for_platform(const json& definition) {
+    // priority: platform-specific -> generic-only（解析优先级：先解析特定于平台的可执行文件路径，如果没有再解析通用的可执行文件路径）
+#ifdef _WIN32
+    // 如果是 Windows 平台，优先检查 "executable_windows" 字段
+    if (definition.contains("executable_windows") && definition["executable_windows"].is_string()) {
+        return definition["executable_windows"].get<std::string>();
+    }
+#elif defined(__APPLE__)
+    // 如果是 macOS 平台，优先检查 "executable_macos" 字段
+    if (definition.contains("executable_macos") && definition["executable_macos"].is_string()) {
+        return definition["executable_macos"].get<std::string>();
+    }
+#else
+    // 如果是 Linux 平台，优先检查 "executable_linux" 字段
+    if (definition.contains("executable_linux") && definition["executable_linux"].is_string()) {
+        return definition["executable_linux"].get<std::string>();
+    }
+#endif
+    // 如果没有指定平台则检查通用的 "executable_generic" 字段
+    if (definition.contains("executable_generic") && definition["executable_generic"].is_string()) {
+        return definition["executable_generic"].get<std::string>();
+    }
+    // 如果都没有找到合适的可执行文件路径，则返回空字符串
+    return std::string();
+    }
+
+// 内部辅助函数：提取超时时间（毫秒），如果未指定则返回 -1 表示无超时
+static int64_t extract_timeout_ms(const json& definition) {
+    // 这个字段是可选的，如果存在则必须是整数或字符串，默认值为 -1 表示不设置超时
+    if (definition.contains("timeout_ms")) {
+        try {
+            // 允许整数或字符串类型
+            if (definition["timeout_ms"].is_number_integer()) {
+                return definition["timeout_ms"].get<int64_t>();
+            }
+            if (definition["timeout_ms"].is_string()) {
+                // allow string, best-effort parse
+                return std::stoll(definition["timeout_ms"].get<std::string>());
+            }
+        } catch (...) {
+            // 输出提示日志
+            LOG_ERR("工具定义中的 timeout_ms 字段无效，必须是整数或字符串");
+        }
+    }
+    return -1;
+}
+
 } // namespace
 
 #pragma endregion
@@ -490,57 +539,6 @@ bool ToolExecutor::registerExternalTools(const json& tool_definition) {
     }catch (...) {
             LOG_ERR("注册外部工具时发生异常");
             return false;
-    }
-}
-
-// 执行工具
-namespace {
-    // 内部辅助函数：根据平台解析可执行文件路径
-    static std::string resolve_executable_for_platform(const json& definition) {
-        // priority: platform-specific -> generic-only（解析优先级：先解析特定于平台的可执行文件路径，如果没有再解析通用的可执行文件路径）
-#ifdef _WIN32
-        // 如果是 Windows 平台，优先检查 "executable_windows" 字段
-        if (definition.contains("executable_windows") && definition["executable_windows"].is_string()) {
-            return definition["executable_windows"].get<std::string>();
-        }
-#elif defined(__APPLE__)
-        // 如果是 macOS 平台，优先检查 "executable_macos" 字段
-        if (definition.contains("executable_macos") && definition["executable_macos"].is_string()) {
-            return definition["executable_macos"].get<std::string>();
-        }
-#else
-        // 如果是 Linux 平台，优先检查 "executable_linux" 字段
-        if (definition.contains("executable_linux") && definition["executable_linux"].is_string()) {
-            return definition["executable_linux"].get<std::string>();
-        }
-#endif
-        // 如果没有指定平台则检查通用的 "executable_generic" 字段
-        if (definition.contains("executable_generic") && definition["executable_generic"].is_string()) {
-            return definition["executable_generic"].get<std::string>();
-        }
-        // 如果都没有找到合适的可执行文件路径，则返回空字符串
-        return std::string();
-    }
-
-    // 内部辅助函数：提取超时时间（毫秒），如果未指定则返回 -1 表示无超时
-    static int64_t extract_timeout_ms(const json& definition) {
-        // 这个字段是可选的，如果存在则必须是整数或字符串，默认值为 -1 表示不设置超时
-        if (definition.contains("timeout_ms")) {
-            try {
-                // 允许整数或字符串类型
-                if (definition["timeout_ms"].is_number_integer()) {
-                    return definition["timeout_ms"].get<int64_t>();
-                }
-                if (definition["timeout_ms"].is_string()) {
-                    // allow string, best-effort parse
-                    return std::stoll(definition["timeout_ms"].get<std::string>());
-                }
-            } catch (...) {
-                // 输出提示日志
-                LOG_ERR("工具定义中的 timeout_ms 字段无效，必须是整数或字符串");
-            }
-        }
-        return -1;
     }
 }
 
@@ -784,6 +782,7 @@ json ToolExecutor::getAllToolsDefinitions() const {
     return result;
 }
 
+// 执行外部工具
 json ToolExecutor::executeExternalTool(
     const std::string& executable,
     const json& arguments,
@@ -831,18 +830,19 @@ json ToolExecutor::executeExternalTool(
                 std::optional<long long> timeout_opt;
                 if (timeout_ms >= 0) timeout_opt = timeout_ms;
                 auto message = std::string("Executable not found: ") + exe_path;
-                json err = make_uniform_result(false,
-                                               127,
-                                               std::string(),
-                                               message,
-                                               log_cmd,
-                                               json(argv),
-                                               exe_path,
-                                               dur_ms,
-                                               false,
-                                               message,
-                                               timeout_opt,
-                                               message);
+                json err = make_uniform_result(
+                    false,
+                    127,
+                    std::string(),
+                    message,
+                    log_cmd,
+                    json(argv),
+                    exe_path,
+                    dur_ms,
+                    false,
+                    message,
+                    timeout_opt,
+                    message);
                 LOG_ERR("Executable not found: %s (cmd=%s)", exe_path.c_str(), log_cmd.c_str());
                 return err;
             }
@@ -855,18 +855,19 @@ json ToolExecutor::executeExternalTool(
                 std::optional<long long> timeout_opt;
                 if (timeout_ms >= 0) timeout_opt = timeout_ms;
                 auto message = std::string("Executable not found or not executable: ") + exe_path;
-                json err = make_uniform_result(false,
-                                               127,
-                                               std::string(),
-                                               message,
-                                               log_cmd,
-                                               json(argv),
-                                               exe_path,
-                                               dur_ms,
-                                               false,
-                                               message,
-                                               timeout_opt,
-                                               message);
+                json err = make_uniform_result(
+                    false,
+                    127,
+                    std::string(),
+                    message,
+                    log_cmd,
+                    json(argv),
+                    exe_path,
+                    dur_ms,
+                    false,
+                    message,
+                    timeout_opt,
+                    message);
                 LOG_ERR("Executable not found or not executable: %s (cmd=%s)", exe_path.c_str(), log_cmd.c_str());
                 return err;
             }
@@ -898,18 +899,20 @@ json ToolExecutor::executeExternalTool(
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
             std::optional<long long> timeout_opt;
             if (timeout_ms >= 0) timeout_opt = timeout_ms;
+
             json err = make_uniform_result(false,
-                                           1,
-                                           std::string(),
-                                           std::string("Failed to create pipes"),
-                                           log_cmd,
-                                           json(argv),
-                                           exe_path,
-                                           dur_ms,
-                                           false,
-                                           std::string("Failed to create pipes"),
-                                           timeout_opt,
-                                           std::string("Failed to create pipes"));
+            1,
+            std::string(),
+            std::string("Failed to create pipes"),
+            log_cmd,
+            json(argv),
+            exe_path,
+            dur_ms,
+            false,
+            std::string("Failed to create pipes"),
+            timeout_opt,
+            std::string("Failed to create pipes"));
+
             LOG_ERR("Failed to create pipes (cmd=%s)", log_cmd.c_str());
             return err;
         }
@@ -946,18 +949,21 @@ json ToolExecutor::executeExternalTool(
             std::optional<long long> timeout_opt;
             if (timeout_ms >= 0) timeout_opt = timeout_ms;
             auto message = std::string("Failed to create process: error ") + std::to_string(err);
-            json j = make_uniform_result(false,
-                                         1,
-                                         std::string(),
-                                         message,
-                                         log_cmd,
-                                         json(argv),
-                                         exe_path,
-                                         dur_ms,
-                                         false,
-                                         message,
-                                         timeout_opt,
-                                         message);
+
+            json j = make_uniform_result(
+                false,
+                1,
+                std::string(),
+                message,
+                log_cmd,
+                json(argv),
+                exe_path,
+                dur_ms,
+                false,
+                message,
+                timeout_opt,
+                message);
+
             LOG_ERR("Failed to create process (err=%lu) cmd=%s", err, log_cmd.c_str());
             return j;
         }
@@ -1133,19 +1139,21 @@ json ToolExecutor::executeExternalTool(
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
             std::optional<long long> timeout_opt;
             if (timeout_ms >= 0) timeout_opt = timeout_ms;
+
             json err = make_uniform_result(false,
-                                           1,
-                                           std::string(),
-                                           std::string("Failed to create pipes"),
-                                           log_cmd,
-                                           json(argv),
-                                           exe_path,
-                                           dur_ms,
-                                           false,
-                                           std::string("Failed to create pipes"),
-                                           timeout_opt,
-                                           std::string("Failed to create pipes"));
+            1,
+            std::string(),
+            std::string("Failed to create pipes"),
+            log_cmd,
+            json(argv),
+            exe_path,
+            dur_ms,
+            false,
+            std::string("Failed to create pipes"),
+            timeout_opt,
+            std::string("Failed to create pipes"));
             LOG_ERR("Failed to create pipes (cmd=%s)", log_cmd.c_str());
+
             return err;
         }
 
@@ -1157,18 +1165,21 @@ json ToolExecutor::executeExternalTool(
             auto dur_ms = (int64_t) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_start).count();
             std::optional<long long> timeout_opt;
             if (timeout_ms >= 0) timeout_opt = timeout_ms;
-            json err = make_uniform_result(false,
-                                           1,
-                                           std::string(),
-                                           std::string("Failed to fork process"),
-                                           log_cmd,
-                                           json(argv),
-                                           exe_path,
-                                           dur_ms,
-                                           false,
-                                           std::string("Failed to fork process"),
-                                           timeout_opt,
-                                           std::string("Failed to fork process"));
+
+            json err = make_uniform_result(
+                false,
+                1,
+                std::string(),
+                std::string("Failed to fork process"),
+                log_cmd,
+                json(argv),
+                exe_path,
+                dur_ms,
+                false,
+                std::string("Failed to fork process"),
+                timeout_opt,
+                std::string("Failed to fork process"));
+
             LOG_ERR("Failed to fork process (cmd=%s)", log_cmd.c_str());
             return err;
         }
@@ -1338,45 +1349,20 @@ json ToolExecutor::executeExternalTool(
         std::optional<long long> timeout_opt;
         if (timeout_ms >= 0) timeout_opt = timeout_ms;
         auto message = std::string(e.what());
-        return make_uniform_result(false,
-                                   1,
-                                   std::string(),
-                                   message,
-                                   executable,
-                                   json::array(),
-                                   executable,
-                                   0,
-                                   false,
-                                   message,
-                                   timeout_opt,
-                                   message);
+        return make_uniform_result(
+            false,
+            1,
+            std::string(),
+            message,
+            executable,
+            json::array(),
+            executable,
+            0,
+            false,
+            message,
+            timeout_opt,
+            message);
     }
-}
-
-// 辅助函数：安全地转义命令行参数
-static std::string escapeShellArgument(const std::string& arg) {
-    // 如果参数包含空白或特殊字符，需要用双引号包围，并转义内部的双引号
-    auto is_special = [](char c) {
-        switch (c) {
-            case ' ': case '\t': case '\n': case '\v':
-            case '"': case '\'': case '$': case '`':
-            case ';': case '&': case '|':
-                return true;
-            default:
-                return false;
-        }
-    };
-    bool need_quote = std::any_of(arg.begin(), arg.end(), is_special);
-    if (!need_quote) return arg;
-
-    std::string escaped;
-    escaped.reserve(arg.size() + 2);
-    escaped.push_back('"');
-    for (char c : arg) {
-        if (c == '"') escaped += "\\\""; else escaped.push_back(c);
-    }
-    escaped.push_back('"');
-    return escaped;
 }
 
 /*
@@ -1411,7 +1397,10 @@ static std::string escapeShellArgument(const std::string& arg) {
     7. 转换：{param:upper} / {param:lower} / {param:json} / {param:url|urlencode}
        - 分别输出大写/小写/JSON 序列化/URL 编码形式。
  */
-std::string ToolExecutor::buildCommandFromTemplate(const std::string& command_template, const json& arguments, const std::string& executable) {
+std::string ToolExecutor::buildCommandFromTemplate(
+    const std::string& command_template,
+    const json& arguments,
+    const std::string& executable) {
     // Build via argv and stringify with platform quoting for logging/compat only
     auto argv = build_argv_from_template(command_template, arguments, executable);
     std::string out;
