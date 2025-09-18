@@ -94,7 +94,7 @@
             "executable_generic": "ogrinfo",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogrinfo.exe",
             "executable_linux": "/usr/bin/ogrinfo",
-            "executable_macos": "/usr/bin/ogrinfo",
+            "executable_macos": "/opt/homebrew/bin/ogrinfo",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_info_basic",
@@ -132,7 +132,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_convert_format_basic",
@@ -232,7 +232,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_write_shp_to_gpkg_layer",
@@ -368,7 +368,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_reproject_shapefile",
@@ -473,7 +473,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_reproject_shapefile_dir",
@@ -576,7 +576,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_filter_by_attributes",
@@ -648,7 +648,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_spatial_filter_bbox",
@@ -714,7 +714,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_clip_by_bbox",
@@ -780,7 +780,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_append_to_gpkg",
@@ -844,7 +844,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_drop_field_sqlite",
@@ -915,7 +915,7 @@
             "executable_generic": "ogr2ogr",
             "executable_windows": "F:/starmap_package/DLHJ_20250812/DLHJ/bin/ogr2ogr.exe",
             "executable_linux": "/usr/bin/ogr2ogr",
-            "executable_macos": "/usr/bin/ogr2ogr",
+            "executable_macos": "/opt/homebrew/bin/ogr2ogr",
             "timeout_ms": 10000,
             "function": {
                 "name": "ogr_explode_collections",
