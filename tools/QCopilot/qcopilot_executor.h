@@ -52,9 +52,4 @@ private:
         const std::string& command_template,
         long long timeout_ms) const;
 
-    // 从模板和参数构建命令行（用于日志记录/诊断）
-    std::string buildCommandFromTemplate(
-        const std::string& command_template,
-        const json& arguments,
-        const std::string& executable = "");
 };

@@ -318,30 +318,58 @@ static std::vector<std::string> build_argv_from_template(
     const std::string& command_template,
     const json& arguments,
     const std::string& executable) {
-    // 创建一个空的 argv 向量用来保存构建的命令行参数
     std::vector<std::string> argv;
-    // 如果命令模板为空，则只包含可执行文件路径（如果提供了的话）
+    // 该函数负责把命令模板拆解成最终的 argv 数组：解析占位符、注入可执行文件绝对路径，并过滤掉空参数
     if (command_template.empty()) {
         if (!executable.empty()) argv.push_back(executable);
         return argv;
     }
-    // 解析命令模板为多个 token
+
     auto tokens = split_template_tokens(command_template);
-    // 如果没有包含路径分隔符且提供了可执行文件路径，则将其作为第一个参数
-    if (!tokens.empty()) {
-        std::string cmd0 = tokens[0].text;
-        if (cmd0.find('/') == std::string::npos && cmd0.find('\\') == std::string::npos && !executable.empty()) {
-            argv.push_back(executable);
-        } else {
-            // keep as-is (may be absolute path or relative path inside template)
-            argv.push_back(cmd0);
-        }
-        // Process remaining tokens
-        for (size_t i = 1; i < tokens.size(); ++i) {
-            auto expanded = expand_placeholders_token(tokens[i].text, arguments, tokens[i].quoted);
-            argv.insert(argv.end(), expanded.begin(), expanded.end());
-        }
+    if (tokens.empty()) {
+        if (!executable.empty()) argv.push_back(executable);
+        return argv;
     }
+
+    const bool first_token_has_placeholder = tokens[0].text.find('{') != std::string::npos;
+
+    auto append_from_expanded = [&](const std::vector<std::string>& expanded,
+                                    bool is_first_token,
+                                    bool token_has_placeholder) {
+        bool first_added = !is_first_token || !argv.empty();
+        for (const auto& item : expanded) {
+            if (is_first_token && !first_added) {
+                const bool sentinel = (item == "executableFilePath");
+                const bool looks_like_name = !sentinel && !token_has_placeholder && !item.empty() && !has_path_separator(item);
+                if ((sentinel || looks_like_name) && !executable.empty()) {
+                    argv.push_back(executable);
+                    first_added = true;
+                    continue;
+                }
+                if (item.empty() && !executable.empty()) {
+                    argv.push_back(executable);
+                    first_added = true;
+                    continue;
+                }
+            }
+            if (!item.empty()) {
+                argv.push_back(item);
+                if (is_first_token) first_added = true;
+            }
+        }
+        if (is_first_token && !first_added && !executable.empty()) {
+            argv.push_back(executable);
+        }
+    };
+
+    auto first_expanded = expand_placeholders_token(tokens[0].text, arguments, tokens[0].quoted);
+    append_from_expanded(first_expanded, true, first_token_has_placeholder);
+
+    for (size_t i = 1; i < tokens.size(); ++i) {
+        auto expanded = expand_placeholders_token(tokens[i].text, arguments, tokens[i].quoted);
+        append_from_expanded(expanded, false, tokens[i].text.find('{') != std::string::npos);
+    }
+
     return argv;
 }
 
@@ -1111,25 +1139,42 @@ json ToolExecutor::executeExternalTool(
         }
         try {
             json result = json::parse(output);
-            result["success"] = true;
-            result["exit_code"] = 0;
-            result["stdout"] = output; // keep raw stdout for uniformity
-            result["stderr"] = errout;
-            result["command_line"] = log_cmd;
-            result["argv"] = argv;
-            result["executable"] = exe_path;
-            result["duration_ms"] = dur_ms;
-            if (timeout_ms >= 0) result["timeout_ms"] = timeout_ms;
-            result["timed_out"] = false;
-            result["llm_message"] = std::string("Tool executed successfully in ") + std::to_string(dur_ms) + " ms.";
-            return result;
-        } catch (...) {
-            base["success"] = true;
-            base["llm_message"] = "Tool returned non-JSON output; returning raw stdout/stderr.";
-            LOG_WRN("Tool returned non-JSON output. cmd=%s, stdout_len=%zu, stderr_len=%zu",
-                    log_cmd.c_str(), base["stdout"].get<std::string>().size(), base["stderr"].get<std::string>().size());
-            return base;
+            if (!result.is_object()) {
+                LOG_WRN("Tool returned JSON value that is not an object. cmd=%s, stdout_len=%zu, stderr_len=%zu",
+                        log_cmd.c_str(), output.size(), errout.size());
+            } else {
+                if (!result.contains("success") || !result["success"].is_boolean()) {
+                    result["success"] = true;
+                }
+                if (!result.contains("exit_code") || !result["exit_code"].is_number_integer()) {
+                    result["exit_code"] = 0;
+                }
+                result["stdout"] = output; // keep raw stdout for uniformity
+                result["stderr"] = errout;
+                result["command_line"] = log_cmd;
+                result["argv"] = argv;
+                result["executable"] = exe_path;
+                result["duration_ms"] = dur_ms;
+                if (timeout_ms >= 0 && (!result.contains("timeout_ms") || !result["timeout_ms"].is_number_integer())) {
+                    result["timeout_ms"] = timeout_ms;
+                }
+                if (!result.contains("timed_out") || !result["timed_out"].is_boolean()) {
+                    result["timed_out"] = false;
+                }
+                if (!result.contains("llm_message") || !result["llm_message"].is_string()) {
+                    result["llm_message"] = std::string("Tool executed successfully in ") + std::to_string(dur_ms) + " ms.";
+                }
+                return result;
+            }
+        } catch (const std::exception& e) {
+            LOG_WRN("Tool returned non-JSON output. cmd=%s, stdout_len=%zu, stderr_len=%zu, err=%s",
+                    log_cmd.c_str(), output.size(), errout.size(), e.what());
         }
+        base["success"] = true;
+        if (!base.contains("llm_message")) {
+            base["llm_message"] = "Tool returned non-JSON output; returning raw stdout/stderr.";
+        }
+        return base;
 
 #else // POSIX
         int stdin_pipe[2];
@@ -1323,25 +1368,42 @@ json ToolExecutor::executeExternalTool(
         }
         try {
             json result = json::parse(output);
-            result["success"] = true;
-            result["exit_code"] = 0;
-            result["stdout"] = output;
-            result["stderr"] = errout;
-            result["command_line"] = log_cmd;
-            result["argv"] = argv;
-            result["executable"] = exe_path;
-            result["duration_ms"] = dur_ms;
-            if (timeout_ms >= 0) result["timeout_ms"] = timeout_ms;
-            result["timed_out"] = false;
-            result["llm_message"] = std::string("Tool executed successfully in ") + std::to_string(dur_ms) + " ms.";
-            return result;
-        } catch (...) {
-            base["success"] = true;
-            base["llm_message"] = "Tool returned non-JSON output; returning raw stdout/stderr.";
-            LOG_WRN("Tool returned non-JSON output. cmd=%s, stdout_len=%zu, stderr_len=%zu",
-                    log_cmd.c_str(), base["stdout"].get<std::string>().size(), base["stderr"].get<std::string>().size());
-            return base;
+            if (!result.is_object()) {
+                LOG_WRN("Tool returned JSON value that is not an object. cmd=%s, stdout_len=%zu, stderr_len=%zu",
+                        log_cmd.c_str(), output.size(), errout.size());
+            } else {
+                if (!result.contains("success") || !result["success"].is_boolean()) {
+                    result["success"] = true;
+                }
+                if (!result.contains("exit_code") || !result["exit_code"].is_number_integer()) {
+                    result["exit_code"] = 0;
+                }
+                result["stdout"] = output;
+                result["stderr"] = errout;
+                result["command_line"] = log_cmd;
+                result["argv"] = argv;
+                result["executable"] = exe_path;
+                result["duration_ms"] = dur_ms;
+                if (timeout_ms >= 0 && (!result.contains("timeout_ms") || !result["timeout_ms"].is_number_integer())) {
+                    result["timeout_ms"] = timeout_ms;
+                }
+                if (!result.contains("timed_out") || !result["timed_out"].is_boolean()) {
+                    result["timed_out"] = false;
+                }
+                if (!result.contains("llm_message") || !result["llm_message"].is_string()) {
+                    result["llm_message"] = std::string("Tool executed successfully in ") + std::to_string(dur_ms) + " ms.";
+                }
+                return result;
+            }
+        } catch (const std::exception& e) {
+            LOG_WRN("Tool returned non-JSON output. cmd=%s, stdout_len=%zu, stderr_len=%zu, err=%s",
+                    log_cmd.c_str(), output.size(), errout.size(), e.what());
         }
+        base["success"] = true;
+        if (!base.contains("llm_message")) {
+            base["llm_message"] = "Tool returned non-JSON output; returning raw stdout/stderr.";
+        }
+        return base;
 #endif
 
     } catch (const std::exception& e) {
@@ -1363,56 +1425,4 @@ json ToolExecutor::executeExternalTool(
             timeout_opt,
             message);
     }
-}
-
-/*
-一、根据命令模板和参数构建完整的命令行（仅用于日志展示；实际执行按 argv 构建）
-    @param command_template 命令模板字符串
-    @param arguments JSON格式的参数对象
-    @param executable 可执行文件路径，用于替换模板开头的硬编码可执行文件名
-    @return 构建好的完整命令行字符串
-
-二、支持的模板语法（在 token 维度展开；引用括起来的 token 不会被拆成多个 argv）：
-    1. 基本替换：{param}
-       - 直接将参数值替换到占位符位置。
-
-    2. 条件替换（真值判断）：{param:?text}
-       - 当参数“为真”时替换为 text，否则为空。
-       - 真值规则：true、非零数字、非空字符串、非空数组/对象。
-       - text 中可以包含同名占位符再次替换，如 {encoding:?-lco ENCODING={encoding}}。
-
-    3. 不等于默认值：{param:!default?text}
-       - 当参数值不等于 default 时替换为 text。
-
-    4. 默认值回退：{param:or:default}
-       - 当参数缺失或不为真时，用 default 替换。
-
-    5. 数组连接：{param:join:sep}
-       - 将数组参数用 sep 连接为一个 token；
-       - 若该 token 未被引号包围且 sep 为单个空格，则会展开为多个 argv token。
-
-    6. 旗标输出：{param:flag:--name}
-       - 当参数为真时，替换为给定 flag（例如 --name）。
-
-    7. 转换：{param:upper} / {param:lower} / {param:json} / {param:url|urlencode}
-       - 分别输出大写/小写/JSON 序列化/URL 编码形式。
- */
-std::string ToolExecutor::buildCommandFromTemplate(
-    const std::string& command_template,
-    const json& arguments,
-    const std::string& executable) {
-    // Build via argv and stringify with platform quoting for logging/compat only
-    auto argv = build_argv_from_template(command_template, arguments, executable);
-    std::string out;
-    bool first = true;
-    for (const auto& a : argv) {
-        if (!first) out.push_back(' ');
-        first = false;
-#ifdef _WIN32
-        out += utf16_to_utf8(windows_quote_arg(utf8_to_utf16(a)));
-#else
-        out += posix_quote_arg(a);
-#endif
-    }
-    return out;
 }

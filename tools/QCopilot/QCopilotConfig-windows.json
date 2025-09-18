@@ -87,7 +87,7 @@
                     "additionalProperties": false
                 }
             },
-            "command_template": "shapefile_converter {r_flag} {s_flag} {source_encoding} {t_flag} {target_encoding} {v_flag} \"{input_path}\" {output_path}"
+            "command_template": "executableFilePath {r_flag} {s_flag} {source_encoding} {t_flag} {target_encoding} {v_flag} \"{input_path}\" {output_path}"
         },
         {
             "type": "function",
