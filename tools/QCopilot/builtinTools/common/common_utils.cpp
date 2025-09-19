@@ -12,69 +12,222 @@
 #include <cstdarg>
 #include <set>
 #include <stack>
-
-namespace fs = std::filesystem;
+#include <system_error>
 
 namespace BuiltinTools {
 namespace Utils {
+
+namespace fs = std::filesystem;
 
 #pragma region "内部辅助函数"
 // 已迁移到 common_utils_internal.{h,cpp}
 #pragma endregion
 
-#pragma region "匹配模式相关实用函数"
-/***********************************************************
-* 1、匹配模式
-***********************************************************/
-
-// 辅助：通配符匹配（支持 *, ?, [], \；* 不跨分隔符）
-bool matchPattern(
-    const std::string& text,
-    const std::string& pattern,
-    bool case_sensitive) {
-    // 这里匹配的是“单个段”，所以先把分隔符统一后，禁止跨分隔符。
-    std::string t = Internal::slashify(text);
-    if (t.find('/') != std::string::npos) {
-        // 若上层传的是“整条路径”，请先拆段后用；这里按典型 glob 约定：* 不跨分隔符。
-        // 让调用方分段；或者在 globFiles 中处理。
-    }
-    return Internal::globSegmentMatch(t, Internal::slashify(pattern), case_sensitive);
-}
-#pragma endregion
-
 #pragma region "路径相关实用函数"
-/***********************************************************
-* 1、验证路径合法性
-***********************************************************/
+// 判断给定字符串路径是否像URL
+static inline bool looks_like_url(const std::string& s) {
+    // RFC3986 scheme: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":" 简化检测：以 "scheme://" 形式出现的，认为是 URL（拒绝）
+    static const std::regex kUrlRe(R"(^[A-Za-z][A-Za-z0-9+\-.]*://)");
+    return std::regex_search(s, kUrlRe);
+}
+
+// 判断给定字符串路径是否包含不安全字符（\0）与控制符
+static inline bool contains_nul_or_control(const std::string& s) {
+    for (unsigned char ch : s) {
+        if (ch == 0 || (ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+#ifdef _WIN32
+    // 检查路径组件是否为保留设备名
+    static inline bool is_windows_reserved_device(const std::wstring& name) {
+        if (name.empty()) return false;
+    
+        auto to_upper = [](wchar_t c){ return (wchar_t)std::toupper(c); };
+        std::wstring u;
+        u.reserve(name.size());
+        for (auto c : name) u.push_back(to_upper(c));
+    
+        // 去掉尾部的空格与点（Windows 组件结尾不允许）
+        while (!u.empty() && (u.back() == L' ' || u.back() == L'.')) u.pop_back();
+        if (u.empty()) return false;
+    
+        auto starts_with = [&](const std::wstring& p){
+            return u.size() >= p.size() && std::equal(p.begin(), p.end(), u.begin());
+        };
+    
+        static const std::wstring base_devs[] = {
+            L"CON", L"PRN", L"AUX", L"NUL"
+        };
+        for (const auto& d : base_devs) {
+            if (starts_with(d) && (u.size() == d.size() || u[d.size()] == L'.')) return true;
+        }
+    
+        // COM1..COM9, LPT1..LPT9
+        if (u.size() >= 4) {
+            if ((u.rfind(L"COM", 0) == 0 || u.rfind(L"LPT", 0) == 0) &&
+                u[3] >= L'1' && u[3] <= L'9' &&
+                (u.size() == 4 || u[4] == L'.')) {
+                return true;
+            }
+        }
+    
+        return false;
+    }
+
+    // 检查是否包含非法字符或非法结尾（每个组件）
+    static inline bool windows_component_invalid(const std::wstring& comp) {
+        if (comp.empty()) return false; // 空组件（如根分隔）由外层忽略
+    
+        // 组件不能以空格或句点结尾
+        if (comp.back() == L' ' || comp.back() == L'.') return true;
+    
+        for (wchar_t wc : comp) {
+            if (wc < 0x20) return true;
+            switch (wc) {
+                case L'<': case L'>': case L':': case L'"':
+                case L'|': case L'?': case L'*':
+                    return true;
+                default: break;
+            }
+        }
+    
+        return is_windows_reserved_device(comp);
+    }
+#endif // _WIN32
+
+/**
+* @brief 函数功能：校验文件系统路径字符串是否合法（本地路径，不允许 URL）
+*
+* 功能概述：
+*  - 检查路径是否为空。
+*  - 检查路径长度是否超过 4096 个 UTF-8 字节。
+*  - 检查是否为 URL（拒绝 schema:// 前缀）。
+*  - 检查是否包含 NUL 或不可见控制字符。
+*  - 将字符串解析为 `std::filesystem::path`（通过 `fs::u8path`）并进行规范化 `lexically_normal()`。
+*  - 若规范化结果仍包含 `..` 组件，判定为路径穿越（path traversal）风险。
+*  - 检查路径是否存在（文件或目录），若不存在返回错误。
+*  - Windows 平台：逐组件检查非法字符与保留设备名。
+*
+* @param path           输入的路径字符串（UTF-8 编码）。
+* @param error_message  输出参数，当返回 false 时携带具体的错误原因描述。
+* @return               合法且存在时返回 true；否则返回 false，并在 error_message 中给出原因。
+*
+* @note
+* - 本函数会访问文件系统以检查存在性（`fs::exists`），因此结果受当前工作目录、权限与挂载等影响。
+* - Path traversal 检查为语义层面：仅基于字符串规范化判断是否残留 `..`，不解析符号链接。
+* - Windows 下通过 `fs::u8path` 将 UTF-8 转宽字节，能正确处理中文/日文等 Unicode 路径。
+*
+* @par 正确示例（返回 true）
+* @code{.cpp}
+* std::string err;
+* validatePath("C:/数据/报告.pdf", err);                       // true（Windows）
+* validatePath(R"(D:\项目\子目录\配置.json)", err);             // true（Windows）
+* validatePath("/home/user/ドキュメント/集計.csv", err);        // true（Linux/macOS）
+* validatePath("./相对路径/設定.yaml", err);                    // true（相对路径）
+* @endcode
+*
+* @par 错误示例（返回 false）
+* @code{.cpp}
+* std::string err;
+* validatePath("", err);                                     // 空路径
+* validatePath(std::string(5000, 'a'), err);                 // 路径过长（>4096 字节）
+* validatePath("../etc/passwd", err);                        // 路径穿越
+* validatePath("file://C:/secret.txt", err);                 // URL 形式
+* validatePath("C:\\con\\data.txt", err);                    // Windows 设备名
+* validatePath("C:\\bad<name>.txt", err);                    // Windows 非法字符
+* validatePath("/tmp/not_exists_日语名.txt", err);           // 路径不存在
+* @endcode
+*/
 bool validatePath(const std::string& path, std::string& error_message) {
-    // 路径是否为空
+    // 1) 为空？
     if (path.empty()) {
         error_message = "Path is required";
         LOG_WRN("validatePath: Empty path provided");
         return false;
     }
-    // 路径长度是否过长
-    if (path.length() > 4096) {
-        error_message = "Path too long (maximum 4096 characters)";
+
+    // 2) 拒绝 URL（仅允许本地文件系统路径）
+    if (looks_like_url(path)) {
+        error_message = "URL is not allowed; local filesystem paths only";
+        LOG_WRN("validatePath: URL detected: %s", path.c_str());
         return false;
     }
+
+    // 3) 快速过滤 NUL/控制字符
+    if (contains_nul_or_control(path)) {
+        error_message = "Path contains NUL or control characters";
+        LOG_WRN("validatePath: Control/NUL characters in path: %s", path.c_str());
+        return false;
+    }
+
+    // 4) 长度限制（按 UTF-8 字节数）
+    if (path.size() > 4096) {
+        error_message = "Path too long (maximum 4096 bytes in UTF-8)";
+        LOG_WRN("validatePath: Over-length path (len=%zu): %s", path.size(), path.c_str());
+        return false;
+    }
+
+    fs::path p;
+    fs::path norm;
     try {
-        std::filesystem::path p = fs::u8path(path);
-        // 仅做“语义穿越”检查：规范化后若仍含有“..”组件，判为不安全
-        auto norm = p.lexically_normal();
+        // 5) 将 UTF-8 转为本机路径对象（Windows 下转宽字节）
+        p = fs::u8path(path);
+
+        // 6) 语义规范化，不触发 IO
+        norm = p.lexically_normal();
+
+        // 7) Path traversal：规范化后若仍含 ".." 组件，则拒绝
         for (const auto& part : norm) {
             if (part == "..") {
                 error_message = "Path traversal not allowed";
-                LOG_WRN("validatePath: Path traversal detected after normalize: %s", path.c_str());
+                LOG_WRN("validatePath: Traversal after normalize: %s", path.c_str());
                 return false;
             }
         }
-        // 如需限制到某根目录，可在此比较 norm 是否以允许前缀开头
+
+#ifdef _WIN32
+        // 8) Windows 组件级合法性检查（非法字符 / 设备名 / 结尾空格点）
+        // 注意：跳过根名与根目录部分，仅检查普通组件
+        for (const auto& part : norm) {
+            // 根名如 "C:" 或 "\\server\share" 的组件由 filesystem 处理，这里只检查普通名称
+            if (part.native().empty()) continue;
+            const std::wstring comp = part.native();
+
+            // 跳过分隔或根组件（例如 "\"）
+            if (comp == L"\\" || comp == L"/") continue;
+
+            if (windows_component_invalid(comp)) {
+                error_message = "Invalid Windows path component (reserved or contains forbidden characters)";
+                LOG_WRN("validatePath: Windows invalid component in '%s'", path.c_str());
+                return false;
+            }
+        }
+#endif
+
     } catch (const std::exception& e) {
         error_message = std::string("Invalid path: ") + e.what();
-        LOG_WRN("validatePath: Exception for path '%s': %s", path.c_str(), e.what());
+        LOG_WRN("validatePath: Exception for '%s': %s", path.c_str(), e.what());
         return false;
     }
+
+    // 9) 必须存在（文件或目录）
+    std::error_code ec;
+    const bool exists = fs::exists(norm, ec);
+    if (ec) {
+        error_message = std::string("Filesystem error: ") + ec.message();
+        LOG_WRN("validatePath: exists() error for '%s': %s", path.c_str(), ec.message().c_str());
+        return false;
+    }
+    if (!exists) {
+        error_message = "Path does not exist";
+        LOG_WRN("validatePath: Not exists: %s", path.c_str());
+        return false;
+    }
+
     return true;
 }
 #pragma endregion
@@ -414,8 +567,6 @@ bool readFileContent(const std::string& path, std::string& content) {
         return false;
     }
 }
-
-// (moved) readTextFileWithRange: now implemented in Utils::Internal
 
 bool isValidUtf8File(const std::string& path) {
     if (!fileExists(path)) {

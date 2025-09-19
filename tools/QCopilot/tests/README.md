@@ -104,7 +104,7 @@ qcopilot_add_test(test_<name> test_support.h <source>.cpp)
 
 - 文件系统与搜索
   - `fileExists`、`is_regular_readable_file`、`readFileContent`、`writeFileContent`、`appendFileContent`、`listDirectory`、`readTextFileWithRange`。
-  - `matchPattern`、`globFiles`、`searchInFileRegex`。
+  - `globFiles`、`searchInFileRegex`。
 
 建议保留为内部使用或谨慎开放（特定语义、易被误用或更适合由上层工具封装）：
 

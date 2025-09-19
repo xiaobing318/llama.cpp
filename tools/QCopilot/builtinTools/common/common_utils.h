@@ -11,19 +11,6 @@
 namespace BuiltinTools {
 namespace Utils {
 
-#pragma region "匹配模式相关实用函数"
-/***********************************************************
-* 1、匹配模式
-***********************************************************/
-
-// 通用实用函数 1 ：匹配模式
-bool matchPattern(
-    const std::string& text,
-    const std::string& pattern,
-    bool case_sensitive);
-
-#pragma endregion
-
 #pragma region "路径相关实用函数"
 /***********************************************************
 * 1、验证路径合法性

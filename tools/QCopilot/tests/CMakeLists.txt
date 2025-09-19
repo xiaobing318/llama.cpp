@@ -58,7 +58,6 @@ qcopilot_add_test(test_mathTools_calculate              test_support.h test_math
 qcopilot_add_test(test_common_validatePath              test_support.h test_common_validatePath.cpp)
 qcopilot_add_test(test_common_sanitizeStringForJson     test_support.h test_common_sanitizeStringForJson.cpp)
 qcopilot_add_test(test_common_getCurrentTimestamp       test_support.h test_common_getCurrentTimestamp.cpp)
-qcopilot_add_test(test_common_matchPattern              test_support.h test_common_matchPattern.cpp)
 qcopilot_add_test(test_common_isValidUtf8String         test_support.h test_common_isValidUtf8String.cpp)
 qcopilot_add_test(test_common_fileExists                test_support.h test_common_fileExists.cpp)
 qcopilot_add_test(test_common_formatFileSize            test_support.h test_common_formatFileSize.cpp)

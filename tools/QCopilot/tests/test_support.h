@@ -25,19 +25,22 @@ inline void write_binary(const fs::path &p, const std::string &bytes) {
 }
 
 struct Test {
-    int fails = 0;
+    // 用来记录测试用例总数和测试用例失败次数
+    int totalTestCases = 0;
+    int totalFailedCases = 0;
+    // 该成员函数用来通过条件来选择输出指定消息
     void check(bool cond, const std::string &msg) {
         if (!cond) {
-            ++fails;
+            ++totalFailedCases;
             std::cerr << "[FAIL] " << msg << std::endl;
         }
+        totalTestCases++;
     }
+    // 该成员函数用来输出测试成功或者失败统计情况
     int finish() const {
-        if (fails == 0) {
-            std::cout << "[OK] all checks passed" << std::endl;
-            return 0;
-        }
-        std::cerr << fails << " check(s) failed" << std::endl;
+        std::cerr << "[STATISTICS] " << totalTestCases << " check(s)" << std::endl;
+        std::cerr << "[STATISTICS] " << totalTestCases - totalFailedCases << " check(s) successed" << std::endl;
+        std::cerr << "[STATISTICS] " << totalFailedCases << " check(s) failed" << std::endl;
         return 1;
     }
 };
