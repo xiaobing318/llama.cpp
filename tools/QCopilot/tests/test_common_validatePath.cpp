@@ -24,8 +24,69 @@ fs::path getDataRoot() {
 
 // 将文件系统路径转换为 UTF-8 字符串
 std::string toUtf8(const fs::path& p) {
-    // 使用工具函数进行转换
-    return BuiltinTools::Utils::pathToUtf8String(p);
+    // Windows 平台需要手动进行宽字符到 UTF-8 的转换
+#ifdef _WIN32
+    // 使用宽字符表示当前路径以匹配 Windows API
+    const std::wstring widePath = p.wstring();
+    // 空路径直接返回空字符串以避免不必要的转换
+    if (widePath.empty()) {
+        // 返回空字符串对象作为空路径的 UTF-8 表示
+        return std::string{};
+    }
+    // 第一次调用以确定转换后缓冲区所需的字节数
+    const int sizeWithNull = WideCharToMultiByte(
+        CP_UTF8,                // 指定目标编码为 UTF-8
+        0,                      // 不使用任何附加转换标志
+        widePath.c_str(),       // 输入的宽字符路径数据
+        -1,                     // 让 API 处理以空字符结尾的字符串
+        nullptr,                // 此次调用不输出结果只计算长度
+        0,                      // 输出缓冲区长度为零表示只请求长度
+        nullptr,                // 不提供替代字符
+        nullptr                 // 不关心是否发生用了替代字符
+    );
+
+    // 如果计算结果不合法则认定转换失败
+    if (sizeWithNull <= 0) {
+        // 转换失败时返回空字符串以保持可预期行为
+        return std::string{};
+    }
+    // 分配包含终止符空间的 UTF-8 缓冲区
+    std::string utf8(static_cast<size_t>(sizeWithNull), '\0');
+    // 第二次调用执行实际的宽字符到 UTF-8 转换并返回写入字节数
+    const int written = WideCharToMultiByte(
+        CP_UTF8,                // 目标编码仍为 UTF-8
+        0,                      // 同样不启用附加标志
+        widePath.c_str(),       // 输入的宽字符数据
+        -1,                     // 使用以空字符结尾的字符串长度
+        utf8.data(),            // 写入结果到预分配的 std::string 缓冲区
+        sizeWithNull,           // 指定包含终止符的缓冲区大小
+        nullptr,                // 不提供替代字符
+        nullptr                 // 不关心替代字符是否被使用
+    );
+    // 如果写入结果只有终止符说明转换失败
+    if (written <= 1) {
+        // 返回空字符串以表示转换失败
+        return std::string{};
+    }
+    // 移除多余的终止符只保留有效 UTF-8 数据
+    utf8.resize(static_cast<size_t>(written - 1));
+    // 返回经过转换的 UTF-8 路径字符串
+    return utf8;
+
+// 其他平台可直接使用标准库提供的 UTF-8 接口
+#else
+// 如果编译器支持 char8_t 则返回 std::string 需要显式转换
+#if defined(__cpp_lib_char8_t)
+    // 获取 char8_t 形式的 UTF-8 数据
+    const std::u8string u8 = p.u8string();
+    // 将 char8_t 范围转换为标准的 std::string
+    return std::string(u8.begin(), u8.end());
+// 对于 C++17 及不支持 char8_t 的实现可以直接返回 std::string
+#else
+    // 直接返回标准库提供的 UTF-8 字符串表示
+    return p.u8string();
+#endif // 结束 char8_t 功能检测
+#endif // 结束平台分支
 }
 
 #ifdef _WIN32
@@ -87,9 +148,9 @@ int main() {
     T.check(!validatePath(missingFile, err), "针对不存在的路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对存在路径的测试应该返回 true
-    //const std::string existingFile = toUtf8(dataRoot / "通用" / "已存在文件.txt");
-    //T.check(validatePath(existingFile, err), "针对存在路径的测试没有返回 true，说明接口存在问题。");
-    //err.clear();
+    const std::string existingFile = toUtf8(dataRoot / "通用" / "已存在文件.txt");
+    T.check(validatePath(existingFile, err), "针对存在路径的测试没有返回 true，说明接口存在问题。");
+    err.clear();
     // 测试用例：针对存在路径（目录）的测试应该返回 true
     const std::string existingDir = toUtf8(dataRoot / "通用" / "已存在目录");
     T.check(validatePath(existingDir, err), "针对存在路径（目录）的测试没有返回 true，说明接口存在问题。");
@@ -147,8 +208,8 @@ int main() {
     err.clear();
     // 测试用例：针对 macOS 平台使用 Windows 平台路径的测试应该返回 false
     T.check(!validatePath("C:\\临时\\不存在.txt", err), "针对 macOS 平台使用 Windows 平台路径的测试没有返回 false，说明接口存在问题。");
-    err.clear(); 
+    err.clear();
 #endif
     // 汇总测试结果并返回退出码
-    return T.finish(); 
+    return T.finish();
 } // main
