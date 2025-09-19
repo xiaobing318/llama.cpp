@@ -127,69 +127,70 @@ int main() {
     T.check(!validatePath("https://示例.com/资源.txt", err), "针对 URL 形式路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对包含空字节路径的测试应该返回 false
-    std::string pathWithNull = dataRoot.string();
+    std::string pathWithNull = toUtf8(dataRoot); // 使用 toUtf8 提取根目录的 UTF-8 字符串表示
     pathWithNull.push_back('\0');
-    pathWithNull += "通用";
+    pathWithNull += toUtf8(fs::u8path(u8"通用")); // 追加 UTF-8 编码的“通用”目录名称
     T.check(!validatePath(pathWithNull, err), "针对包含空字节路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对包含控制字符路径的测试应该返回 false
-    std::string pathWithControl = dataRoot.string();
+    std::string pathWithControl = toUtf8(dataRoot); // 使用 UTF-8 字符串作为路径基础
     pathWithControl.push_back('\t');
-    pathWithControl += "通用";
+    pathWithControl += toUtf8(fs::u8path(u8"通用")); // 追加包含中文的目录名称
     T.check(!validatePath(pathWithControl, err), "针对包含控制字符路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对包含..路径的测试应该返回 false
-    std::string traversalAttempt = dataRoot.string();
-    traversalAttempt += "../通用";
+    std::string traversalAttempt = toUtf8(dataRoot); // 以 UTF-8 字符串形式复制根路径
+    traversalAttempt += "../"; // 追加目录遍历片段
+    traversalAttempt += toUtf8(fs::u8path(u8"通用")); // 追加目标目录名称的 UTF-8 表示
     T.check(!validatePath(traversalAttempt, err), "针对包含..路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对不存在路径的测试应该返回 false
-    const std::string missingFile = toUtf8(dataRoot / "通用" / "缺失文件.txt");
+    const std::string missingFile = toUtf8(dataRoot / fs::u8path(u8"通用") / fs::u8path(u8"缺失文件.txt")); // 通过 u8path 构建包含中文的路径
     T.check(!validatePath(missingFile, err), "针对不存在的路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对存在路径的测试应该返回 true
-    const std::string existingFile = toUtf8(dataRoot / "通用" / "已存在文件.txt");
+    const std::string existingFile = toUtf8(dataRoot / fs::u8path(u8"通用") / fs::u8path(u8"已存在文件.txt")); // 构建指向已存在文件的 UTF-8 路径
     T.check(validatePath(existingFile, err), "针对存在路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对存在路径（目录）的测试应该返回 true
-    const std::string existingDir = toUtf8(dataRoot / "通用" / "已存在目录");
+    const std::string existingDir = toUtf8(dataRoot / fs::u8path(u8"通用") / fs::u8path(u8"已存在目录")); // 构建指向已存在目录的 UTF-8 路径
     T.check(validatePath(existingDir, err), "针对存在路径（目录）的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对包含空格路径的测试应该返回 true
-    const std::string spacedFile = toUtf8(dataRoot / "通用" / "含空格 目录" / "含空格 文件.txt");
+    const std::string spacedFile = toUtf8(dataRoot / fs::u8path(u8"通用") / fs::u8path(u8"含空格 目录") / fs::u8path(u8"含空格 文件.txt")); // 构建包含空格和中文的路径
     T.check(validatePath(spacedFile, err), "针对包含空格路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对包含中文字符路径的测试应该返回 true
-    const std::string unicodeFile = toUtf8(dataRoot / "通用" / "含中文" / "子目录" / "文件.txt");
+    const std::string unicodeFile = toUtf8(dataRoot / fs::u8path(u8"通用") / fs::u8path(u8"含中文") / fs::u8path(u8"子目录") / fs::u8path(u8"文件.txt")); // 构建包含多级中文目录的路径
     T.check(validatePath(unicodeFile, err), "针对包含中文字符路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
 
     // Windows 平台特定测试
 #ifdef _WIN32
     // 测试用例：针对 Windows 平台反斜杠形式路径的测试应该返回 true
-    const std::string windowsStyleFile = toWindowsStyle(dataRoot / "Windows特定" / "已存在Windows路径.txt");
+    const std::string windowsStyleFile = toWindowsStyle(dataRoot / fs::u8path(u8"Windows特定") / fs::u8path(u8"已存在Windows路径.txt")); // 使用 u8path 组合 Windows 特定测试路径
     T.check(validatePath(windowsStyleFile, err), "针对 Windows 平台反斜杠形式路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 Windows 平台包含尖括号形式路径的测试应该返回 false
-    const std::string windowsInvalidComponent = toWindowsStyle(dataRoot / "Windows特定" / "含有<尖括号>.txt");
+    const std::string windowsInvalidComponent = toWindowsStyle(dataRoot / fs::u8path(u8"Windows特定") / fs::u8path(u8"含有<尖括号>.txt")); // 构建包含非法字符的 Windows 测试路径
     T.check(!validatePath(windowsInvalidComponent, err), "针对 Windows 平台包含尖括号形式路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 Windows 平台保留设备名相关路径的测试应该返回 false
     T.check(!validatePath("NUL.txt", err), "针对 Windows 平台保留设备名相关路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 Windows 平台以空格结尾路径的测试应该返回 false
-    const std::string trailingSpace = toWindowsStyle(dataRoot / "Windows特定" / "结尾空格 ");
+    const std::string trailingSpace = toWindowsStyle(dataRoot / fs::u8path(u8"Windows特定") / fs::u8path(u8"结尾空格 ")); // 构建以空格结尾的 Windows 测试路径
     T.check(!validatePath(trailingSpace, err), "针对 Windows 平台以空格结尾路径的测试没有返回 false，说明接口存在问题。");
     err.clear();
 
     // Linux 平台特定测试
 #elif defined(__linux__)
     // 测试用例：针对 Linux 平台存在路径的测试应该返回 true
-    const std::string linuxFile = toUtf8(dataRoot / "Linux特定" / "已存在Linux路径.txt");
+    const std::string linuxFile = toUtf8(dataRoot / fs::u8path(u8"Linux特定") / fs::u8path(u8"已存在Linux路径.txt")); // 构建 Linux 平台专用路径
     T.check(validatePath(linuxFile, err), "针对 Linux 平台存在路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 Linux 平台已存在绝对路径的测试应该返回 true
-    const std::string linuxAbsolute = toUtf8(fs::absolute(dataRoot / "Linux特定" / "已存在Linux路径.txt"));
+    const std::string linuxAbsolute = toUtf8(fs::absolute(dataRoot / fs::u8path(u8"Linux特定") / fs::u8path(u8"已存在Linux路径.txt"))); // 构建 Linux 绝对路径并转换为 UTF-8
     T.check(validatePath(linuxAbsolute, err), "针对 Linux 平台已存在绝对路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 Linux 平台使用 Windows 平台路径的测试应该返回 false
@@ -199,11 +200,11 @@ int main() {
     // macOS 平台特定测试
 #elif defined(__APPLE__)
     // 测试用例：针对 macOS 平台存在路径的测试应该返回 true
-    const std::string macFile = toUtf8(dataRoot / "macOS特定" / "已存在macOS路径.txt");
+    const std::string macFile = toUtf8(dataRoot / fs::u8path(u8"macOS特定") / fs::u8path(u8"已存在macOS路径.txt")); // 构建 macOS 平台专用路径
     T.check(validatePath(macFile, err), "针对 macOS 平台存在路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 macOS 平台已存在绝对路径的测试应该返回 true
-    const std::string macAbsolute = toUtf8(fs::absolute(dataRoot / "macOS特定" / "已存在macOS路径.txt"));
+    const std::string macAbsolute = toUtf8(fs::absolute(dataRoot / fs::u8path(u8"macOS特定") / fs::u8path(u8"已存在macOS路径.txt"))); // 构建 macOS 绝对路径并转换为 UTF-8
     T.check(validatePath(macAbsolute, err), "针对 macOS 平台已存在绝对路径的测试没有返回 true，说明接口存在问题。");
     err.clear();
     // 测试用例：针对 macOS 平台使用 Windows 平台路径的测试应该返回 false
