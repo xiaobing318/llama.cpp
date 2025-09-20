@@ -15,7 +15,8 @@ namespace common = builtin_tools::common;
 
 /*
 Note:
-1、内置工具定义中的 R"( ... )" 是 raw string literal，它里面的换行符会被直接当成字符串里的 \n 存储。最终传给 nlohmann::json 的就是一个普通的 std::string，不会破坏 JSON 结构。
+1、内置工具定义中的 R"( ... )" 是 raw string literal，它里面的换行符会被直接当成字符串里的 \n 存储。
+最终传给 nlohmann::json 的就是一个普通的 std::string，不会破坏 JSON 结构。
 */
 
 // 内部辅助函数：检查字符串是否只包含允许的字符
