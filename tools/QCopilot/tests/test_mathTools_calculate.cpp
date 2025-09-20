@@ -1,5 +1,5 @@
 #include "test_support.h"
-#include "../builtinTools/mathTools/calculate.h"
+#include "../builtin_tools/mathTools/calculate.h"
 #include <cmath>
 
 using json = nlohmann::ordered_json;
@@ -10,14 +10,14 @@ int main(){
     qctest::Test T;
 
     auto ok = [&](const std::string &expr, double expect, double eps=1e-6){
-        auto r = BuiltinTools::MathTools::executeCalculate({{"expression", expr}});
+        auto r = BuiltinTools::MathTools::run_calculate({{"expression", expr}});
         if (!(r.value("success", false) == true)) { T.check(false, std::string("success expected: ")+expr); return; }
         qctest::expect_json_schema(r, {{"success","boolean"},{"expression","string"},{"cleaned_expression","string"},{"result","number"}}, T, "calculate schema");
         double v = r.value("result", 0.0);
         T.check(approx(v, expect, eps), std::string("result mismatch for ")+expr+", got="+std::to_string(v));
     };
     auto bad = [&](const std::string &expr){
-        auto r = BuiltinTools::MathTools::executeCalculate({{"expression", expr}});
+        auto r = BuiltinTools::MathTools::run_calculate({{"expression", expr}});
         T.check(r.value("success", true) == false, std::string("expect failure: ")+expr);
     };
 

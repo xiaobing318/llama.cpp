@@ -1,5 +1,5 @@
 #include "test_support.h"
-#include "../builtinTools/common/common_utils.h"
+#include "../builtin_tools/common/common_utils.h"
 
 using namespace BuiltinTools::Utils;
 namespace fs = std::filesystem;
@@ -8,22 +8,22 @@ int main(){
     qctest::Test T;
     fs::path root = qctest::make_temp_dir("qctest_common_encoding_");
 
-    // isValidUtf8String
-    T.check(isValidUtf8String("Hello 世界"), "isValidUtf8String ok");
-    T.check(!isValidUtf8String(std::string("ASCII") + std::string("\xC0\xAF",2)), "isValidUtf8String detects invalid");
+    // is_valid_utf8_string
+    T.check(is_valid_utf8_string("Hello 世界"), "is_valid_utf8_string ok");
+    T.check(!is_valid_utf8_string(std::string("ASCII") + std::string("\xC0\xAF",2)), "is_valid_utf8_string detects invalid");
 
-    // isLikelyBinaryString
-    T.check(!isLikelyBinaryString("abc"), "isLikelyBinaryString false on text");
-    T.check(isLikelyBinaryString(std::string("A\0B",3)), "isLikelyBinaryString true on NUL");
+    // is_likely_binaryString
+    T.check(!is_likely_binaryString("abc"), "is_likely_binaryString false on text");
+    T.check(is_likely_binaryString(std::string("A\0B",3)), "is_likely_binaryString true on NUL");
 
     // files
-    fs::path ok = root/"ok.txt"; writeFileContent(ok.u8string(), "Hello 世界");
-    fs::path bin = root/"bin.dat"; writeFileContent(bin.u8string(), std::string("AB\0CD",5));
+    fs::path ok = root/"ok.txt"; write_file_content(ok.u8string(), "Hello 世界");
+    fs::path bin = root/"bin.dat"; write_file_content(bin.u8string(), std::string("AB\0CD",5));
 
-    T.check(isValidUtf8File(ok.u8string()), "isValidUtf8File ok");
-    T.check(!isValidUtf8File(bin.u8string()), "isValidUtf8File false");
-    T.check(!isLikelyBinary(ok), "isLikelyBinary false on text file");
-    T.check(isLikelyBinary(bin), "isLikelyBinary true on binary file");
+    T.check(is_valid_utf8_file(ok.u8string()), "is_valid_utf8_file ok");
+    T.check(!is_valid_utf8_file(bin.u8string()), "is_valid_utf8_file false");
+    T.check(!is_likely_binary(ok), "is_likely_binary false on text file");
+    T.check(is_likely_binary(bin), "is_likely_binary true on binary file");
 
     return T.finish();
 }

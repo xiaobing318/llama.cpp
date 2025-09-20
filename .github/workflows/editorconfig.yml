@@ -27,3 +27,13 @@ jobs:
         with:
           version: v3.0.3
       - run: editorconfig-checker
+      - name: Check for stray metadata files
+        run: |
+          set -euo pipefail
+          matches=$(find . -type f \( -name '.DS_Store' -o -name 'Thumbs.db' -o -name '._*' \))
+          if [ -n "$matches" ]; then
+            echo "Found disallowed metadata files:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "No disallowed metadata files detected."

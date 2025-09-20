@@ -1,5 +1,5 @@
 #include "test_support.h"
-#include "../builtinTools/common/common_utils_internal.h"
+#include "../builtin_tools/common/common_utils_internal.h"
 
 using namespace BuiltinTools::Utils::Internal;
 

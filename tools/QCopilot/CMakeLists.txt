@@ -14,32 +14,39 @@ set(TARGET_SRCS
     qcopilot_utils.cpp
     qcopilot_executor.cpp
     qcopilot_builtin_tools.cpp
+    tool_registry.cpp
 )
 
 # 内置工具源文件
 set(BUILTIN_TOOLS_SRCS
     # 通用工具
-    builtinTools/common/common_utils.cpp
-    builtinTools/common/common_utils_internal.cpp
+    builtin_tools/common/common_utils_internal.cpp
+    builtin_tools/common/encoding_utils.cpp
+    builtin_tools/common/filesystem_utils.cpp
+    builtin_tools/common/io_utils.cpp
+    builtin_tools/common/json_utils.cpp
+    builtin_tools/common/string_utils.cpp
+    builtin_tools/common/time_utils.cpp
+    builtin_tools/common/tool_response.cpp
 
     # 时间工具
-    builtinTools/timeTools/get_current_time.cpp
+    builtin_tools/timeTools/get_current_time.cpp
 
     # 数学工具
-    builtinTools/mathTools/mathTools_utils.cpp
-    builtinTools/mathTools/calculate.cpp
-    builtinTools/mathTools/expression_parser.cpp
+    builtin_tools/mathTools/mathTools_utils.cpp
+    builtin_tools/mathTools/calculate.cpp
+    builtin_tools/mathTools/expression_parser.cpp
 
     # 文件工具
-    builtinTools/fileTools/read_text_lines.cpp
-    builtinTools/fileTools/write_text_file.cpp
-    builtinTools/fileTools/validate_utf8_file.cpp
+    builtin_tools/fileTools/read_text_lines.cpp
+    builtin_tools/fileTools/write_text_file.cpp
+    builtin_tools/fileTools/validate_utf8_file.cpp
 
     # 系统工具
-    builtinTools/systemTools/list_directory.cpp
-    builtinTools/systemTools/path_stat.cpp
-    builtinTools/systemTools/glob.cpp
-    builtinTools/systemTools/grep.cpp
+    builtin_tools/systemTools/list_directory.cpp
+    builtin_tools/systemTools/path_stat.cpp
+    builtin_tools/systemTools/glob.cpp
+    builtin_tools/systemTools/grep.cpp
 )
 
 # 将内置工具源文件添加到目标源文件列表
@@ -74,7 +81,7 @@ endforeach()
    - qcopilot_utils.cpp: 通用工具函数库
    - qcopilot_executor.cpp: 工具执行器核心逻辑
    - qcopilot_builtin_tools.cpp: 内置工具注册和管理（重构后的版本）
-   - builtinTools/**/*.cpp: 各个内置工具的具体实现（按功能分类模块化）
+   - builtin_tools/**/*.cpp: 各个内置工具的具体实现（按功能分类模块化）
    - 生成的前端资源头文件
 2、编译单元指的是源代码中的一个独立的文件，它可以被单独编译并生成一个目标文件，可以包含头文件、源文件和其他资源。
 ]]
@@ -89,8 +96,8 @@ add_executable(${TARGET} ${TARGET_SRCS})
 target_include_directories(${TARGET} PRIVATE
     # 向编译系统传递该头文件查找路径是为了能够包含 qcopilot_utils.h/qcopilot_executor.h 头文件
     ${CMAKE_CURRENT_SOURCE_DIR}
-    # 向编译系统传递该头文件查找路径是为了能够包含 builtinTools 目录下的头文件
-    ${CMAKE_CURRENT_SOURCE_DIR}/builtinTools
+    # 向编译系统传递该头文件查找路径是为了能够包含 builtin_tools 目录下的头文件
+    ${CMAKE_CURRENT_SOURCE_DIR}/builtin_tools
     # 向编译系统传递该头文件查找路径是为了能够包含 index.html.gz.hpp/loading.html.hpp 头文件
     ${CMAKE_CURRENT_BINARY_DIR}
     # 向编译系统传递该头文件查找路径是为了能够包含 json.hpp/json_fwd.hpp 头文件
@@ -123,12 +130,13 @@ set(QCOPILOT_DOCGEN_SRCS
     qcopilot_builtin_tools.cpp
 )
 list(APPEND QCOPILOT_DOCGEN_SRCS ${BUILTIN_TOOLS_SRCS})
+list(APPEND QCOPILOT_DOCGEN_SRCS tool_registry.cpp)
 
 add_executable(qcopilot_tool_docs ${QCOPILOT_DOCGEN_SRCS})
 
 target_include_directories(qcopilot_tool_docs PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/builtinTools
+    ${CMAKE_CURRENT_SOURCE_DIR}/builtin_tools
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/vendor/nlohmann
     ${CMAKE_SOURCE_DIR}/vendor/cpp-httplib

@@ -49,7 +49,7 @@ class LlamaState: ObservableObject {
 
         for model in defaultModels {
             let fileURL = getDocumentsDirectory().appendingPathComponent(model.filename)
-            if FileManager.default.fileExists(atPath: fileURL.path) {
+            if FileManager.default.file_exists(atPath: fileURL.path) {
 
             } else {
                 var undownloadedModel = model

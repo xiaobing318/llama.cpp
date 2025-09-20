@@ -1,0 +1,349 @@
+#include "read_text_lines.h"
+#include "../common/common_utils_internal.h"
+#include "../common/encoding_utils.h"
+#include "../common/filesystem_utils.h"
+#include "../common/io_utils.h"
+#include "../common/tool_response.h"
+
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+
+namespace fs = std::filesystem;
+
+namespace BuiltinTools {
+namespace FileTools {
+
+namespace common = builtin_tools::common;
+namespace internal = builtin_tools::internal;
+
+constexpr const char* k_tool_name = "read_text_lines";
+
+// 如果存在 UTF-8 BOM ，则跳过对应的字节
+static void skip_utf8_bom(std::istream& is) {
+    // 仅在流处于 good 状态尝试
+    if (!is.good()) return;
+    unsigned char bom[3] = {0, 0, 0};
+    std::istream::pos_type pos0 = is.tellg();
+    if (!is.read(reinterpret_cast<char*>(bom), 3)) {
+        // 不足 3 字节，复位流并退出
+        is.clear();
+        is.seekg(pos0);
+        return;
+    }
+    const bool has_bom = (bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF);
+    if (!has_bom) {
+        // 无 BOM，回退
+        is.clear();
+        is.seekg(pos0);
+    }
+}
+
+// 获取 read_text_lines 工具的定义
+ToolDefinition get_read_text_lines_definition() {
+    return {
+        "read_text_lines",
+        {
+            {"type", "function"},
+            {"function", {
+                {"name", "read_text_lines"},
+                {"description",
+                    R"(Specialized UTF-8 text file reading utility with safe 1-based line-range selection.
+Primary purpose:
+- Load UTF-8 text documents and extract exact line ranges (1-based, inclusive).
+- Always count total lines first, then validate the requested range; reads only the selected segment.
+- Focused on text content extraction. Does not attempt to parse formats or return metadata beyond what is documented.
+Recommended workflow:
+- (Optional but recommended) First validate the file encoding and type using your dedicated tools,
+  e.g., validate_utf8_file → read_text_lines, or validate_utf8_file → inspect_path → read_text_lines.
+Key notes:
+- Binary files are not supported. If enforce_utf8=true (default), a non-UTF-8 segment will cause failure.
+- Windows CRLF is normalized by removing the trailing '\r' from each line; output lines end with '\n'.
+- Large files are guarded by max_file_size_bytes to avoid accidental heavy reads.
+Parameters:
+- path (string, required): Target UTF-8 text file path (absolute or relative).
+- start_line (integer, optional, default=1): 1-based inclusive start line.
+- end_line (integer, optional, default=EOF): 1-based inclusive end line; omit or <=0 to read to end-of-file.
+- include_line_numbers (boolean, optional, default=true): If true, returns `lines` array with {no,text}.
+- enforce_utf8 (boolean, optional, default=true): Validate that the selected text is valid UTF-8.
+- max_file_size_bytes (integer, optional, default=104857600): Hard upper bound for file size (100MB by default).
+Returns:
+- ok (boolean), tool (string), path (string), encoding (string="utf-8"), enforce_utf8 (bool), include_line_numbers (bool),
+  total_lines (integer), range {start_line, end_line}, content (string), lines? (array of {no,text}).
+Examples:
+- { "path": "./README.md", "start_line": 1, "end_line": 80 }
+- { "path": "C:/logs/app.log", "start_line": 100, "include_line_numbers": false }
+- { "path": "/var/log/syslog", "end_line": 200, "max_file_size_bytes": 16777216 })"},
+                {"parameters", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"path", {{"type", "string"}, {"description", "UTF-8 text file path"}}},
+                        {"start_line", {{"type", "integer"}, {"minimum", 1}}},
+                        {"end_line", {{"type", "integer"}, {"minimum", 1}}},
+                        {"include_line_numbers", {{"type", "boolean"}, {"default", true}}},
+                        {"enforce_utf8", {{"type", "boolean"}, {"default", true}}},
+                        {"max_file_size_bytes", {{"type", "integer"}, {"minimum", 1}, {"default", 104857600}}}
+                    }},
+                    {"required", {"path"}},
+                    {"additionalProperties", false}
+                }}
+            }}
+        }
+    };
+}
+
+// 执行 read_text_lines 工具
+json run_read_text_lines(const json& args) {
+    // 提取参数并设默认值（若键不存在）
+    const std::string path = args.value("path", std::string{});
+    std::string effective_path = path;
+    int64_t  start_line = args.value("start_line", (int64_t)1);
+    int64_t  end_line   = args.value("end_line",   (int64_t)-1); // -1 => EOF
+    bool     include_line_numbers = args.value("include_line_numbers", true);
+    bool     enforce_utf8         = args.value("enforce_utf8", true);
+    uint64_t max_file_size_bytes  = args.value("max_file_size_bytes", (uint64_t)(100ULL * 1024ULL * 1024ULL));
+    const int64_t req_start = start_line;
+    const int64_t req_end   = end_line;
+
+    // 检查输入路径是否存在
+    if (path.empty()) {
+        LOG_ERR("read_text_lines: empty 'path'");
+        return common::make_error(k_tool_name, "Path is empty");
+    }
+    // 检查输入文件是否存在且可读
+    std::string path_err;
+    if (!common::is_regular_readable_file(effective_path, path_err)) {
+        // 若不存在，尝试将可能的 JSON 转义形式 \ / 归一化为 /
+        if (path_err == "Path does not exist") {
+            std::string alt = effective_path;
+            // 归一化 "\/" 为 "/"，以及多余反斜杠清理
+            std::string out; out.reserve(alt.size());
+            for (size_t i = 0; i < alt.size(); ++i) {
+                if (alt[i] == '\\' && i + 1 < alt.size() && alt[i+1] == '/') {
+                    // 跳过反斜杠，仅保留 '/'
+                    continue;
+                }
+                out.push_back(alt[i]);
+            }
+            alt.swap(out);
+            std::string re_err;
+            if (alt != path && common::is_regular_readable_file(alt, re_err)) {
+                LOG_INF("read_text_lines: normalized escaped slashes in path: '%s' -> '%s'", path.c_str(), alt.c_str());
+                effective_path = alt;
+                // 记录更正信息，后续输出
+            } else if (alt != path) {
+                LOG_WRN("read_text_lines: path normalization attempted but still invalid: '%s' -> '%s' (%s)", path.c_str(), alt.c_str(), re_err.c_str());
+            }
+        }
+        // 若仍不可读，则返回带提示的错误
+        if (!common::is_regular_readable_file(effective_path, path_err)) {
+            LOG_WRN("read_text_lines: invalid file: %s (%s)", effective_path.c_str(), path_err.c_str());
+            json err = common::make_error(k_tool_name, "Invalid file: " + effective_path + " (" + path_err + ")");
+            err["tool"] = "read_text_lines";
+            err["requested_path"] = path;
+            if (effective_path != path) err["resolved_path"] = effective_path;
+            err["messages"] = json::array({"Target file is not a readable regular file"});
+            return err;
+        }
+    }
+    // 检查文件大小是否在允许范围内
+    uintmax_t fsz = 0;
+    try { fsz = fs::file_size(common::utf8_to_path(path)); } catch (...) {}
+    if (fsz > max_file_size_bytes) {
+        LOG_WRN("read_text_lines: file too large: %s size=%ju limit=%ju", path.c_str(), (uintmax_t)fsz, (uintmax_t)max_file_size_bytes);
+        return common::make_error(k_tool_name, "File too large: " + std::to_string((uintmax_t)fsz) + " bytes (limit " + std::to_string((uintmax_t)max_file_size_bytes) + ")"
+        );
+    }
+
+    // 获取得到输入文件的总行数
+    int64_t total_lines = 0;
+    {
+        // 以 Unicode 友好方式打开，并跳过 BOM
+        std::ifstream ifs = common::open_ifstream_unicode(effective_path, std::ios::binary);
+        if (!ifs) {
+            LOG_ERR("read_text_lines: open for counting failed: %s", path.c_str());
+            return common::make_error(k_tool_name, "Failed to open file");
+        }
+        // 跳过 BOM
+        skip_utf8_bom(ifs);
+        // 逐行读取计数
+        std::string tmp;
+        while (std::getline(ifs, tmp)) {
+            // 统一处理 CRLF
+            if (!tmp.empty() && tmp.back() == '\r'){
+                tmp.pop_back();
+            }
+            ++total_lines;
+        }
+        // 如果读取过程中发生 I/O 错误，则输出错误
+        if (ifs.bad()) {
+            LOG_ERR("read_text_lines: I/O error during line counting: %s", path.c_str());
+            return common::make_error(k_tool_name, "I/O error during line counting");
+        }
+    }
+
+    // 如果是空文件不报错，直接返回空切片（content/lines 为空）
+    if (total_lines == 0) {
+        json out = common::make_success(k_tool_name);
+        out["tool"] = "read_text_lines";
+        out["path"] = path;
+        out["encoding"] = enforce_utf8 ? "utf-8" : "assumed-utf8";
+        out["enforce_utf8"] = enforce_utf8;
+        out["include_line_numbers"] = include_line_numbers;
+        out["total_lines"] = 0;
+        // 对于空文件，保持区间语义合理：end_line 规范为 0
+        out["range"] = { {"start_line", start_line}, {"end_line", 0} };
+        out["requested"] = { {"start_line", req_start}, {"end_line", req_end} };
+        out["messages"] = json::array({
+            "File is empty; no lines to return"
+        });
+        out["content"] = "";
+        if (include_line_numbers) {
+            out["lines"] = json::array();
+        }
+        return out;
+    }
+
+    // 规范化并验证行号范围（记录自动纠正与提示信息）
+    json messages = json::array();
+    json corrections = json::array();
+    bool auto_corrected = false;
+
+    if (end_line <= 0){
+        corrections.push_back({
+            {"field","end_line"},
+            {"from", end_line},
+            {"to", total_lines},
+            {"code","normalize_end_to_eof"},
+            {"reason","non-positive end_line implies EOF"}
+        });
+        end_line = total_lines;
+        auto_corrected = true;
+    }
+    if (start_line < 1) {
+        corrections.push_back({
+            {"field","start_line"},
+            {"from", start_line},
+            {"to", 1},
+            {"code","normalize_start_min"},
+            {"reason","start_line must be >= 1"}
+        });
+        start_line = 1;
+        auto_corrected = true;
+    }
+    if (end_line > total_lines) {
+        corrections.push_back({
+            {"field","end_line"},
+            {"from", end_line},
+            {"to", total_lines},
+            {"code","clamp_end_to_total"},
+            {"reason","end_line exceeds total_lines"}
+        });
+        end_line = total_lines;
+        auto_corrected = true;
+    }
+    // 起始行超过文件总行数：返回带详细提示的错误，不读取全文
+    if (start_line > total_lines) {
+        LOG_ERR("read_text_lines: start_line(%lld) > total_lines(%lld)", (long long)start_line, (long long)total_lines);
+        json err = common::make_error(k_tool_name, "start_line exceeds total lines");
+        err["tool"] = "read_text_lines";
+        err["path"] = path;
+        err["total_lines"] = total_lines;
+        err["requested"] = { {"start_line", req_start}, {"end_line", req_end} };
+        err["allowed_range"] = { {"start_line_min", 1}, {"start_line_max", total_lines}, {"end_line_min", 1}, {"end_line_max", total_lines} };
+        err["messages"] = json::array({
+            "Requested start_line is beyond end-of-file; please pick a range within [1,total_lines]"
+        });
+        return err;
+    }
+    // 检查起始行号不大于结束行号（当 total_lines>0 时有效）
+    if (start_line > end_line) {
+        LOG_ERR("read_text_lines: start_line(%lld) > end_line(%lld)", (long long)start_line, (long long)end_line);
+        json err = common::make_error(k_tool_name, "Invalid range: start_line > end_line");
+        err["tool"] = "read_text_lines";
+        err["path"] = path;
+        err["total_lines"] = total_lines;
+        err["requested"] = { {"start_line", req_start}, {"end_line", req_end} };
+        err["allowed_range"] = { {"start_line_min", 1}, {"start_line_max", total_lines}, {"end_line_min", 1}, {"end_line_max", total_lines} };
+        err["messages"] = json::array({
+            "Requested range is invalid after normalization; please ensure start_line <= end_line and both within file bounds"
+        });
+        return err;
+    }
+
+    std::vector<std::string> selected_lines;
+    std::string selection;
+    int lines_read = 0;
+    int actual_end_line = 0;
+    if (!internal::read_text_with_range(
+            effective_path,
+            static_cast<int>(start_line),
+            static_cast<int>(end_line),
+            selection,
+            lines_read,
+            actual_end_line,
+            &selected_lines)) {
+        LOG_ERR("read_text_lines: failed to read selection: %s", path.c_str());
+        return common::make_error(k_tool_name, "Failed to open file");
+    }
+
+    if (lines_read > 0 && (selection.empty() || selection.back() != '\n')) {
+        selection.push_back('\n');
+    }
+
+    // 对选定片段进行二进制与编码检测
+    if (common::is_likely_binary_string(selection)) {
+        LOG_ERR("read_text_lines: selected segment is likely binary: %s", path.c_str());
+        return common::make_error(k_tool_name, "Selected text appears to be binary");
+    }
+
+    if (enforce_utf8 && !common::is_valid_utf8_string(selection)) {
+        LOG_ERR("read_text_lines: selected segment is not valid UTF-8: %s", path.c_str());
+        return common::make_error(k_tool_name, "Selected text is not valid UTF-8");
+    }
+
+    // 组装输出
+    json out = common::make_success(k_tool_name);
+    out["tool"] = "read_text_lines";
+    out["path"] = path;
+    if (effective_path != path) {
+        out["resolved_path"] = effective_path;
+        out["auto_corrected"] = true;
+        out["corrections"] = json::array({ json{{"field","path"},{"from",path},{"to",effective_path},{"code","normalize_escaped_slashes"},{"reason","normalized escaped slashes in path"}} });
+        messages.push_back("Path was normalized from escaped form");
+    }
+    // encoding 字段在 enforce_utf8=false 时标记为 "assumed-utf8" ——
+    out["encoding"] = enforce_utf8 ? "utf-8" : "assumed-utf8";
+    out["enforce_utf8"] = enforce_utf8;
+    out["include_line_numbers"] = include_line_numbers;
+    out["total_lines"] = total_lines;
+    const int64_t realized_end = (lines_read > 0) ? actual_end_line : start_line - 1;
+    out["range"] = { {"start_line", start_line}, {"end_line", realized_end} };
+    out["requested"] = { {"start_line", req_start}, {"end_line", req_end} };
+    if (auto_corrected) {
+        out["auto_corrected"] = true;
+        out["corrections"] = std::move(corrections);
+        messages.push_back("Request parameters were auto-corrected to fit file bounds");
+    }
+
+    // 拼接 content 字段
+    out["content"] = selection;
+    // 根据需要拼接 lines 字段
+    if (include_line_numbers) {
+        json arr = json::array();
+        int64_t line_no = start_line;
+        for (const auto& line_text : selected_lines) {
+            arr.push_back({ {"no", line_no++}, {"text", line_text} });
+        }
+        out["lines"] = std::move(arr);
+    } else {
+        messages.push_back("lines array omitted as include_line_numbers=false");
+    }
+    if (!messages.empty()) out["messages"] = std::move(messages);
+    return out;
+}
+
+} // namespace FileTools
+} // namespace BuiltinTools

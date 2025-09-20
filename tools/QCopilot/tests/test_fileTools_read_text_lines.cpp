@@ -1,5 +1,5 @@
 #include "test_support.h"
-#include "../builtinTools/fileTools/read_text_lines.h"
+#include "../builtin_tools/fileTools/read_text_lines.h"
 #include "json.hpp"
 
 using json = nlohmann::ordered_json;
@@ -15,7 +15,7 @@ int main(){
     std::string content = bom + "L1\r\nL2\r\nL3\r\n";
     qctest::write_binary(p, content);
 
-    auto r1 = BuiltinTools::FileTools::executeReadTextLines({
+    auto r1 = BuiltinTools::FileTools::run_read_text_lines({
         {"path", p.u8string()},
         {"start_line", 2},
         {"end_line", 99},
@@ -34,19 +34,19 @@ int main(){
     T.check(r1["lines"].size() == 2, "lines size=2");
 
     // 错误：start_line < 1
-    auto r2 = BuiltinTools::FileTools::executeReadTextLines({{"path", p.u8string()}, {"start_line", 0}});
+    auto r2 = BuiltinTools::FileTools::run_read_text_lines({{"path", p.u8string()}, {"start_line", 0}});
     T.check(r2.value("success", true) == false, "invalid start_line rejected");
 
     // 空文件
     fs::path empty = root / "empty.txt";
     qctest::write_binary(empty, "");
-    auto r3 = BuiltinTools::FileTools::executeReadTextLines({{"path", empty.u8string()}});
+    auto r3 = BuiltinTools::FileTools::run_read_text_lines({{"path", empty.u8string()}});
     T.check(r3.value("success", false) == true && r3.value("total_lines", 1) == 0, "empty file handled");
 
     // 二进制片段（含 NUL）
     fs::path pb = root / "nul.txt";
     qctest::write_binary(pb, std::string("A\nB\0C\n", 6));
-    auto r4 = BuiltinTools::FileTools::executeReadTextLines({{"path", pb.u8string()}, {"start_line", 1}, {"end_line", 2}});
+    auto r4 = BuiltinTools::FileTools::run_read_text_lines({{"path", pb.u8string()}, {"start_line", 1}, {"end_line", 2}});
     T.check(r4.value("success", true) == false, "binary-like segment rejected");
 
     return T.finish();

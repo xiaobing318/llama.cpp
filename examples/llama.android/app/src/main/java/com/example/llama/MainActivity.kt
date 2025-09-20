@@ -62,8 +62,8 @@ class MainActivity(
                 .build()
         )
 
-        val free = Formatter.formatFileSize(this, availableMemory().availMem)
-        val total = Formatter.formatFileSize(this, availableMemory().totalMem)
+        val free = Formatter.format_file_size(this, availableMemory().availMem)
+        val total = Formatter.format_file_size(this, availableMemory().totalMem)
 
         viewModel.log("Current memory: $free / $total")
         viewModel.log("Downloads directory: ${getExternalFilesDir(null)}")

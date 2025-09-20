@@ -1,28 +1,34 @@
-# QCopilot builtinTools unit tests
+# QCopilot builtin_tools unit tests
 
 cmake_minimum_required(VERSION 3.14)
 
-# 静态库：打包 builtinTools 的实现，便于测试可复用
+# 静态库：打包 builtin_tools 的实现，便于测试可复用
 add_library(qcopilot_builtins STATIC
     ../qcopilot_utils.cpp
-    ../builtinTools/common/common_utils.cpp
-    ../builtinTools/common/common_utils_internal.cpp
-    ../builtinTools/timeTools/get_current_time.cpp
-    ../builtinTools/fileTools/read_text_lines.cpp
-    ../builtinTools/fileTools/write_text_file.cpp
-    ../builtinTools/fileTools/validate_utf8_file.cpp
-    ../builtinTools/mathTools/mathTools_utils.cpp
-    ../builtinTools/mathTools/calculate.cpp
-    ../builtinTools/mathTools/expression_parser.cpp
-    ../builtinTools/systemTools/list_directory.cpp
-    ../builtinTools/systemTools/path_stat.cpp
-    ../builtinTools/systemTools/glob.cpp
-    ../builtinTools/systemTools/grep.cpp
+    ../builtin_tools/common/common_utils_internal.cpp
+    ../builtin_tools/common/encoding_utils.cpp
+    ../builtin_tools/common/filesystem_utils.cpp
+    ../builtin_tools/common/io_utils.cpp
+    ../builtin_tools/common/json_utils.cpp
+    ../builtin_tools/common/string_utils.cpp
+    ../builtin_tools/common/time_utils.cpp
+    ../builtin_tools/common/tool_response.cpp
+    ../builtin_tools/timeTools/get_current_time.cpp
+    ../builtin_tools/fileTools/read_text_lines.cpp
+    ../builtin_tools/fileTools/write_text_file.cpp
+    ../builtin_tools/fileTools/validate_utf8_file.cpp
+    ../builtin_tools/mathTools/mathTools_utils.cpp
+    ../builtin_tools/mathTools/calculate.cpp
+    ../builtin_tools/mathTools/expression_parser.cpp
+    ../builtin_tools/systemTools/list_directory.cpp
+    ../builtin_tools/systemTools/path_stat.cpp
+    ../builtin_tools/systemTools/glob.cpp
+    ../builtin_tools/systemTools/grep.cpp
 )
 
 target_include_directories(qcopilot_builtins PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR}/../builtinTools
+    ${CMAKE_CURRENT_SOURCE_DIR}/../builtin_tools
     ${CMAKE_SOURCE_DIR}/vendor/nlohmann
 )
 
@@ -31,7 +37,7 @@ target_compile_features(qcopilot_builtins PUBLIC cxx_std_17)
 # 公共包含路径
 set(QCOPILOT_TEST_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR}/../builtinTools
+    ${CMAKE_CURRENT_SOURCE_DIR}/../builtin_tools
     ${CMAKE_SOURCE_DIR}/vendor/nlohmann
 )
 
@@ -55,40 +61,42 @@ qcopilot_add_test(test_timeTools_get_current_time       test_support.h test_time
 qcopilot_add_test(test_mathTools_calculate              test_support.h test_mathTools_calculate.cpp)
 
 # common 工具组测试
-qcopilot_add_test(test_common_validatePath              test_support.h test_common_validatePath.cpp)
-qcopilot_add_test(test_common_sanitizeStringForJson     test_support.h test_common_sanitizeStringForJson.cpp)
-qcopilot_add_test(test_common_getCurrentTimestamp       test_support.h test_common_getCurrentTimestamp.cpp)
-qcopilot_add_test(test_common_isValidUtf8String         test_support.h test_common_isValidUtf8String.cpp)
-qcopilot_add_test(test_common_fileExists                test_support.h test_common_fileExists.cpp)
-qcopilot_add_test(test_common_formatFileSize            test_support.h test_common_formatFileSize.cpp)
+qcopilot_add_test(test_common_validate_existing_path              test_support.h test_common_validate_existing_path.cpp)
+qcopilot_add_test(test_common_sanitize_string_for_json     test_support.h test_common_sanitize_string_for_json.cpp)
+qcopilot_add_test(test_common_get_current_timestamp       test_support.h test_common_get_current_timestamp.cpp)
+qcopilot_add_test(test_common_is_valid_utf8_string         test_support.h test_common_is_valid_utf8_string.cpp)
+qcopilot_add_test(test_common_file_exists                test_support.h test_common_file_exists.cpp)
+qcopilot_add_test(test_common_format_file_size            test_support.h test_common_format_file_size.cpp)
 qcopilot_add_test(test_common_is_regular_readable_file  test_support.h test_common_is_regular_readable_file.cpp)
-qcopilot_add_test(test_common_readFileContent           test_support.h test_common_readFileContent.cpp)
-qcopilot_add_test(test_common_readTextFileWithRange     test_support.h test_common_readTextFileWithRange.cpp)
-qcopilot_add_test(test_common_writeFileContent          test_support.h test_common_writeFileContent.cpp)
-qcopilot_add_test(test_common_appendFileContent         test_support.h test_common_appendFileContent.cpp)
-qcopilot_add_test(test_common_listDirectory             test_support.h test_common_listDirectory.cpp)
-qcopilot_add_test(test_common_globFiles                 test_support.h test_common_globFiles.cpp)
-qcopilot_add_test(test_common_searchInFileRegex         test_support.h test_common_searchInFileRegex.cpp)
+qcopilot_add_test(test_common_read_file_content           test_support.h test_common_read_file_content.cpp)
+qcopilot_add_test(test_common_read_text_with_range     test_support.h test_common_read_text_with_range.cpp)
+qcopilot_add_test(test_common_write_file_content          test_support.h test_common_write_file_content.cpp)
+qcopilot_add_test(test_common_append_file_content         test_support.h test_common_append_file_content.cpp)
+qcopilot_add_test(test_common_list_directory             test_support.h test_common_list_directory.cpp)
+qcopilot_add_test(test_common_glob_paths                 test_support.h test_common_glob_paths.cpp)
+qcopilot_add_test(test_common_search_in_file_regex         test_support.h test_common_search_in_file_regex.cpp)
 qcopilot_add_test(test_common_open_ifstream_unicode     test_support.h test_common_open_ifstream_unicode.cpp)
-qcopilot_add_test(test_common_utf8ToPath                test_support.h test_common_utf8ToPath.cpp)
-qcopilot_add_test(test_common_pathToUtf8String          test_support.h test_common_pathToUtf8String.cpp)
-qcopilot_add_test(test_common_isLikelyBinaryString      test_support.h test_common_isLikelyBinaryString.cpp)
-qcopilot_add_test(test_common_splitString               test_support.h test_common_splitString.cpp)
-qcopilot_add_test(test_common_trimString                test_support.h test_common_trimString.cpp)
-qcopilot_add_test(test_common_joinStrings               test_support.h test_common_joinStrings.cpp)
-qcopilot_add_test(test_common_createErrorResponse       test_support.h test_common_createErrorResponse.cpp)
-qcopilot_add_test(test_common_createSuccessResponse     test_support.h test_common_createSuccessResponse.cpp)
-qcopilot_add_test(test_common_safeParseJson             test_support.h test_common_safeParseJson.cpp)
-qcopilot_add_test(test_common_formatJson                test_support.h test_common_formatJson.cpp)
-qcopilot_add_test(test_common_getCurrentTimeMs          test_support.h test_common_getCurrentTimeMs.cpp)
-qcopilot_add_test(test_common_formatTimeStamp           test_support.h test_common_formatTimeStamp.cpp)
-qcopilot_add_test(test_common_isValidUtf8File           test_support.h test_common_isValidUtf8File.cpp)
-qcopilot_add_test(test_common_isLikelyBinary            test_support.h test_common_isLikelyBinary.cpp)
+qcopilot_add_test(test_common_utf8_to_path                test_support.h test_common_utf8_to_path.cpp)
+qcopilot_add_test(test_common_path_to_utf8_string          test_support.h test_common_path_to_utf8_string.cpp)
+qcopilot_add_test(test_common_is_likely_binaryString      test_support.h test_common_is_likely_binaryString.cpp)
+qcopilot_add_test(test_common_split_string               test_support.h test_common_split_string.cpp)
+qcopilot_add_test(test_common_trim_string                test_support.h test_common_trim_string.cpp)
+qcopilot_add_test(test_common_join_strings               test_support.h test_common_join_strings.cpp)
+qcopilot_add_test(test_common_prepare_writable_path      test_support.h test_common_prepare_writable_path.cpp)
+qcopilot_add_test(test_common_make_error       test_support.h test_common_make_error.cpp)
+qcopilot_add_test(test_common_make_success     test_support.h test_common_make_success.cpp)
+qcopilot_add_test(test_common_tool_response             test_support.h test_common_tool_response.cpp)
+qcopilot_add_test(test_common_safe_parse_json             test_support.h test_common_safe_parse_json.cpp)
+qcopilot_add_test(test_common_format_json                test_support.h test_common_format_json.cpp)
+qcopilot_add_test(test_common_get_current_time_ms          test_support.h test_common_get_current_time_ms.cpp)
+qcopilot_add_test(test_common_format_timestamp           test_support.h test_common_format_timestamp.cpp)
+qcopilot_add_test(test_common_is_valid_utf8_file           test_support.h test_common_is_valid_utf8_file.cpp)
+qcopilot_add_test(test_common_is_likely_binary            test_support.h test_common_is_likely_binary.cpp)
 qcopilot_add_test(test_common_utils_internal_to_lower_unsafe        test_support.h test_common_utils_internal_to_lower_unsafe.cpp)
 qcopilot_add_test(test_common_utils_internal_normalize_case         test_support.h test_common_utils_internal_normalize_case.cpp)
 qcopilot_add_test(test_common_utils_internal_slashify               test_support.h test_common_utils_internal_slashify.cpp)
-qcopilot_add_test(test_common_utils_internal_matchCharClass         test_support.h test_common_utils_internal_matchCharClass.cpp)
-qcopilot_add_test(test_common_utils_internal_globSegmentMatch       test_support.h test_common_utils_internal_globSegmentMatch.cpp)
-qcopilot_add_test(test_common_utils_internal_splitPatternSegments   test_support.h test_common_utils_internal_splitPatternSegments.cpp)
+qcopilot_add_test(test_common_utils_internal_match_char_class         test_support.h test_common_utils_internal_match_char_class.cpp)
+qcopilot_add_test(test_common_utils_internal_glob_segment_match       test_support.h test_common_utils_internal_glob_segment_match.cpp)
+qcopilot_add_test(test_common_utils_internal_split_pattern_segments   test_support.h test_common_utils_internal_split_pattern_segments.cpp)
 qcopilot_add_test(test_common_utils_internal_append_replacement_char test_support.h test_common_utils_internal_append_replacement_char.cpp)
 qcopilot_add_test(test_common_utils_internal_is_cont                test_support.h test_common_utils_internal_is_cont.cpp)

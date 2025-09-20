@@ -26,7 +26,7 @@ struct DownloadButton: View {
         self.filename = filename
 
         let fileURL = DownloadButton.getFileURL(filename: filename)
-        status = FileManager.default.fileExists(atPath: fileURL.path) ? "downloaded" : "download"
+        status = FileManager.default.file_exists(atPath: fileURL.path) ? "downloaded" : "download"
     }
 
     private func download() {
@@ -85,7 +85,7 @@ struct DownloadButton: View {
             } else if status == "downloaded" {
                 Button(action: {
                     let fileURL = DownloadButton.getFileURL(filename: filename)
-                    if !FileManager.default.fileExists(atPath: fileURL.path) {
+                    if !FileManager.default.file_exists(atPath: fileURL.path) {
                         download()
                         return
                     }
@@ -108,7 +108,7 @@ struct DownloadButton: View {
             if newValue {
                 downloadTask?.cancel()
                 let fileURL = DownloadButton.getFileURL(filename: filename)
-                status = FileManager.default.fileExists(atPath: fileURL.path) ? "downloaded" : "download"
+                status = FileManager.default.file_exists(atPath: fileURL.path) ? "downloaded" : "download"
             }
         }
     }

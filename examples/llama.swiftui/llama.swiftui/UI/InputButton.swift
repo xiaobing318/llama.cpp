@@ -101,7 +101,7 @@ struct InputButton: View {
             } else if status == "downloaded" {
                 Button(action: {
                     let fileURL = InputButton.getFileURL(filename: self.filename)
-                    if !FileManager.default.fileExists(atPath: fileURL.path) {
+                    if !FileManager.default.file_exists(atPath: fileURL.path) {
                         download()
                         return
                     }
@@ -124,7 +124,7 @@ struct InputButton: View {
             if newValue {
                 downloadTask?.cancel()
                 let fileURL = InputButton.getFileURL(filename: self.filename)
-                status = FileManager.default.fileExists(atPath: fileURL.path) ? "downloaded" : "download"
+                status = FileManager.default.file_exists(atPath: fileURL.path) ? "downloaded" : "download"
             }
         }
     }

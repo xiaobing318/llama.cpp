@@ -1,6 +1,6 @@
 # QCopilot 内置工具单元测试说明
 
-本目录提供对 `tools/QCopilot/builtinTools` 与 `common` 模块的全面单元测试，目标：
+本目录提供对 `tools/QCopilot/builtin_tools` 与 `common` 模块的全面单元测试，目标：
 
 - 解耦 WebUI 行为与工具功能验证（缩短定位时间，降低耦合）。
 - 跨平台（Windows 10/11、Ubuntu 22.04/24.04、macOS 15.6）一致性验证，重点覆盖：路径（含中文）、编码、权限、遍历等差异点。
@@ -9,7 +9,7 @@
 ## 组织架构
 
 - 静态库 `qcopilot_builtins`
-  - 打包 builtinTools 与 common 的实现文件，供测试目标链接复用。
+  - 打包 builtin_tools 与 common 的实现文件，供测试目标链接复用。
   - 位置：`tools/QCopilot/tests/CMakeLists.txt`
 
 - 测试目标命名规范
@@ -59,7 +59,7 @@ ctest --test-dir build --output-on-failure -R test_mathTools_
 查看单个测试输出：
 
 ```bash
-ctest --test-dir build -R test_common_validatePath -V
+ctest --test-dir build -R test_common_validate_existing_path -V
 
 或使用提供的跨平台脚本快速构建与测试：
 
@@ -80,58 +80,58 @@ qcopilot_add_test(test_<name> test_support.h <source>.cpp)
 ```
 
 3. 在源文件中：
-   - 引入对应头文件（例如 `../builtinTools/systemTools/glob.h` 或 `../builtinTools/common/common_utils.h`）。
-   - 构造 JSON 参数，调用 `executeXxx(args)`（工具）或直接调用函数（common）。
+   - 引入对应头文件（例如 `../builtin_tools/systemTools/glob.h` 或 `../builtin_tools/common/common_utils.h`）。
+   - 构造 JSON 参数，调用 `run_<tool>(args)`（工具）或直接调用函数（common）。
    - 使用 `qctest::Test` 的 `check` 断言，返回 `T.finish()` 作为进程退出码。
    - 涉及文件系统时，使用 `std::filesystem::u8path` 和中文路径进行覆盖验证。
 
 ## 开放接口建议（common 模块）
 
-经对 builtinTools 全量工具与 common 依赖关系梳理，建议对外开放以下接口（稳定、跨平台、通用性强）：
+经对 builtin_tools 全量工具与 common 依赖关系梳理，建议对外开放以下接口（稳定、跨平台、通用性强）：
 
 - 路径与编码
-  - `utf8ToPath`、`pathToUtf8String`：统一跨平台 UTF-8 ↔ path 转换（Windows 宽字符，Linux/macOS UTF-8）。
+  - `utf8_to_path`、`path_to_utf8_string`：统一跨平台 UTF-8 ↔ path 转换（Windows 宽字符，Linux/macOS UTF-8）。
   - `open_ifstream_unicode`：以 UTF-8 友好方式打开文件流。
-  - `sanitizeStringForJson`、`isValidUtf8String`、`isValidUtf8File`、`isLikelyBinary`、`isLikelyBinaryString`。
-  - `validatePath`：路径安全校验（长度、语义穿越）。
+  - `sanitize_string_for_json`、`is_valid_utf8_string`、`is_valid_utf8_file`、`is_likely_binary`、`is_likely_binary_string`。
+  - `validate_existing_path`（读）与 `prepare_writable_path`（写）：路径安全校验、非法字符检测与父目录验证。
 
 - 字符串与 JSON
-  - `splitString`、`trimString`、`joinStrings`。
-  - `createErrorResponse`、`createSuccessResponse`、`safeParseJson`、`formatJson`（统一返回格式）。
+  - `split_string`、`trim_string`、`join_strings`。
+  - `make_error`、`make_success`、`safe_parse_json`、`format_json`（统一返回格式）。
 
 - 时间
-  - `getCurrentTimestamp`、`getCurrentTimeMs`、`formatTimeStamp`。
+  - `get_current_timestamp`、`get_current_time_ms`、`format_timestamp`。
 
 - 文件系统与搜索
-  - `fileExists`、`is_regular_readable_file`、`readFileContent`、`writeFileContent`、`appendFileContent`、`listDirectory`、`readTextFileWithRange`。
-  - `globFiles`、`searchInFileRegex`。
+  - `file_exists`、`is_regular_readable_file`、`read_file_content`、`write_file_content`、`append_file_content`、`list_directory`、`read_text_with_range`。
+  - `glob_paths`、`search_in_file_regex`。
 
 建议保留为内部使用或谨慎开放（特定语义、易被误用或更适合由上层工具封装）：
 
-- `readTextFileWithRange`：虽通用，但上层工具（如 `read_text_lines`）已做更完整的 BOM/CRLF/UTF-8/二进制片段处理与参数校验，直接开放容易跳过这些安全约束。建议提供“高阶工具”优先，`readTextFileWithRange` 面向内部复用。
-- `searchInFileRegex`：返回结构稳定，但其正则风格、大小写行为、匹配上限等在工具层有更明确协议（如 `grep`）。若开放，建议明确行为契约与限制。
+- `read_text_with_range`：虽通用，但上层工具（如 `read_text_lines`）已做更完整的 BOM/CRLF/UTF-8/二进制片段处理与参数校验，直接开放容易跳过这些安全约束。建议提供“高阶工具”优先，`read_text_with_range` 面向内部复用。
+- `search_in_file_regex`：返回结构稳定，但其正则风格、大小写行为、匹配上限等在工具层有更明确协议（如 `grep`）。若开放，建议明确行为契约与限制。
 
 > 说明：以上分类并非强制，仅为 API 稳定性与可维护性建议，可结合业务场景选择性开放。
 
 内部接口说明：
 
-- `readTextFileWithRange` 已迁移至 `builtinTools/common/common_utils_internal.h`，标记为内部接口，仅供内部复用与单测验证。
-  业务逻辑中请优先使用 `FileTools::read_text_lines` 工具，以获得更完整的 BOM/CRLF/UTF‑8/二进制片段校验与错误处理。
+- `read_text_with_range` 已迁移至 `builtin_tools/common/common_utils_internal.h`，标记为内部接口，仅供内部复用与单测验证。
+  业务逻辑中请优先使用 `FileTools::run_read_text_lines` 工具，以获得更完整的 BOM/CRLF/UTF‑8/二进制片段校验与错误处理。
 
 ## 设计准则与覆盖要点
 
 - 一函数一测试文件：降低认知负担，便于快速定位失败点。
 - 覆盖常见场景与关键边界：空/非法输入、中文路径、BOM/CRLF、NUL 字节、权限拒绝、递归遍历、大小写敏感等。
-- 保持 JSON 输出稳定：使用 `createSuccessResponse`/`createErrorResponse` 与 `formatJson`，便于自动化检查。
-- 跨平台一致性：统一使用 `fs::u8path`、`pathToUtf8String` 序列化路径字段。
+- 保持 JSON 输出稳定：使用 `make_success`/`make_error` 与 `format_json`，便于自动化检查。
+- 跨平台一致性：统一使用 `fs::u8path`、`path_to_utf8_string` 序列化路径字段。
 
 ## 常见问题
 
 - Windows 上中文路径打不开？
-  - 所有文件流打开统一使用 `open_ifstream_unicode`，路径构造使用 `utf8ToPath`，避免 CP_ACP 乱码问题。
+  - 所有文件流打开统一使用 `open_ifstream_unicode`，路径构造使用 `utf8_to_path`，避免 CP_ACP 乱码问题。
 
 - 目录遍历出现权限异常？
-  - `globFiles` 与目录枚举使用 `directory_options::skip_permission_denied`，测试中避免失败。
+  - `glob_paths` 与目录枚举使用 `directory_options::skip_permission_denied`，测试中避免失败。
 
 - 为什么禁止在 common 混测多个函数？
   - 便于新人理解“一个文件一个接口”的映射关系；失败时快速定位；便于按需挑选/重跑。

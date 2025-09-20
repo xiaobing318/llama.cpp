@@ -110,28 +110,75 @@ Perform basic mathematical calculations.
 **Parameters:**
 - `expression` (string, required): Mathematical expression to evaluate
 
-### 3. read_file
-Read contents of a file.
+### 3. read_text_lines
+Read a UTF-8 text file by line range with BOM/CRLF normalization and optional UTF-8 enforcement.
 
 **Parameters:**
-- `path` (string, required): Path to the file
-- `encoding` (string, optional): File encoding (default: "utf-8")
+- `path` (string, required): Target file path
+- `start_line` (integer, optional): 1-based inclusive start line (default 1)
+- `end_line` (integer, optional): inclusive end line, `<=0` means EOF
+- `include_line_numbers` (bool, optional): Include `{no,text}` array (default true)
+- `enforce_utf8` (bool, optional): Validate UTF-8 (default true)
+- `max_file_size_bytes` (integer, optional): Size guard (default 100 MB)
 
-### 4. write_file
-Write content to a file.
-
-**Parameters:**
-- `path` (string, required): Path to the file
-- `content` (string, required): Content to write
-- `append` (bool, optional): Append to existing file (default: false)
-
-### 5. list_files
-List files in a directory.
+### 4. write_text_file
+Write UTF-8 text content to a file with append/overwrite support and safe path validation.
 
 **Parameters:**
-- `directory` (string, optional): Directory path (default: ".")
-- `pattern` (string, optional): File pattern filter (default: "*")
-- `recursive` (bool, optional): List recursively (default: false)
+- `path` (string, required): Target file path (parent directory must exist)
+- `content` (string, required): UTF-8 text content
+- `append` (bool, optional): Append instead of overwrite (default false)
+
+### 5. validate_utf8_file
+Verify whether a file is valid UTF-8 text.
+
+**Parameters:**
+- `path` (string, required): File path for validation
+
+### 6. list_directory
+Enumerate directory entries with options for recursion, hidden files, and size reporting.
+
+**Parameters:**
+- `path` (string, required): Directory path
+- `recursive` (bool, optional): Recurse into subdirectories (default false)
+- `show_hidden` (bool, optional): Include hidden/system entries (default false)
+- `include_size` (bool, optional): Include file sizes/human_size (default true)
+- `max_results` (integer, optional): Soft cap on results (default 50000)
+
+### 7. path_stat
+Inspect a path and return metadata such as type, size, timestamps, permissions, and optional text statistics.
+
+**Parameters:**
+- `path` (string, required): Path to inspect
+- `detailed` (bool, optional): Enable extended metadata (default false)
+- `text_analysis` (bool, optional): Count lines/chars for text files (default true)
+
+### 8. grep
+Search for patterns in files or directory trees. Supports regex/literal modes, glob filtering, and match limits.
+
+**Parameters:**
+- `path` (string, required): File or directory to search
+- `pattern` (string, required): Search pattern
+- `use_regex` (bool, optional): Treat pattern as ECMAScript regex (default false)
+- `case_sensitive` (bool, optional): Case-sensitive search (default true)
+- `line_numbers` (bool, optional): Include line numbers (default true)
+- `recursive` (bool, optional): Recurse into directories (default false)
+- `file_glob` (string, optional): Glob filter for files (default `*` or `**/*` when recursive)
+- `follow_symlinks` (bool, optional): Follow directory symlinks (default false)
+- `show_hidden` (bool, optional): Include hidden files (default false)
+- `max_matches` (integer, optional): Soft cap on total matches (default 10000)
+
+### 9. glob
+Expand shell-style patterns (`*`, `?`, `[]`, `**`) under a base directory.
+
+**Parameters:**
+- `base_dir` (string, required): Base directory for expansion
+- `pattern` (string, required): Glob pattern
+- `include_directories` (bool, optional): Include matching directories (default false)
+- `follow_symlinks` (bool, optional): Follow directory symlinks (default false)
+- `case_sensitive` (bool, optional): Pattern matching sensitivity (default platform-dependent)
+- `show_hidden` (bool, optional): Include hidden files/directories (default false)
+- `max_results` (integer, optional): Soft cap on expanded entries (default 50)
 
 ## Tool Calling Flow
 
