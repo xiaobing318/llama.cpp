@@ -1,6 +1,6 @@
 #pragma once
 
-#include "builtin_tools/common/tool_types.h"
+#include "builtin-tools/common/types.h"
 
 #include <vector>
 
@@ -8,7 +8,7 @@ namespace BuiltinTools {
 
 struct ToolRegistryEntry {
     const char* name;
-    builtin_tools::ToolDefinition (*definition)();
+    BuiltinTools::Types::ToolDefinition (*definition)();
     json (*runner)(const json&);
 };
 

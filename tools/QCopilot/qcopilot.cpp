@@ -10,8 +10,8 @@
  */
 
 // 1. 相关项目头文件
-#include "qcopilot_utils.h"
-#include "qcopilot_executor.h"
+#include "qcopilot-utils.h"
+#include "qcopilot-executor.h"
 
 // 2. llama.cpp项目头文件
 #include "common.h"

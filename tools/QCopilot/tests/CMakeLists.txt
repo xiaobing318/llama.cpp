@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.14)
 
 # 静态库：打包 builtin_tools 的实现，便于测试可复用
 add_library(qcopilot_builtins STATIC
-    ../qcopilot_utils.cpp
+    ../qcopilot-utils.cpp
     ../builtin_tools/common/common_utils_internal.cpp
     ../builtin_tools/common/encoding_utils.cpp
     ../builtin_tools/common/filesystem_utils.cpp

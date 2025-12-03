@@ -1,5 +1,5 @@
-#include "qcopilot_executor.h"
-#include "qcopilot_utils.h"
+#include "qcopilot-executor.h"
+#include "qcopilot-utils.h"
 
 #include <algorithm>
 #include <chrono>

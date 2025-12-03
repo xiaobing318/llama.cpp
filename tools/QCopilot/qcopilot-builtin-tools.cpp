@@ -1,12 +1,12 @@
-#include "qcopilot_builtin_tools.h"
-#include "qcopilot_utils.h"
-#include "tool_registry.h"
+#include "qcopilot-builtin-tools.h"
+#include "qcopilot-utils.h"
+#include "tools-registry.h"
 
 namespace BuiltinTools {
 
 // 获取内置工具的定义
-std::vector<ToolDefinition> getBuiltinToolDefinitions() {
-    std::vector<ToolDefinition> definitions;
+std::vector<BuiltinTools::Types::ToolDefinition> getBuiltinToolDefinitions() {
+    std::vector<BuiltinTools::Types::ToolDefinition> definitions;
     const auto& registry = getToolRegistry();
     definitions.reserve(registry.size());
     for (const auto& entry : registry) {
@@ -16,8 +16,8 @@ std::vector<ToolDefinition> getBuiltinToolDefinitions() {
 }
 
 // 获取内置工具的执行器函数映射
-std::map<std::string, ToolFunction> getBuiltinToolFunctions() {
-    std::map<std::string, ToolFunction> functions;
+std::map<std::string, BuiltinTools::Types::ToolFunction> getBuiltinToolFunctions() {
+    std::map<std::string, BuiltinTools::Types::ToolFunction> functions;
     for (const auto& entry : getToolRegistry()) {
         functions[entry.name] = entry.runner;
     }

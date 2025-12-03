@@ -11,42 +11,42 @@ set(TARGET qcopilot)
 ]]
 set(TARGET_SRCS
     qcopilot.cpp
-    qcopilot_utils.cpp
-    qcopilot_executor.cpp
-    qcopilot_builtin_tools.cpp
-    tool_registry.cpp
+    qcopilot-utils.cpp
+    qcopilot-executor.cpp
+    qcopilot-builtin-tools.cpp
+    tools-registry.cpp
 )
 
 # 内置工具源文件
 set(BUILTIN_TOOLS_SRCS
     # 通用工具
-    builtin_tools/common/common_utils_internal.cpp
-    builtin_tools/common/encoding_utils.cpp
-    builtin_tools/common/filesystem_utils.cpp
-    builtin_tools/common/io_utils.cpp
-    builtin_tools/common/json_utils.cpp
-    builtin_tools/common/string_utils.cpp
-    builtin_tools/common/time_utils.cpp
-    builtin_tools/common/tool_response.cpp
+    builtin-tools/common/common-response.cpp
+    #builtin-tools/common/common_utils_internal.cpp
+    #builtin-tools/common/encoding_utils.cpp
+    #builtin-tools/common/filesystem_utils.cpp
+    #builtin-tools/common/io_utils.cpp
+    #builtin-tools/common/json_utils.cpp
+    #builtin-tools/common/string_utils.cpp
+    #builtin-tools/common/time_utils.cpp
 
     # 时间工具
-    builtin_tools/timeTools/get_current_time.cpp
+    #builtin-tools/timeTools/get_current_time.cpp
 
     # 数学工具
-    builtin_tools/mathTools/mathTools_utils.cpp
-    builtin_tools/mathTools/calculate.cpp
-    builtin_tools/mathTools/expression_parser.cpp
+    builtin-tools/MathTools/MathTools-utils.cpp
+    builtin-tools/MathTools/expression-parser.cpp
+    builtin-tools/MathTools/MathTools-basic-math-calculator.cpp
 
     # 文件工具
-    builtin_tools/fileTools/read_text_lines.cpp
-    builtin_tools/fileTools/write_text_file.cpp
-    builtin_tools/fileTools/validate_utf8_file.cpp
+    #builtin-tools/fileTools/read_text_lines.cpp
+    #builtin-tools/fileTools/write_text_file.cpp
+    #builtin-tools/fileTools/validate_utf8_file.cpp
 
     # 系统工具
-    builtin_tools/systemTools/list_directory.cpp
-    builtin_tools/systemTools/path_stat.cpp
-    builtin_tools/systemTools/glob.cpp
-    builtin_tools/systemTools/grep.cpp
+    #builtin-tools/systemTools/list_directory.cpp
+    #builtin-tools/systemTools/path_stat.cpp
+    #builtin-tools/systemTools/glob.cpp
+    #builtin-tools/systemTools/grep.cpp
 )
 
 # 将内置工具源文件添加到目标源文件列表
@@ -78,10 +78,10 @@ endforeach()
 #[[
 1、该目标包含了以下编译单元：
    - qcopilot.cpp: 主程序入口和HTTP服务器
-   - qcopilot_utils.cpp: 通用工具函数库
-   - qcopilot_executor.cpp: 工具执行器核心逻辑
-   - qcopilot_builtin_tools.cpp: 内置工具注册和管理（重构后的版本）
-   - builtin_tools/**/*.cpp: 各个内置工具的具体实现（按功能分类模块化）
+   - qcopilot-utils.cpp: 通用工具函数库
+   - qcopilot-executor.cpp: 工具执行器核心逻辑
+   - qcopilot-builtin-tools.cpp: 内置工具注册和管理（重构后的版本）
+   - builtin-tools/**/*.cpp: 各个内置工具的具体实现（按功能分类模块化）
    - 生成的前端资源头文件
 2、编译单元指的是源代码中的一个独立的文件，它可以被单独编译并生成一个目标文件，可以包含头文件、源文件和其他资源。
 ]]
@@ -94,10 +94,10 @@ add_executable(${TARGET} ${TARGET_SRCS})
 4、在指定包含头文件目录的时候需要明确说明针对哪一个目标进行的参数。
 ]]
 target_include_directories(${TARGET} PRIVATE
-    # 向编译系统传递该头文件查找路径是为了能够包含 qcopilot_utils.h/qcopilot_executor.h 头文件
+    # 向编译系统传递该头文件查找路径是为了能够包含 qcopilot-utils.h/qcopilot-executor.h 头文件
     ${CMAKE_CURRENT_SOURCE_DIR}
-    # 向编译系统传递该头文件查找路径是为了能够包含 builtin_tools 目录下的头文件
-    ${CMAKE_CURRENT_SOURCE_DIR}/builtin_tools
+    # 向编译系统传递该头文件查找路径是为了能够包含 builtin-tools 目录下的头文件
+    ${CMAKE_CURRENT_SOURCE_DIR}/builtin-tools
     # 向编译系统传递该头文件查找路径是为了能够包含 index.html.gz.hpp/loading.html.hpp 头文件
     ${CMAKE_CURRENT_BINARY_DIR}
     # 向编译系统传递该头文件查找路径是为了能够包含 json.hpp/json_fwd.hpp 头文件
@@ -124,19 +124,19 @@ target_compile_features(${TARGET} PRIVATE cxx_std_17)
 
 # 工具定义文档生成器
 set(QCOPILOT_DOCGEN_SRCS
-    generate_tool_docs.cpp
-    qcopilot_utils.cpp
-    qcopilot_executor.cpp
-    qcopilot_builtin_tools.cpp
+    generate-tool-docs.cpp
+    qcopilot-utils.cpp
+    qcopilot-executor.cpp
+    qcopilot-builtin-tools.cpp
 )
 list(APPEND QCOPILOT_DOCGEN_SRCS ${BUILTIN_TOOLS_SRCS})
-list(APPEND QCOPILOT_DOCGEN_SRCS tool_registry.cpp)
+list(APPEND QCOPILOT_DOCGEN_SRCS tools-registry.cpp)
 
 add_executable(qcopilot_tool_docs ${QCOPILOT_DOCGEN_SRCS})
 
 target_include_directories(qcopilot_tool_docs PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/builtin_tools
+    ${CMAKE_CURRENT_SOURCE_DIR}/builtin-tools
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/vendor/nlohmann
     ${CMAKE_SOURCE_DIR}/vendor/cpp-httplib

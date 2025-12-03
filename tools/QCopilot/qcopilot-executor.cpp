@@ -1,9 +1,9 @@
 // 1. 本模块的头文件必须第一个包含（验证头文件自包含性）
-#include "qcopilot_executor.h"
+#include "qcopilot-executor.h"
 
 // 2. 相关项目头文件
-#include "qcopilot_utils.h"
-#include "qcopilot_builtin_tools.h"
+#include "qcopilot-utils.h"
+#include "qcopilot-builtin-tools.h"
 
 // 3. C++标准库头文件（保留需要的）
 #include <cctype>
