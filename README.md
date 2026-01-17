@@ -1,4 +1,10 @@
 # llama.cpp
+```text
+Note:xbyang
+
+1. 这是一个名为 llama.cpp 使用 C/C++ 实现 LLMs 推理任务的项目。
+2. 该项目最初是为了支持 Meta 公司开源的 Llama 系列大语言模型，因此项目名称上存在历史原因。
+```
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
@@ -10,10 +16,28 @@
 
 LLM inference in C/C++
 
+```text
+Note:xbyang
+
+1. 使用 C/C++ 编程语言对 LLMs 提供推理服务，当前项目中使用到的编程语言如下所示：
+ 1.1 C++ 17
+ 1.2 C 11
+ 1.3 Python
+ 1.4 Cuda
+ 1.5 HTML
+ 1.6 Metal
+ 1.7 Other
+```
 ## Recent API changes
 
 - [Changelog for `libllama` API](https://github.com/ggml-org/llama.cpp/issues/9289)
 - [Changelog for `llama-server` REST API](https://github.com/ggml-org/llama.cpp/issues/9291)
+
+```text
+Note:xbyang
+
+1. 这部分内容通过间接引用的方式说明一些 API interface 变化，如果没有形成成熟的产品，这部分内容暂时帮助不是特别的大。
+```
 
 ## Hot topics
 
@@ -27,6 +51,19 @@ LLM inference in C/C++
 - Hugging Face Inference Endpoints now support GGUF out of the box! https://github.com/ggml-org/llama.cpp/discussions/9669
 - Hugging Face GGUF editor: [discussion](https://github.com/ggml-org/llama.cpp/discussions/9268) | [tool](https://huggingface.co/spaces/CISCai/gguf-editor)
 
+```text
+Note:xbyang
+
+1. 通过一个专门的讨论页面来说明 llama.cpp 项目中 llama-server 所采用全新 WebUI，在该指南中学习到了对自定义 JSON 选项进行受限输出的使用。
+2. 通过一个专门的讨论页面来说明如何使用 llama.cpp 来运行 gpt-oss 系列模型。
+3. 通过一个专门的讨论页面来说明如何更好的对 llama.cpp 进行包装从而来支持下游开发者的使用。
+4. 已经对 gpt-oss 系列模型添加了原生 MXFP4 格式的支持。
+5. 在 llama.cpp 中的 llamas-server 中已经支持了多模态模型。
+6. 在 VS Code 中实现了 FIM 补全支持。
+7. 在 Vim/Neovim 中实现了 FIM 补全支持。
+8. 在 Hugging Face 推理端点已经支持了 GGUF 格式的推理。
+9. 可以在 Hugging Face 中对 GGUF 格式的文件进行修改。
+```
 ----
 
 ## Quick start
@@ -55,8 +92,7 @@ llama-server -hf ggml-org/gemma-3-1b-it-GGUF
 
 ## Description
 
-The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide
-range of hardware - locally and in the cloud.
+The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide range of hardware - locally and in the cloud.
 
 - Plain C/C++ implementation without any dependencies
 - Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
@@ -302,6 +338,11 @@ llama-cli -hf ggml-org/gemma-3-1b-it-GGUF
 
 By default, the CLI would download from Hugging Face, you can switch to other options with the environment variable `MODEL_ENDPOINT`. For example, you may opt to downloading model checkpoints from ModelScope or other model sharing communities by setting the environment variable, e.g. `MODEL_ENDPOINT=https://www.modelscope.cn/`.
 
+```text
+Note:xbyang
+
+1. 默认情况下，命令行程序将会自动从 Hugging Face 这个平台上下载指定的模型文件，如果想要从其它的平台上下载指定的模型文件，那么可以同通过设置环境变量 MODEL_ENDPOINT 来达到想要的效果，大概的实现原理是如果 MODEL_ENDPOINT 环境变量被设置了并且是有效的，那么优先选择该环境变量设置的平台而不是默认的平台。
+```
 After downloading a model, use the CLI tools to run it locally - see below.
 
 `llama.cpp` requires the model to be stored in the [GGUF](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) file format. Models in other data formats can be converted to GGUF using the `convert_*.py` Python scripts in this repo.
@@ -314,6 +355,16 @@ The Hugging Face platform provides a variety of online tools for converting, qua
 - Use the [Inference Endpoints](https://ui.endpoints.huggingface.co/) to directly host `llama.cpp` in the cloud (more info: https://github.com/ggml-org/llama.cpp/discussions/9669)
 
 To learn more about model quantization, [read this documentation](tools/quantize/README.md)
+
+```text
+Note:xbyang
+
+1. 提供了四种资源，这些资源都是非常有用的
+ 1.1 GGUF-my-repo space：用于将模型文件转化成 GGUF 格式文件。
+ 1.2 GGUF-my-LoRA space：用于将 LoRA 转化成 GGUF 格式文件。
+ 1.3 GGUF-editor space：用于在网页中直接修改 GGUF 格式文件的元数据。
+ 1.4 Inference Endpoints：用户直接在云端部署 llama.cpp 项目。
+```
 
 ## [`llama-cli`](tools/cli)
 
@@ -368,6 +419,12 @@ To learn more about model quantization, [read this documentation](tools/quantize
 ## [`llama-server`](tools/server)
 
 #### A lightweight, [OpenAI API](https://github.com/openai/openai-openapi) compatible, HTTP server for serving LLMs.
+```text
+Note:xbyang
+
+1. 这部分内容介绍的是 tools/server 这个工具。
+2. llama-server 是一个轻量级的、兼容 OpenAI API 的、为了推理 LLMs 的 HTTP 服务。低层使用的函数接口都是 ggml 提供的，因此如果将该工具能够完整理解，那么将会对很多能够都有相当大的帮助。
+```
 
 - <details open>
     <summary>Start a local HTTP server with default configuration on port 8080</summary>
@@ -509,6 +566,12 @@ To learn more about model quantization, [read this documentation](tools/quantize
 - Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
 - Make sure to read this: [Inference at the edge](https://github.com/ggml-org/llama.cpp/discussions/205)
 - A bit of backstory for those who are interested: [Changelog podcast](https://changelog.com/podcast/532)
+
+```text
+Note:xbyang
+
+1. 贡献者将会基于其贡献被邀请，维护者可以向 llama.cpp 仓库中的分支推送代码，并将拉取请求（PR）合并到 master 分支。在 llama.cpp 项目中通过标签筛选出来了一些 good first issues，可以作为参考。
+```
 
 ## Other documentation
 

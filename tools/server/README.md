@@ -1,6 +1,14 @@
 # LLaMA.cpp HTTP Server
 
 Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
+```text
+Note:xbyang
+
+1. llama-server 所具有的特点
+ 1.1 高性能
+ 1.2 轻量级
+ 1.3 基于 httplib/nlohmann::json/llama.cpp 使用纯 C/C++ 编程语言实现的 HTTP 服务
+```
 
 Set of LLM REST APIs and a web UI to interact with llama.cpp.
 
@@ -20,6 +28,11 @@ Set of LLM REST APIs and a web UI to interact with llama.cpp.
  * Easy-to-use web UI
 
 For the ful list of features, please refer to [server's changelog](https://github.com/ggml-org/llama.cpp/issues/9291)
+```text
+Note:xbyang
+
+1. 针对上述给出的兼容 OpenAI API 的资料需要完整了解从而对工作原理有一定的帮助。
+```
 
 ## Usage
 
