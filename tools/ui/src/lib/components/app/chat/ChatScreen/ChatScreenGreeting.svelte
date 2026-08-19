@@ -14,10 +14,9 @@
 		isEmpty && 'mb-[calc(50dvh-8rem)] md:mb-8 pointer-events-auto block!'
 	]}
 >
-	<h1 class="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">Hello there</h1>
+	<h1 class="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">小瀚能帮你做些什么？</h1>
 
 	<p class="text-muted-foreground md:text-lg">
-		{serverStore.props?.modalities?.audio ? 'Record audio, type a message ' : 'Type a message'} or upload
-		files to get started
+		{serverStore.props?.modalities?.audio ? '录制音频、输入想法' : '输入想法'}或上传文件开始使用
 	</p>
 </div>
